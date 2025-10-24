@@ -1,0 +1,296 @@
+SYSTEM / ARCHITECT PROMPT — BUILD “AURORA” (MULTI‑TENANT ENVISIONING APP)
+
+You are an expert full‑stack engineer and cloud architect. Generate a complete, runnable prototype for the application codename **Aurora**, meeting the following requirements. Output:
+1) a monorepo with front end, back end, infra-as-code, and database migrations/seed data,
+2) local dev scripts (Replit + Node), 
+3) Azure deployment automation (Azure CLI/Bicep), and 
+4) a concise README with run/deploy instructions.
+
+====================================================
+A. PURPOSE & USER ROLES
+====================================================
+Aurora organizes **multiple envisioning spaces** to guide a cohort through staged activities and produce: cohort results, per-user personalized results, and a facilitator report.
+
+**Roles**
+- **Publisher (Synozur only)**: global super-tenant; can view/manage all organizations.
+- **Org Admin**: manage their organization (branding, spaces, facilitators), never see other orgs.
+- **Facilitator**: run sessions for a given space, control timers, AI actions, and module transitions.
+- **Participant**: join spaces, add notes, vote, rank, and receive summaries (anonymous or registered).
+
+**Modes**
+- **Synchronous** (facilitated live; timers, transitions).
+- **Asynchronous** (open window over days; deep-link to specific module).
+
+====================================================
+B. MULTI‑TENANCY, URLS & BRANDING
+====================================================
+**URL Hierarchy**
+- Master app: `https://<MASTER_HOST>/`
+- Organization home: `https://<MASTER_HOST>/o/<org_slug>`
+- Envisioning space: `https://<MASTER_HOST>/o/<org_slug>/s/<space_slug>`
+- Facilitator console for a space: `.../facilitate`
+- Admin center (Org): `.../admin`
+- Publisher (Synozur) console: `https://<MASTER_HOST>/publisher`
+
+**Isolation**
+- Hard enforce **org_id scoping** on all data access; only **Synozur (publisher)** can see cross‑tenant data.
+- Subdomain option (future): `<org_slug>.<MASTER_HOST>` supported in router but disabled by default.
+
+**Branding**
+- Global theme: Synozur (primary), with per‑org theme overrides (colors, logo, accent tokens).
+- Tailwind theme tokens; server returns `brand.json` per org at runtime. No cross‑org leakage.
+
+====================================================
+C. CORE MODULES (SPACES) & FLOWS
+====================================================
+**Space 1 — Waiting Room**
+- Participants join via URL; facilitator “opens” session to admit.
+- Choice: 
+  - **Random alias** for anonymity, or 
+  - **Register** with name, email, password (hashed), plus profile fields: company, job_title, industry, country, company_size. 
+- If registered, data can personalize results and email final readout (opt‑in).
+- Show org & space name/purpose; live status (not yet open / open / closed).
+
+**Space 2 — Ideation Whiteboard**
+- Real-time shared canvas (text sticky notes, drag/drop). Everyone sees updates instantly.
+- Facilitator can define **named zones** (rectangles) for grouping.
+- Facilitator controls a **timer**; when it ends, freeze note creation (drag remains for facilitator).
+- **AI Categorization (on demand):** Call Azure AI model (“gpt‑5‑mini”) to read all note text, propose categories, and auto-classify notes (allow split scores); then move notes into categories/zones. Persist all AI artifacts.
+- Pre‑staging: facilitator can pre-create zones and pre‑seed sticky notes.
+- All notes persist with: author_user_id (null for alias), timestamp, content_text, optional image_url (future), and classification metadata.
+
+**Space 3 — Pairwise Voting**
+- Each participant sees **pairs** of items (from Space 2). Configurable pairing policy:
+  - all vs. all; or
+  - constrained to categories (manually created or AI-generated).
+- Each note card shows its text and current category.
+- Track outcomes as duels with win/loss counts and win rates per item.
+- Facilitator can preload choices to bypass ideation (future: deep-link directly here).
+
+**Space 4 — Stack Ranking**
+- Participants rank a set (all or category subset). Drag-and-drop ranked list UI.
+- Compute cohort ranking (support Borda count aggregation + display median rank).
+- Close voting, then reveal real-time results: top by total votes (from Space 3), top by win rate, and final ranked list here.
+
+**Space 5 — Personalized & Cohort Readout**
+- Cohort view: show top items and recommended next steps **grounded** in domain docs (e.g., “Microsoft agentic AI capabilities for custom agents”).
+- Per-user view (if registered): show user’s votes/choices vs cohort, tailored narrative, optional email delivery.
+- Grounding via Azure AI Search / vector index over provided **grounding_docs**; prompt model with notes + outcomes + user profile for personalization.
+
+**Reporting**
+- At any time: facilitator generates a **Participation & Results Report** (PDF + CSV), including participation metrics, note exports, category sets, pairwise outcomes, aggregated rankings, and AI summaries. Store in blob; link in UI.
+
+====================================================
+D. NON‑FUNCTIONAL REQUIREMENTS
+====================================================
+- Real-time collaboration with **Azure SignalR Service** (groups per space).
+- Persist **everything** in **Azure SQL Database** (prisma migrations).
+- Privacy: Pseudonymous option; PII only when user registers and consents for email.
+- Security: org isolation, JWT session tokens (short TTL), CSRF protection, input validation, content moderation stub.
+- Observability: Azure Application Insights (traces, logs, metrics).
+- Accessibility: WCAG 2.1 AA; keyboard support for notes and ranking.
+- Internationalization ready (en-US default).
+- Testing: Unit (Jest), E2E (Playwright) for critical flows.
+
+====================================================
+E. TECH STACK
+====================================================
+- Frontend: **Next.js 14 (App Router) + TypeScript + Tailwind + Zustand** (client state)
+- Canvas/whiteboard: **Konva.js** (React Konva) for zones, notes, drag/drop
+- Realtime: **Azure SignalR** (socket.io adapter)
+- Backend: Next.js API routes (Node/Express style) + **Prisma** ORM
+- Database: **Azure SQL** (local dev: SQLite fallback)
+- Auth: **Azure AD B2C** (local accounts with email/password) + optional Microsoft Entra ID SSO; anonymous aliases allowed
+- AI: **Azure OpenAI “gpt‑5‑mini”** for categorization & summaries; **Azure AI Search** for grounding documents (vector + keyword)
+- Storage: **Azure Blob Storage** (images future, reports now)
+- Infra: **Bicep** + Azure CLI; `.env` driven configuration
+
+====================================================
+F. DATA MODEL (PRISMA/SQL) — HIGH LEVEL
+====================================================
+Tables (all include org_id where applicable; add created_at/updated_at; UUID PKs):
+- organizations(id, slug, name, is_publisher, branding_json)
+- users(id, org_id, email, password_hash, name, random_alias, role ENUM[org_admin, facilitator, participant, publisher], company, job_title, industry, country, company_size, registered BOOLEAN)
+- spaces(id, org_id, name, purpose, slug, status ENUM[draft, open, closed], async_window_start, async_window_end, config_json, facilitator_id)
+- sessions(id, space_id, facilitator_id, started_at, ended_at, mode ENUM[sync, async], status)
+- zones(id, space_id, name, x, y, w, h)
+- notes(id, space_id, session_id, author_user_id NULLABLE, content_text, image_url NULLABLE)
+- note_positions(id, note_id, zone_id NULLABLE, x, y)
+- categories(id, space_id, name, source ENUM[manual, ai], descriptor_json)
+- note_categories(note_id, category_id, score FLOAT DEFAULT 1.0)
+- pairings(id, session_id, left_note_id, right_note_id, category_id NULLABLE)
+- votes_pairwise(id, pairing_id, voter_user_id, choice ENUM[left, right], created_at)
+- rankings(id, session_id, voter_user_id, methodology ENUM[borda], created_at)
+- ranking_items(id, ranking_id, note_id, rank INT)
+- results(id, space_id, session_id, snapshot_json, generated_at)
+- grounding_docs(id, org_id, title, blob_url, vector_id, metadata_json)
+- reports(id, space_id, session_id, type ENUM[pdf, csv_zip], blob_url, created_at)
+- audit_logs(id, org_id, actor_user_id, action, entity, entity_id, metadata_json, created_at)
+
+**Constraints**
+- Index all foreign keys + `(org_id, <entity_slug_or_id>)`.
+- Enforce org isolation in every query.
+- Optional RLS comment + app-layer enforcement.
+
+====================================================
+G. KEY BACKEND ENDPOINTS
+====================================================
+Prefix all routes with org & space scoping; protect with auth middleware that injects `org_id`, `space_id`, and `role`.
+- `POST /api/o/:org/space/:space/session/open|close` (facilitator)
+- `POST /api/.../waiting/register` (create user with profile + consent)
+- `POST /api/.../waiting/alias` (issue random alias token)
+- `GET  /api/.../state` (aggregate space state for clients)
+- `POST /api/.../zones` (CRUD by facilitator)
+- `POST /api/.../notes` (create); `PATCH /api/.../notes/:id` (move/update); `GET /api/.../notes` (list)
+- `POST /api/.../ai/categorize` (trigger model; persist categories + mappings)
+- `POST /api/.../pairings/generate` (policy: “all_vs_all” | “by_category”)
+- `POST /api/.../vote/pairwise` (record duel choice)
+- `POST /api/.../rankings` (submit ordered list)
+- `GET  /api/.../results` (winners by total, by win rate, and final rankings)
+- `POST /api/.../readout/cohort` (generate grounded cohort summary)
+- `POST /api/.../readout/personal` (generate user summary; optional email)
+- `POST /api/.../report` (produce PDF + CSV, store in blob, return URL)
+- Admin/Branding:
+  - `GET /api/o/:org/brand` (branding JSON)
+  - `PUT /api/o/:org/brand` (org admin only)
+  - Publisher endpoints under `/api/publisher/*` (Synozur only)
+
+====================================================
+H. REALTIME CONTRACTS (SIGNALR / SOCKET.IO)
+====================================================
+Rooms: `org:<org_id>`, `space:<space_id>`, `session:<session_id>`.
+Events:
+- `session:status` (open/close/timer)
+- `note:created|updated|moved`
+- `zone:created|updated`
+- `vote:pairwise:cast`
+- `ranking:submitted`
+- `results:updated`
+Use at-least-once emit with idempotent handlers (clients reconcile by `state` fetch).
+
+====================================================
+I. AI INTEGRATION (AZURE)
+====================================================
+- Model: `gpt-5-mini` (deployment name configurable: `AZURE_OPENAI_DEPLOYMENT`)
+- Categorization prompt (system): “You are an expert facilitator. Read these sticky notes, propose 5–12 clear categories, and assign each note to one or more categories with confidence scores [0..1]. Return JSON: {categories:[{name,description}], assignments:[{note_id,[{category,score}]}]}.”
+- Summarization prompt (system): “You are a strategy consultant. Using cohort outcomes plus the provided grounding documents, produce actionable next steps. If user profile is provided, tailor the guidance by role, company size, and industry. Return markdown plus a JSON block of recommended actions.”
+- Grounding: Ingest `grounding_docs` into Azure AI Search (vector + BM25). Retrieve top K chunks; pass as context with citations (URLs) in the final narrative.
+- Content safety: add a simple moderation filter (block disallowed content, log + inform facilitator).
+
+====================================================
+J. FRONTEND UX (NEXT.JS)
+====================================================
+Pages:
+- `/`: Synozur-branded landing with “Find my organization” + Publisher login.
+- `/o/:org`: Org landing with branding; list of spaces user can access.
+- `/o/:org/s/:space/waiting`: Waiting room (alias/registration)
+- `/o/:org/s/:space/ideate`: Whiteboard (Konva canvas, sticky toolbar, zones, timer)
+- `/o/:org/s/:space/pairs`: Pairwise UI (left vs right, keyboard shortcuts)
+- `/o/:org/s/:space/rank`: Stack rank list (drag/drop)
+- `/o/:org/s/:space/results`: Cohort outcomes
+- `/o/:org/s/:space/readout`: Personalized & cohort readouts
+- `/o/:org/s/:space/facilitate`: Facilitator console (start/stop, timers, AI, transitions)
+- `/o/:org/admin`: Org admin (branding, spaces)
+- `/publisher`: Synozur publisher console
+
+Components:
+- BrandHeader (logo/colors), TimerBar, ParticipantList (counts only), StickyNote, Zone, CategoryPill, DuelCard, RankList, ResultsTabs, ReadoutViewer.
+
+Accessibility:
+- Full keyboard control for stickies and ranking, visible focus, ARIA roles.
+
+====================================================
+K. SEED & FIXTURES
+====================================================
+On `yarn db:seed`, create:
+- Organizations: **Synozur** (`is_publisher=true`), **Microsoft**
+- One sample space per org, with:
+  - Waiting Room configured
+  - Pre-staged ideation zones + 6 example sticky notes
+- One org_admin + one facilitator per org (password: `ChangeMe!`); sample participants
+- Sample grounding doc: “Microsoft Core Capabilities for Custom Agents” (markdown) uploaded to blob and indexed.
+
+====================================================
+L. SECURITY & PRIVACY
+====================================================
+- Password hashing: bcrypt; tokens: JWT (httpOnly cookies)
+- CSRF protection on mutations
+- Input validation (zod)
+- Strict org_id checks in every handler; deny cross-tenant access
+- CORS restricted to known origins
+- PII minimization; email only used for opted‑in readouts
+- Audit logs for facilitator actions and AI invocations
+====================================================
+M. REPORTING
+====================================================
+- Generate on demand:
+  - **PDF**: cover (org brand), session metadata, participation charts, top results, AI cohort summary
+  - **CSV**: notes.csv, pairwise_votes.csv, rankings.csv, categories.csv
+- Use server-side rendering to PDF (Playwright); store in Blob; return signed URL.
+
+====================================================
+N. LOCAL DEV & REPLIT
+====================================================
+- `pnpm` (or yarn) workspace
+- `.env.example` with:
+  - DATABASE_URL (sqlite for local; `file:./dev.db`)
+  - AZURE_SQL_CONNECTION_STRING (for cloud)
+  - AZURE_OPENAI_ENDPOINT / AZURE_OPENAI_API_KEY / AZURE_OPENAI_DEPLOYMENT
+  - AZURE_SEARCH_ENDPOINT / AZURE_SEARCH_API_KEY / AZURE_SEARCH_INDEX
+  - AZURE_STORAGE_ACCOUNT / AZURE_STORAGE_CONTAINER / AZURE_STORAGE_KEY
+  - AZURE_SIGNALR_CONNECTION_STRING
+  - B2C_TENANT / B2C_CLIENT_ID / B2C_CLIENT_SECRET / B2C_POLICY
+  - APPINSIGHTS_CONNECTION_STRING
+  - MAIL_SMTP_HOST / MAIL_USER / MAIL_PASSWORD / MAIL_FROM
+- Scripts:
+  - `dev`: local with sqlite + mock SignalR
+  - `db:migrate`, `db:seed`
+  - `test`, `e2e`
+
+====================================================
+O. AZURE DEPLOYMENT (CLI + BICEP)
+====================================================
+Provide `infra/` with Bicep to create:
+- Resource Group
+- Azure SQL (server + DB)
+- App Service (Linux) for Next.js
+- Azure SignalR Service (Serverless)
+- Storage Account + Container
+- Azure AI Search service + index
+- Azure Application Insights
+- (Assume Azure OpenAI already provisioned; wire via env vars)
+
+Provide a `deploy.sh` that:
+- Accepts: `SUBSCRIPTION_ID`, `RESOURCE_GROUP`, `LOCATION`, `MASTER_HOST`
+- Runs `az group create`, `az deployment group create -f infra/main.bicep -p ...`
+- Builds and deploys app; sets App Settings with all env secrets.
+
+====================================================
+P. ACCEPTANCE CRITERIA (MUST DEMO)
+====================================================
+1. Join waiting room as alias, and as registered user; facilitator opens session.
+2. Create stickies; see real-time sync; move notes into zones; timer locks creation.
+3. Run AI categorization; categories appear; notes auto-classified and moved.
+4. Pairwise voting across all notes; show interim duel stats; winners by total & win rate.
+5. Stack ranking with drag/drop; show aggregated cohort ranking.
+6. Generate cohort readout (grounded) and a personalized readout; email optional.
+7. Generate report (PDF + CSVs) with signed URL.
+8. Org isolation verified: Microsoft org cannot see Synozur spaces (and vice‑versa); Synozur publisher can see both.
+9. Replit local run works (sqlite), Azure deployment works (Azure SQL).
+
+====================================================
+Q. STRETCH (FLAG AS FUTURE IN CODE)
+====================================================
+- Image/picture notes and note image upload
+- Direct start at Pairwise (skip ideation)
+- Subdomains per org
+- Row-Level Security (SQL) in addition to app-layer
+- Advanced pairing strategies (Swiss, ELO)
+- Role-based SSO with Entra ID for enterprise tenants
+
+Generate all code, migrations, seeders, tests, and infra. Provide a top-level README with:
+- Local dev quick start (5 steps)
+- Azure deploy steps (CLI commands)
+- Configuration of Azure AI Search index
+- How to change Synozur + org theming
+- Known limitations & TODOs
