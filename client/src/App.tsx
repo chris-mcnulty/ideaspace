@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 
 import LandingPageExample from "@/components/examples/LandingPage";
 import OrganizationHomeExample from "@/components/examples/OrganizationHome";
+import FacilitatorWorkspaceExample from "@/components/examples/FacilitatorWorkspace";
 import BrandHeaderExample from "@/components/examples/BrandHeader";
 import StickyNoteExample from "@/components/examples/StickyNote";
 import ZoneExample from "@/components/examples/Zone";
@@ -28,6 +29,7 @@ function Router() {
       <Route path="/" component={LandingPageExample} />
       <Route path="/showcase" component={ComponentShowcase} />
       <Route path="/organization-home" component={OrganizationHomeExample} />
+      <Route path="/facilitator-workspace" component={FacilitatorWorkspaceExample} />
       <Route path="/brand-header" component={BrandHeaderExample} />
       <Route path="/sticky-note" component={StickyNoteExample} />
       <Route path="/zone" component={ZoneExample} />
@@ -52,6 +54,7 @@ function ComponentShowcase() {
     { name: "Landing Page", path: "/" },
     { name: "Organization Home", path: "/organization-home" },
     { name: "Waiting Room", path: "/waiting-room" },
+    { name: "Facilitator Workspace", path: "/facilitator-workspace" },
     { name: "Facilitator Console", path: "/facilitator-console" },
     { name: "Results Tabs", path: "/results-tabs" },
     { name: "Readout Viewer", path: "/readout-viewer" },
