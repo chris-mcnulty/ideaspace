@@ -8,12 +8,18 @@ Aurora is a sophisticated web application that enables facilitators to guide coh
 ### Completed
 - ✅ Database schema for multi-tenant architecture (organizations, spaces, participants, notes, votes, rankings)
 - ✅ Backend API routes for CRUD operations
-- ✅ WebSocket server for real-time collaboration
+- ✅ WebSocket server for real-time collaboration (/ws endpoint with spaceId parameter)
 - ✅ Entry flow pages: Landing → Organization Home → Waiting Room → Participant View
 - ✅ Guest name generation system with randomized astronomical names
 - ✅ Comprehensive component library (14 reusable components)
 - ✅ Hidden spaces functionality for facilitator-only content
-- ✅ Professional design system matching models.synozur.com with gradient hero sections
+- ✅ **Dark Mode Design System** based on Synozur reference:
+  - Primary purple (`274 95% 52%` - #810FFB) throughout
+  - Dark backgrounds (`240 8% 6%` - very dark blue-black)
+  - Montserrat font (fallback for Avenir Next LT Pro)
+  - Gradient text effects for hero sections
+  - Automatic elevation on hover/active states
+  - Dark mode enabled by default
 - ✅ **Facilitator Workspace** (/o/:org/s/:space/facilitate) with:
   - Note preloading, add, edit, delete operations
   - Bulk selection and deletion
@@ -58,7 +64,8 @@ Aurora is a sophisticated web application that enables facilitators to guide coh
 - **Backend**: Express.js, WebSocket (ws)
 - **Database**: PostgreSQL (Neon), Drizzle ORM
 - **AI**: OpenAI API (for categorization and summaries)
-- **Design**: Linear + Notion hybrid aesthetic, Inter/JetBrains Mono fonts
+- **Design**: Dark mode with purple highlights, Montserrat font (Avenir Next LT Pro fallback), gradient text effects
+- **Reference**: Synozur Maturity Modeler design system
 
 ## Key Features
 
