@@ -5,6 +5,11 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 
+import LandingPage from "@/pages/LandingPage";
+import OrganizationHome from "@/pages/OrganizationHome";
+import WaitingRoom from "@/pages/WaitingRoom";
+import ParticipantView from "@/pages/ParticipantView";
+
 import LandingPageExample from "@/components/examples/LandingPage";
 import OrganizationHomeExample from "@/components/examples/OrganizationHome";
 import FacilitatorWorkspaceExample from "@/components/examples/FacilitatorWorkspace";
@@ -26,9 +31,14 @@ import ReadoutViewerExample from "@/components/examples/ReadoutViewer";
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={LandingPageExample} />
+      <Route path="/" component={LandingPage} />
+      <Route path="/o/:org" component={OrganizationHome} />
+      <Route path="/o/:org/s/:space" component={WaitingRoom} />
+      <Route path="/o/:org/s/:space/participate" component={ParticipantView} />
+      
       <Route path="/showcase" component={ComponentShowcase} />
-      <Route path="/organization-home" component={OrganizationHomeExample} />
+      <Route path="/examples/landing" component={LandingPageExample} />
+      <Route path="/examples/organization-home" component={OrganizationHomeExample} />
       <Route path="/facilitator-workspace" component={FacilitatorWorkspaceExample} />
       <Route path="/brand-header" component={BrandHeaderExample} />
       <Route path="/sticky-note" component={StickyNoteExample} />
