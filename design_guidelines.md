@@ -1,453 +1,413 @@
-# Aurora Design Guidelines
+# Aurora - Collaborative Envisioning Platform - Design Guidelines
 
 ## Design Inspiration
-**models.synozur.com Aesthetic:** Professional maturity assessment platform with dark hero sections, clean card layouts, and modern typography.
+**Synozur Maturity Modeler Reference:** Dark mode professional platform with vibrant purple highlights, gradient text effects, and modern typography matching https://github.com/chris-mcnulty/synozur-maturitymodeler
 
-## Design System: Synozur Professional
+## Design System: Dark Mode with Purple Highlights
 
 **Principles:** 
-- Professional enterprise aesthetic
-- Dark hero sections with gradient backgrounds
-- Clean, card-based layouts with imagery
-- Clear visual hierarchy
-- Accessibility-first (WCAG 2.1 AA)
+- **Dark mode first** - Professional dark theme as default
+- **Purple brand identity** - Vivid purple (`274 95% 52%`) throughout
+- **Gradient text effects** - Blue→Purple→Pink gradients for hero headings
+- **Clean card layouts** - Subtle borders, generous padding
+- **Real-time collaboration** - Live indicators and smooth animations
+- **Accessibility-first** - WCAG 2.1 AA compliance
 
 **Font Stack:**
-- Primary: Inter (Google Fonts) - Clean, professional sans-serif
-- Monospace: JetBrains Mono (IDs, timestamps, timers)
+- Primary: **Montserrat** (fallback for Avenir Next LT Pro) - Professional sans-serif
+- Fallback: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif
+- Monospace: "Roboto Mono", "Courier New", monospace
 
 ---
 
 ## Color Palette
 
-**Primary (Synozur Purple):** `hsl(269, 97%, 52%)` - Deep violet for CTAs and key actions
-**Secondary (Synozur Magenta):** `hsl(314, 90%, 47%)` - Accent color for highlights
-**Accent (Light Blue):** `hsl(212, 51%, 93%)` - Subtle backgrounds and hover states
+### Dark Mode (Default)
 
-**Neutrals:**
-- Background: White `hsl(0, 0%, 100%)`
-- Card: Light gray `hsl(180, 7%, 97%)`
-- Border: Subtle gray `hsl(201, 30%, 91%)`
-- Muted: Medium gray `hsl(240, 2%, 90%)`
+**Backgrounds:**
+- Primary Background: `240 8% 6%` - Very dark blue-black (#0E0E12)
+- Card/Surface: `240 12% 10%` - Slightly lighter (#15151E)
+- Muted: `240 10% 14%` - Subtle variation
+- Input: `240 12% 18%` - Form fields
 
-**Dark Mode:**
-- Background: Pure black `hsl(0, 0%, 0%)`
-- Card: Dark gray `hsl(228, 10%, 10%)`
-- Foreground: Light gray `hsl(200, 7%, 91%)`
+**Text:**
+- Foreground: `240 10% 92%` - Light gray (#EDEDF2)
+- Muted: `240 5% 65%` - Medium gray for secondary text
+
+**Borders:**
+- Default: `240 10% 15%` - Subtle separation
+- Card: `240 10% 12%` - Even more subtle
+
+**Brand Colors:**
+- **Primary Purple:** `274 95% 52%` (#810FFB) - Main brand color
+- **Secondary Pink:** `315 92% 48%` (#E60CB3) - Accent highlights
+- **Purple Foreground:** `0 0% 100%` - White text on purple
+
+**Semantic:**
+- Success: `141 73% 42%` (#1DB954 - Green)
+- Warning: `41 100% 64%` (#FFC24A - Orange)  
+- Error: `0 84% 60%` (#FF5A6E - Red)
+
+**Charts:**
+- Chart 1: Purple `274 95% 52%`
+- Chart 2: Pink `315 92% 48%`
+- Chart 3: Green `141 73% 42%`
+- Chart 4: Orange `41 100% 64%`
+- Chart 5: Red `0 84% 60%`
+
+### Light Mode (Secondary)
+
+**Backgrounds:**
+- Background: `0 0% 100%` - White
+- Card: `240 10% 98%` - Very light gray
+- Muted: `240 10% 96%`
+
+**Text:**
+- Foreground: `240 10% 10%` - Almost black
+- Muted: `240 5% 45%` - Medium gray
+
+**Brand colors remain the same** - Purple `274 95% 52%` works in both modes
 
 ---
 
 ## Typography Scales
 
+**Font Weights:**
+- Regular: 400 (body text, buttons, nav)
+- Bold: 700 (headings only)
+
 **Hero Sections:**
-- Main Title: `text-4xl md:text-5xl font-bold tracking-tight`
-- Subtitle: `text-lg md:text-xl font-normal leading-relaxed`
-- Description: `text-base md:text-lg leading-relaxed`
+- Main Title: `text-5xl md:text-6xl lg:text-7xl font-bold` with gradient
+- Subtitle: `text-xl md:text-2xl font-normal leading-relaxed`
+- Description: `text-lg leading-relaxed`
 
 **Page Headers:**
-- Page Title: `text-2xl md:text-3xl font-semibold tracking-tight`
-- Section: `text-lg font-semibold`
-- Subsection: `text-base font-medium`
+- Page Title: `text-4xl md:text-5xl font-bold` with optional gradient
+- Section: `text-2xl font-bold`
+- Subsection: `text-xl font-bold`
 
 **Cards:**
-- Card Title: `text-lg font-semibold`
-- Card Subtitle: `text-sm font-medium`
+- Card Title: `text-lg font-bold`
 - Card Body: `text-sm font-normal`
 - Card Meta: `text-xs font-normal text-muted-foreground`
 
 **Buttons & Actions:**
-- Primary CTA: `text-base font-semibold`
-- Secondary: `text-sm font-medium`
-- Links: `text-sm font-normal underline-offset-4`
+- Large CTA: `text-lg font-normal px-8 py-6`
+- Primary: `text-base font-normal`
+- Secondary: `text-sm font-normal`
 
 **Facilitator Console:**
 - Timer: `text-4xl font-bold tabular-nums`
-- Status: `text-xs font-medium uppercase tracking-wide`
-- Actions: `text-sm font-semibold`
+- Status: `text-xs font-normal uppercase tracking-wide`
+- Actions: `text-sm font-normal`
 
-**Participant UI:**
-- Instructions: `text-lg font-medium leading-relaxed`
-- Notes: `text-sm font-normal leading-snug`
-- Results: `text-2xl font-semibold`
+**Gradient Text (Hero Sections):**
+```
+className="text-gradient-blue-purple-pink"
+// Blue (#60A5FA) → Purple (#810FFB) → Pink (#E60CB3)
+```
 
 ---
 
 ## Layout & Spacing
 
-**Spacing Units:** 1, 2, 3, 4, 6, 8, 12, 16, 20, 24
+**Spacing Units:** 1, 2, 3, 4, 6, 8, 12, 16, 20, 24, 32
 
 **Containers:**
-- Max-width Content: `max-w-7xl mx-auto px-6 md:px-12`
-- Narrow Content: `max-w-4xl mx-auto px-6`
-- Form Modals: `max-w-2xl mx-auto`
+- Max-width Content: `max-w-7xl mx-auto px-4`
+- Narrow Content: `max-w-4xl mx-auto px-4`
+- Text Content: `max-w-3xl mx-auto`
 
 **Hero Sections:**
-- Padding: `py-16 md:py-24 lg:py-32`
-- Background: Dark gradient or image with overlay
-- Content: Centered, `max-w-4xl mx-auto text-center`
+- Min height: `min-h-[600px]` or `min-h-screen`
+- Padding: `py-20`
+- Background: Dark with gradient overlay or hero image
+- Content: Centered, `text-center`
 
 **Grids:**
-- Space Cards: `grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6`
+- Model Cards: `grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6`
+- Feature Grid: `grid-cols-1 md:grid-cols-2 gap-12`
 - Metrics: `grid-cols-2 md:grid-cols-4 gap-4`
-- Features: `grid-cols-1 md:grid-cols-2 gap-8`
 
 **Cards:**
 - Standard padding: `p-6`
-- Compact: `p-4`
 - Hero cards: `p-8`
+- Border radius: `rounded-lg` (12px)
 
 ---
 
 ## Components
 
 ### Hero Sections
-**Landing Hero:**
-```
-bg-gradient-to-br from-background via-background to-primary/5
-py-16 md:py-24 lg:py-32
-text-center
-max-w-4xl mx-auto px-6
+
+**Landing Hero with Image:**
+```tsx
+<section className="relative min-h-[600px] flex items-center bg-gray-900 overflow-hidden">
+  <div className="absolute inset-0">
+    <img src={heroImage} className="w-full h-full object-cover opacity-60" />
+    <div className="absolute inset-0 bg-gradient-to-b from-black/40 to-black/60" />
+  </div>
+  <div className="container relative z-10 mx-auto px-4 py-20 text-center">
+    <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6 text-white md:text-gradient-blue-purple-pink">
+      Your Hero Title
+    </h1>
+    <p className="text-xl md:text-2xl text-white/90">Subtitle</p>
+    <Button size="lg" variant="outline" className="bg-white/10 border-white/30">
+      Get Started
+    </Button>
+  </div>
+</section>
 ```
 
 **Features:**
-- Large heading with gradient text effect (optional)
-- Descriptive subtitle
-- Primary CTA button
-- Optional hero image/illustration
-- Subtle gradient background
+- Full viewport or 600px min-height
+- Hero image with dark gradient overlay
+- Gradient text for main heading
+- White text on dark background
+- Outline or primary buttons
 
 ### Cards
 
-**Space Card (models.synozur.com style):**
-```
-border rounded-lg overflow-hidden
-shadow-sm hover:shadow-md transition
-```
-- Optional image at top (aspect-ratio-video or square)
-- Content padding: `p-6`
-- Title: `text-lg font-semibold mb-2`
-- Description: `text-sm text-muted-foreground mb-4`
-- Metadata badges: `text-xs` with icons
-- CTA button: `w-full` at bottom
-- Hover: Slight elevation with `hover:shadow-md`
-
-**Assessment Card Pattern:**
-- Image/icon at top (rounded corners)
-- Title + short description
-- Metadata row (questions, duration)
-- Full-width CTA button
-- Subtle border, clean shadows
-
-**Metric Card:**
-```
-p-4 border rounded-lg
-Number: text-3xl font-bold tabular-nums
-Label: text-sm text-muted-foreground
+**Standard Card:**
+```tsx
+<Card className="p-6 border-2 hover-elevate">
+  <h3 className="text-lg font-bold mb-2">{title}</h3>
+  <p className="text-sm text-muted-foreground">{description}</p>
+</Card>
 ```
 
-### Navigation
+**Features:**
+- Dark surface background (`card`)
+- Subtle border (`card-border`)
+- Automatic hover elevation
+- Generous padding
 
-**Top Bar (Branded):**
-```
-h-16 border-b bg-background/95 backdrop-blur
-flex items-center justify-between px-6
-sticky top-0 z-50
-```
-- Left: Logo + org name
-- Right: User menu, notifications, role badge
-
-**Breadcrumbs:**
-```
-text-sm text-muted-foreground
-flex items-center gap-2
-/  separator with opacity-40
+**Featured Card with Image:**
+```tsx
+<Card className="overflow-hidden border-2 border-primary/20 hover-elevate">
+  <img src={image} className="w-full h-80 object-cover" />
+  <div className="p-6">
+    <h3 className="text-lg font-bold">{title}</h3>
+  </div>
+</Card>
 ```
 
 ### Buttons
 
-**Primary CTA (Synozur style):**
-```
-bg-primary text-primary-foreground
-px-6 py-3 rounded-lg
-font-semibold text-base
-hover:opacity-90 transition
-shadow-sm hover:shadow-md
+**Primary (Purple):**
+```tsx
+<Button size="lg" className="px-8">
+  Start Assessment
+</Button>
 ```
 
-**Secondary:**
-```
-border border-border bg-background
-px-6 py-3 rounded-lg
-font-medium text-sm
-hover:bg-accent transition
-```
-
-**Ghost:**
-```
-text-foreground hover:bg-accent
-px-4 py-2 rounded-md
-font-medium text-sm
+**Outline (on images):**
+```tsx
+<Button variant="outline" className="bg-white/10 border-white/30">
+  Sign Up
+</Button>
 ```
 
-**Button Groups:**
+**All buttons have:**
+- Automatic hover/active elevation
+- Purple primary color
+- No manual hover states needed
+- Min-height: 36px (sm), 40px (default), 44px (lg)
+
+### Purple Highlights
+
+**Where to Use Purple:**
+1. ✅ Primary action buttons
+2. ✅ Links and interactive text
+3. ✅ Focus rings on inputs
+4. ✅ Active navigation items
+5. ✅ Selection highlights
+6. ✅ Progress indicators
+7. ✅ Category badges
+8. ✅ Status indicators
+
+**Gradient Usage:**
+- Hero headings: `.text-gradient-blue-purple-pink`
+- Accent text: `.text-gradient-purple-pink`
+- Card backgrounds: `bg-gradient-to-br from-primary/20 to-accent/20`
+- Button gradients: Use `bg-primary` (solid purple) for clarity
+
+### Real-Time Elements
+
+**Sticky Notes:**
+```tsx
+<div className="p-4 rounded-lg bg-yellow-100 dark:bg-yellow-900/20 border">
+  <p className="text-sm">{noteContent}</p>
+</div>
 ```
-flex gap-3 flex-wrap
-or
-inline-flex items-center gap-2
+
+**Live Indicator:**
+```tsx
+<Badge variant="outline" className="gap-1">
+  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+  Live
+</Badge>
+```
+
+**Connection Status:**
+```tsx
+<div className="flex items-center gap-2 text-sm text-muted-foreground">
+  <div className="w-2 h-2 rounded-full bg-purple-500" />
+  <span>Connected</span>
+</div>
 ```
 
 ### Forms
 
-**Profile Registration Form (Waiting Room):**
-```
-space-y-6
-max-w-md mx-auto
-```
-- Label: `text-sm font-medium mb-1.5`
-- Input: `px-4 py-2.5 rounded-md border w-full`
-- Focus: `focus:ring-2 focus:ring-primary focus:ring-offset-2`
-- Helper text: `text-xs text-muted-foreground mt-1`
-
-**Tabs (Join vs Register):**
-```
-border-b mb-6
-Tab: px-6 py-3 relative
-Active: border-b-2 border-primary font-semibold
-Inactive: text-muted-foreground hover:text-foreground
+**Text Input:**
+```tsx
+<Input 
+  className="bg-input border-border focus:ring-primary"
+  placeholder="Enter text..."
+/>
 ```
 
-### Collaborative Components
-
-**Sticky Note:**
-```
-w-48 h-48 p-3 rounded-lg shadow-md
-border-l-4 border-primary
-bg-card
-```
-- Header: Author + timestamp (tiny text)
-- Content: Scrollable, `text-sm`
-- Footer: Category pill
-- Drag handle: Cursor-move with grip icon
-
-**Zone (Categorization):**
-```
-border-2 border-dashed rounded-lg p-6
-min-h-[200px]
-relative
-```
-- Label badge at top
-- Accepts dropped notes
-- Subtle tinted background per category
-
-**Category Pill:**
-```
-inline-flex items-center px-2.5 py-0.5 
-rounded-full text-xs font-medium
-gap-1
-```
-- AI-generated: Italic with robot icon
-- Manual: Standard styling
-
-**Pairwise Duel Cards:**
-```
-grid grid-cols-2 gap-8
-Each card: 
-  border-2 rounded-lg p-6
-  hover:border-primary cursor-pointer
-  transition-all
-Selected: border-primary shadow-lg
-```
-- "vs" divider badge between cards
-- Keyboard hints: `text-xs absolute bottom-2`
-- Progress indicator at top
-
-**Stack Ranking:**
-```
-space-y-3
-Item: 
-  flex items-center gap-3 p-4 
-  border rounded-md
-  hover:shadow-md cursor-grab
-Rank badge: 
-  w-8 h-8 rounded-full bg-primary text-primary-foreground
-  flex items-center justify-center font-bold
-```
-
-### Data Display
-
-**Participant List:**
-- Grid of avatars: `w-8 h-8 rounded-full`
-- Online indicator: `w-2 h-2 bg-green-500 rounded-full absolute`
-- Overflow: "+X more" text
-
-**Status Badges:**
-```
-inline-flex items-center gap-1.5
-px-2 py-0.5 rounded text-xs font-medium
-Dot: w-2 h-2 rounded-full
-```
-- Open: Green dot
-- Draft: Gray dot
-- Closed: Red dot
-- Processing: Animated pulse
-
-**Tables (Results):**
-- Header: `sticky top-0 bg-background text-xs uppercase font-semibold`
-- Rows: `px-4 py-3 hover:bg-accent border-b`
-- Top 3 ranks: Trophy/medal icons
-
-### Modals & Overlays
-
-**Modal:**
-```
-max-w-lg mx-auto mt-20 rounded-lg shadow-xl
-p-6 bg-card border
-backdrop: fixed inset-0 bg-black/50 backdrop-blur-sm
-```
-- Close button: `absolute top-4 right-4`
-- Title: `text-xl font-semibold mb-4`
-- Actions: `flex justify-end gap-3 mt-6`
-
-**AI Processing Overlay:**
-```
-fixed inset-0 bg-gradient-to-br from-primary/20 to-background
-flex items-center justify-center
-z-50
-```
-- Spinner + progress text
-- Cancel button
-- Backdrop blur
-
-**Timer Bar:**
-```
-sticky top-0 z-40
-bg-background border-b px-6 py-3
-text-lg font-semibold tabular-nums
-```
-- Pulse animation when <1min remaining
-- Color changes based on time
-
-### Status & Feedback
-
-**Toasts:**
-```
-fixed bottom-4 right-4 max-w-sm
-slide-in animation
-border rounded-lg shadow-lg p-4
-```
-- Auto-dismiss after 5s
-- Close button
-- Icon based on type
-
-**Loading States:**
-- Skeleton: `animate-pulse bg-muted rounded`
-- Spinner: `w-4 h-4 animate-spin` (lucide-react Loader2)
-- Full page: Centered spinner with text
-
-**Activity Feed:**
-```
-max-h-64 overflow-y-auto
-Item: flex items-start gap-3 p-2 hover:bg-accent rounded
-```
-- Recent items highlighted
-- Relative timestamps
-- User avatars
+**Form Layout:**
+- Labels above inputs
+- Purple focus rings
+- Error messages in red below
+- Generous spacing (gap-4)
 
 ---
 
-## Whiteboard Canvas (Future)
+## Page-Specific Designs
 
-**Container:** `min-h-[calc(100vh-4rem)]`
-- Sticky toolbar at top
-- Subtle dot grid background
-- Zoom controls bottom-right
+### Landing Page (/)
 
-**Interactions:**
-- Click toolbar → change cursor mode
-- Drag to create zones
-- Double-click → add note
-- Shift+click → multi-select
-- Delete key → confirm removal
+**Hero:**
+- Dark background with hero image
+- Gradient overlay (`bg-gradient-to-b from-black/40 to-black/60`)
+- Gradient text heading (blue→purple→pink)
+- White text for body
+- Outline buttons with blurred background
 
----
+**Featured Section:**
+- Gradient background (`bg-gradient-to-br from-primary/5 via-background to-accent/5`)
+- Featured badge (purple)
+- Large model card with image
+- Purple CTAs
 
-## Accessibility (WCAG 2.1 AA)
+**Model Grid:**
+- Card-based layout
+- Hover elevation effects
+- Images or gradient placeholders
+- Purple highlights on hover
 
-**Keyboard Navigation:**
-- Skip links for main content
-- Visible focus rings: `ring-2 ring-offset-2 ring-primary`
-- Tab order follows visual hierarchy
-- ESC closes modals/dropdowns
-- Arrow keys for rankings/lists
-- 1/2 keys for pairwise voting
-- Space to select/activate
+### Organization Home (/o/:org)
 
-**Screen Readers:**
-- Semantic HTML: `<nav>`, `<main>`, `<article>`, `<section>`
-- ARIA labels on icon-only buttons
-- Live regions: `aria-live="polite"` for notifications
-- `role="status"` for timers
-- Alt text for images: "Space card for [name]"
+- Organization branding (logo, colors if customized)
+- Space cards in grid
+- Purple "Join" buttons
+- Status badges
 
-**Color Independence:**
-- Never rely on color alone
-- Icons + text for all status
-- Sufficient contrast (4.5:1 for text)
-- Visible focus always
+### Waiting Room (/o/:org/s/:space)
 
----
+- Centered layout
+- Participant count display
+- Purple "Join" button
+- Avatar list
+- Dark card backgrounds
 
-## Responsive Design (Mobile-First)
+### Facilitator Workspace (/o/:org/s/:space/facilitate)
 
-**Breakpoints:**
-- Base (mobile): Single column, stacked
-- `md: 768px`: Two columns, toggleable sidebar
-- `lg: 1024px`: Three columns, fixed sidebar
-- `xl: 1280px`: Max width, increased whitespace
+- Multi-panel layout
+- Dark backgrounds
+- Purple action buttons
+- Note grid with hover states
+- Bulk selection with purple highlights
+- Session controls with status badges
+- Participant sidebar
+- Real-time indicators
 
-**Mobile Adaptations:**
-- Touch targets: `min-h-[44px]`
-- Full-width cards
-- Bottom sheet modals
-- Hamburger navigation
-- Smaller notes: `w-32 h-32`
-- Simplified tables (cards instead)
+### Participant View (/o/:org/s/:space/participate)
 
----
+- Whiteboard/zone interface
+- Sticky note creation
+- Drag-and-drop interactions
+- Purple category highlights
+- Timer display
 
-## Visual Assets
+### Results View
 
-**Icons:** Heroicons or Lucide React
-- Outline for navigation/secondary actions
-- Solid for emphasis/primary actions
-
-**Images:**
-- Organization logos: `max-h-12 object-contain`
-- Space thumbnails: `aspect-video` or `aspect-square`
-- User avatars: `rounded-full`
-
-**No Stock Photos:** Use real content, gradients, or abstract patterns for visual interest
+- Large score display with purple badges
+- Chart visualizations (purple/pink gradients)
+- Category breakdown
+- Export buttons
 
 ---
 
-## Brand Customization (Per Organization)
+## Accessibility
 
-**Customizable Elements:**
-- Organization logo
-- Primary brand color (replaces default primary)
-- Header background (solid or gradient)
-- Optional welcome message
+- **Contrast**: 4.5:1 minimum for text on dark backgrounds
+- **Touch targets**: 44x44px minimum
+- **Focus indicators**: 2px purple ring on all interactive elements
+- **Screen readers**: Proper ARIA labels
+- **Keyboard navigation**: Full support
+- **Motion**: Respect `prefers-reduced-motion`
 
-**Fixed Elements:**
-- Typography system
-- Layout patterns
-- Component structure
-- Spacing system
+---
 
-**Header Pattern:**
+## Animation Guidelines
+
+**Use Sparingly:**
+- Page load: 200ms fade-in
+- Button hover: 150ms scale(1.02) + elevation
+- Card hover: 200ms translateY(-2px) + shadow
+- Progress: 300ms width transition
+- Live updates: Subtle pulse (1s)
+
+**Never:**
+- Autoplay animations
+- Infinite loops (except loading states)
+- Jarring transitions
+- Animations that move layout
+
+---
+
+## Dark Mode Implementation
+
+**Technical Setup:**
+```typescript
+// App.tsx - Enable dark mode by default
+useEffect(() => {
+  document.documentElement.classList.add('dark');
+}, []);
 ```
-flex items-center justify-between
-px-6 py-4 border-b
-Logo + org name: text-lg font-semibold
-User section: avatar + role badge
-```
+
+**CSS Variables:**
+- All colors defined in `:root` (light) and `.dark` (dark)
+- Purple primary works in both modes
+- Automatic contrast adjustment via elevation system
+
+**Best Practices:**
+- Dark backgrounds: Use `bg-background` or `bg-card`
+- Text: Use `text-foreground` or `text-muted-foreground`
+- Borders: Use `border-border` or `border-card-border`
+- Interactive: Use `bg-primary` for purple highlights
+
+---
+
+## Brand Voice
+
+- **Empathetic**: "We're here to help you envision your future"
+- **Action-oriented**: "Start your session", "Join now", "Create space"
+- **Professional**: Clear, jargon-free language
+- **Encouraging**: "Great progress!", "You're on track"
+- **Inclusive**: People-first language
+
+---
+
+## Quick Reference
+
+**Primary Color:** Purple `hsl(274, 95%, 52%)` (#810FFB)
+**Background:** Dark `hsl(240, 8%, 6%)` (#0E0E12)
+**Font:** Montserrat (or Avenir Next LT Pro)
+**Gradient Text:** `.text-gradient-blue-purple-pink`
+**Elevation:** `.hover-elevate`, `.active-elevate-2`
+**Border Radius:** `rounded-lg` (12px)
+**Spacing:** Generous (p-6, p-8, gap-6)
