@@ -38,6 +38,13 @@ Aurora is a sophisticated web application that enables facilitators to guide coh
 - Stack ranking module with Borda count
 - Results view with cohort and personalized summaries
 
+### Backlog (Future Features)
+- **Organization-level branding customization**: Allow individual organizations to override the default Synozur design with their own:
+  - Custom color palette (primary, accent, backgrounds)
+  - Custom font selection
+  - Organization logo
+  - Example: Synozur (default dark purple theme) vs Microsoft (custom branding)
+
 ## Architecture
 
 ### Multi-Tenancy
