@@ -66,10 +66,11 @@ export default function FacilitatorWorkspace() {
   }, [params.space]);
 
   useWebSocket({
+    spaceId: params.space,
     onMessage: handleWebSocketMessage,
     onOpen: () => console.log('[FacilitatorWorkspace] WebSocket connected'),
     onClose: () => console.log('[FacilitatorWorkspace] WebSocket disconnected'),
-    enabled: true,
+    enabled: !!params.space,
   });
 
   // Fetch organization
@@ -238,24 +239,52 @@ export default function FacilitatorWorkspace() {
     setIsMergeDialogOpen(true);
   };
 
-  // Merge mutation
+  // Merge mutation - create merged note and delete originals
   const mergeNotesMutation = useMutation({
     mutationFn: async () => {
-      // First, create the merged note
-      await addNoteMutation.mutateAsync(mergedNoteContent);
+      // Get facilitator participant ID
+      let facilitatorParticipantId = participants.find(p => !p.isGuest)?.id;
       
-      // Then delete the original notes
+      if (!facilitatorParticipantId && participants.length > 0) {
+        facilitatorParticipantId = participants[0].id;
+      }
+      
+      if (!facilitatorParticipantId) {
+        const systemParticipantResponse = await apiRequest("POST", "/api/participants", {
+          spaceId: params.space,
+          userId: null,
+          displayName: "Facilitator",
+          isGuest: false,
+          isOnline: true,
+          profileData: { role: "facilitator" },
+        });
+        const systemParticipant = await systemParticipantResponse.json();
+        facilitatorParticipantId = systemParticipant.id;
+      }
+      
+      // Create the merged note
+      const noteResponse = await apiRequest("POST", "/api/notes", {
+        spaceId: params.space,
+        participantId: facilitatorParticipantId,
+        content: mergedNoteContent,
+        category: null,
+        isAiCategory: false,
+      });
+      await noteResponse.json();
+      
+      // Delete the original notes
       for (const noteId of Array.from(selectedNotes)) {
-        await deleteNoteMutation.mutateAsync(noteId);
+        await apiRequest("DELETE", `/api/notes/${noteId}`);
       }
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/notes`] });
       setIsMergeDialogOpen(false);
       setMergedNoteContent("");
       setSelectedNotes(new Set());
       toast({
         title: "Notes merged",
-        description: "The selected notes have been combined",
+        description: `Combined ${selectedNotes.size} notes into one`,
       });
     },
     onError: (error: Error) => {

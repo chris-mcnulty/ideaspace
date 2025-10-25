@@ -6,6 +6,7 @@ interface WebSocketMessage {
 }
 
 interface UseWebSocketOptions {
+  spaceId?: string;
   onMessage?: (message: WebSocketMessage) => void;
   onOpen?: () => void;
   onClose?: () => void;
@@ -15,6 +16,7 @@ interface UseWebSocketOptions {
 
 export function useWebSocket(options: UseWebSocketOptions = {}) {
   const {
+    spaceId,
     onMessage,
     onOpen,
     onClose,
@@ -34,7 +36,8 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     try {
       // Determine WebSocket URL based on current location
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}`;
+      const params = spaceId ? `?spaceId=${spaceId}` : '';
+      const wsUrl = `${protocol}//${window.location.host}/ws${params}`;
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -76,7 +79,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     } catch (error) {
       console.error('[WebSocket] Connection error:', error);
     }
-  }, [enabled, onMessage, onOpen, onClose, onError]);
+  }, [enabled, spaceId, onMessage, onOpen, onClose, onError]);
 
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
