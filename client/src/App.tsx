@@ -5,6 +5,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 
+import LandingPageExample from "@/components/examples/LandingPage";
+import OrganizationHomeExample from "@/components/examples/OrganizationHome";
 import BrandHeaderExample from "@/components/examples/BrandHeader";
 import StickyNoteExample from "@/components/examples/StickyNote";
 import ZoneExample from "@/components/examples/Zone";
@@ -23,7 +25,9 @@ import ReadoutViewerExample from "@/components/examples/ReadoutViewer";
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={ComponentShowcase} />
+      <Route path="/" component={LandingPageExample} />
+      <Route path="/showcase" component={ComponentShowcase} />
+      <Route path="/organization-home" component={OrganizationHomeExample} />
       <Route path="/brand-header" component={BrandHeaderExample} />
       <Route path="/sticky-note" component={StickyNoteExample} />
       <Route path="/zone" component={ZoneExample} />
@@ -45,6 +49,12 @@ function Router() {
 
 function ComponentShowcase() {
   const components = [
+    { name: "Landing Page", path: "/" },
+    { name: "Organization Home", path: "/organization-home" },
+    { name: "Waiting Room", path: "/waiting-room" },
+    { name: "Facilitator Console", path: "/facilitator-console" },
+    { name: "Results Tabs", path: "/results-tabs" },
+    { name: "Readout Viewer", path: "/readout-viewer" },
     { name: "Brand Header", path: "/brand-header" },
     { name: "Sticky Note", path: "/sticky-note" },
     { name: "Zone", path: "/zone" },
@@ -55,10 +65,6 @@ function ComponentShowcase() {
     { name: "Category Pill", path: "/category-pill" },
     { name: "Status Badge", path: "/status-badge" },
     { name: "Space Card", path: "/space-card" },
-    { name: "Waiting Room", path: "/waiting-room" },
-    { name: "Facilitator Console", path: "/facilitator-console" },
-    { name: "Results Tabs", path: "/results-tabs" },
-    { name: "Readout Viewer", path: "/readout-viewer" },
   ];
 
   return (
