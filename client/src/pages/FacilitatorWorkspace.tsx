@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useWebSocket } from "@/hooks/useWebSocket";
 import BrandHeader from "@/components/BrandHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +41,36 @@ export default function FacilitatorWorkspace() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedNotes, setSelectedNotes] = useState<Set<string>>(new Set());
   const [isAddNoteDialogOpen, setIsAddNoteDialogOpen] = useState(false);
+  const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
   const [newNoteContent, setNewNoteContent] = useState("");
+  const [mergedNoteContent, setMergedNoteContent] = useState("");
+
+  // WebSocket connection for real-time updates
+  const handleWebSocketMessage = useCallback((message: { type: string; data: any }) => {
+    console.log('[FacilitatorWorkspace] WebSocket message:', message);
+    
+    switch (message.type) {
+      case 'note_created':
+      case 'note_updated':
+      case 'note_deleted':
+      case 'notes_deleted':
+        // Invalidate notes query to refetch latest data
+        queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/notes`] });
+        break;
+      case 'participant_joined':
+      case 'participant_left':
+        // Invalidate participants query
+        queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/participants`] });
+        break;
+    }
+  }, [params.space]);
+
+  useWebSocket({
+    onMessage: handleWebSocketMessage,
+    onOpen: () => console.log('[FacilitatorWorkspace] WebSocket connected'),
+    onClose: () => console.log('[FacilitatorWorkspace] WebSocket disconnected'),
+    enabled: true,
+  });
 
   // Fetch organization
   const { data: org } = useQuery<Organization>({
@@ -187,6 +217,56 @@ export default function FacilitatorWorkspace() {
     setSelectedNotes(new Set());
   };
 
+  // Handle merge notes
+  const handleMergeNotes = () => {
+    if (selectedNotes.size < 2) {
+      toast({
+        variant: "destructive",
+        title: "Select at least 2 notes",
+        description: "You need to select at least 2 notes to merge",
+      });
+      return;
+    }
+
+    // Get selected note contents
+    const selectedNoteContents = notes
+      .filter(note => selectedNotes.has(note.id))
+      .map(note => note.content);
+    
+    // Pre-fill merged content
+    setMergedNoteContent(selectedNoteContents.join(" • "));
+    setIsMergeDialogOpen(true);
+  };
+
+  // Merge mutation
+  const mergeNotesMutation = useMutation({
+    mutationFn: async () => {
+      // First, create the merged note
+      await addNoteMutation.mutateAsync(mergedNoteContent);
+      
+      // Then delete the original notes
+      for (const noteId of Array.from(selectedNotes)) {
+        await deleteNoteMutation.mutateAsync(noteId);
+      }
+    },
+    onSuccess: () => {
+      setIsMergeDialogOpen(false);
+      setMergedNoteContent("");
+      setSelectedNotes(new Set());
+      toast({
+        title: "Notes merged",
+        description: "The selected notes have been combined",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to merge notes",
+        description: error.message,
+      });
+    },
+  });
+
   if (spaceLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -307,12 +387,7 @@ export default function FacilitatorWorkspace() {
                     </Button>
                     <Button
                       variant="outline"
-                      onClick={() => {
-                        toast({
-                          title: "Merge feature",
-                          description: "Coming soon...",
-                        });
-                      }}
+                      onClick={handleMergeNotes}
                       data-testid="button-bulk-merge"
                     >
                       <Merge className="mr-2 h-4 w-4" />
@@ -361,6 +436,46 @@ export default function FacilitatorWorkspace() {
                         data-testid="button-save-note"
                       >
                         Add Note
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Merge Notes Dialog */}
+                <Dialog open={isMergeDialogOpen} onOpenChange={setIsMergeDialogOpen}>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>Merge {selectedNotes.size} Notes</DialogTitle>
+                      <DialogDescription>
+                        Combine the selected notes into a single note. Edit the merged content below.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="merged-content">Merged Content</Label>
+                        <Textarea
+                          id="merged-content"
+                          value={mergedNoteContent}
+                          onChange={(e) => setMergedNoteContent(e.target.value)}
+                          rows={6}
+                          data-testid="textarea-merged-content"
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsMergeDialogOpen(false)}
+                        data-testid="button-cancel-merge"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={() => mergeNotesMutation.mutate()}
+                        disabled={!mergedNoteContent.trim() || mergeNotesMutation.isPending}
+                        data-testid="button-save-merge"
+                      >
+                        Merge Notes
                       </Button>
                     </DialogFooter>
                   </DialogContent>
