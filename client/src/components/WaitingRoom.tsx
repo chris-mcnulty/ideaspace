@@ -4,15 +4,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, UserCircle } from "lucide-react";
+import { Loader2, UserCircle, Sparkles } from "lucide-react";
 import StatusBadge from "./StatusBadge";
+import { generateGuestName } from "@/lib/guestNames";
+import { useState } from "react";
 
 interface WaitingRoomProps {
   orgName: string;
   spaceName: string;
   spacePurpose: string;
   status: "draft" | "open" | "closed";
-  onJoinAnonymous?: () => void;
+  onJoinAnonymous?: (guestName: string) => void;
   onRegister?: (data: any) => void;
 }
 
@@ -24,6 +26,12 @@ export default function WaitingRoom({
   onJoinAnonymous,
   onRegister,
 }: WaitingRoomProps) {
+  const [guestName, setGuestName] = useState(generateGuestName());
+  
+  const regenerateGuestName = () => {
+    setGuestName(generateGuestName());
+  };
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-6">
       <Card className="w-full max-w-2xl">
@@ -71,12 +79,30 @@ export default function WaitingRoom({
                   <p className="mt-4 text-sm text-muted-foreground">
                     Join with a random alias to participate anonymously
                   </p>
+                  <div className="mt-6 rounded-lg bg-accent/50 p-4">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Your Guest Name
+                    </p>
+                    <p className="mt-2 text-2xl font-semibold" data-testid="text-guest-name">
+                      {guestName}
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mt-3"
+                      onClick={regenerateGuestName}
+                      data-testid="button-regenerate-name"
+                    >
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      Generate New Name
+                    </Button>
+                  </div>
                   <Button
                     className="mt-6"
-                    onClick={onJoinAnonymous}
+                    onClick={() => onJoinAnonymous?.(guestName)}
                     data-testid="button-join-anonymous"
                   >
-                    Generate Alias & Join
+                    Join as {guestName}
                   </Button>
                 </div>
               </TabsContent>

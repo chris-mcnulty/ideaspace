@@ -7,6 +7,7 @@ export default function OrganizationHomeExample() {
       name: 'Product Vision 2025',
       purpose: 'Envision the future of our product roadmap and prioritize key initiatives',
       status: 'open' as const,
+      hidden: false,
       participantCount: 24,
     },
     {
@@ -14,13 +15,23 @@ export default function OrganizationHomeExample() {
       name: 'Customer Experience Workshop',
       purpose: 'Brainstorm and rank improvements to enhance customer satisfaction',
       status: 'draft' as const,
+      hidden: false,
       participantCount: 0,
     },
     {
       id: '3',
+      name: 'Internal Leadership Retreat',
+      purpose: 'Executive team strategic planning (facilitators only)',
+      status: 'open' as const,
+      hidden: true,
+      participantCount: 8,
+    },
+    {
+      id: '4',
       name: 'Q4 Strategy Session',
       purpose: 'Collaborative planning for quarterly objectives and key results',
       status: 'closed' as const,
+      hidden: false,
       participantCount: 18,
     },
   ]

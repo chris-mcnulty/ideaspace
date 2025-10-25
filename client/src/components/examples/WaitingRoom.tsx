@@ -7,7 +7,7 @@ export default function WaitingRoomExample() {
       spaceName="Product Strategy Workshop"
       spacePurpose="Join us to envision the future of our product line and prioritize key initiatives for Q1 2025"
       status="open"
-      onJoinAnonymous={() => console.log('Joining anonymously')}
+      onJoinAnonymous={(guestName) => console.log('Joining as:', guestName)}
       onRegister={(data) => console.log('Registration data:', data)}
     />
   )

@@ -8,6 +8,7 @@ interface Space {
   name: string;
   purpose: string;
   status: "draft" | "open" | "closed" | "processing";
+  hidden: boolean;
   participantCount: number;
 }
 
@@ -33,6 +34,12 @@ export default function OrganizationHome({
   onManageOrg,
 }: OrganizationHomeProps) {
   const canManage = userRole === "org_admin" || userRole === "publisher";
+  const canSeeFacilitatorContent = userRole === "facilitator" || canManage;
+  
+  // Filter hidden spaces based on user role
+  const visibleSpaces = spaces.filter(space => 
+    !space.hidden || canSeeFacilitatorContent
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -73,7 +80,7 @@ export default function OrganizationHome({
           </div>
         </div>
 
-        {spaces.length === 0 ? (
+        {visibleSpaces.length === 0 ? (
           <div className="flex min-h-[400px] items-center justify-center rounded-lg border border-dashed">
             <div className="text-center">
               <p className="text-lg font-medium">No spaces yet</p>
@@ -92,13 +99,14 @@ export default function OrganizationHome({
           </div>
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {spaces.map((space) => (
+            {visibleSpaces.map((space) => (
               <SpaceCard
                 key={space.id}
                 name={space.name}
                 purpose={space.purpose}
                 status={space.status}
                 participantCount={space.participantCount}
+                isHidden={space.hidden}
                 onEnter={() => onEnterSpace?.(space.id)}
               />
             ))}

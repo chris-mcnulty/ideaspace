@@ -1,6 +1,7 @@
 import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Users } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ArrowRight, Users, EyeOff } from "lucide-react";
 import StatusBadge from "./StatusBadge";
 
 type SpaceStatus = "draft" | "open" | "closed" | "processing";
@@ -10,6 +11,7 @@ interface SpaceCardProps {
   purpose: string;
   status: SpaceStatus;
   participantCount: number;
+  isHidden?: boolean;
   onEnter?: () => void;
 }
 
@@ -18,13 +20,22 @@ export default function SpaceCard({
   purpose,
   status,
   participantCount,
+  isHidden,
   onEnter,
 }: SpaceCardProps) {
   return (
     <Card className="hover-elevate transition-all" data-testid={`space-card-${name}`}>
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
-          <h3 className="text-lg font-semibold">{name}</h3>
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold">{name}</h3>
+            {isHidden && (
+              <Badge variant="secondary" className="mt-2 gap-1">
+                <EyeOff className="h-3 w-3" />
+                Hidden
+              </Badge>
+            )}
+          </div>
           <StatusBadge status={status} />
         </div>
       </CardHeader>
