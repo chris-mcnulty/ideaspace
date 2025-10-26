@@ -103,6 +103,12 @@ export default function FacilitatorWorkspace() {
     enabled: !!params.space,
   });
 
+  // Fetch votes
+  const { data: votes = [] } = useQuery<any[]>({
+    queryKey: [`/api/spaces/${params.space}/votes`],
+    enabled: !!params.space,
+  });
+
   // Add note mutation
   const addNoteMutation = useMutation({
     mutationFn: async (content: string) => {
@@ -454,6 +460,9 @@ export default function FacilitatorWorkspace() {
             <TabsTrigger value="participants" data-testid="tab-participants">
               Participants ({participants.length})
             </TabsTrigger>
+            <TabsTrigger value="voting" data-testid="tab-voting">
+              Voting ({votes.length})
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="notes" className="mt-6 space-y-6">
@@ -713,6 +722,181 @@ export default function FacilitatorWorkspace() {
                     </CardContent>
                   </Card>
                 ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="voting" className="mt-6 space-y-6">
+            {/* Voting Header */}
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">Pairwise Voting</h2>
+                <p className="text-muted-foreground mt-1">
+                  Track participant voting progress
+                </p>
+              </div>
+              <Button
+                onClick={() => window.open(`/o/${params.org}/s/${params.space}/vote`, '_blank')}
+                data-testid="button-test-voting"
+              >
+                Test Voting View
+              </Button>
+            </div>
+
+            {/* Voting Statistics */}
+            <div className="grid gap-4 md:grid-cols-3">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium">Total Votes Cast</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">{votes.length}</div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Across all participants
+                  </p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium">Possible Pairs</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">
+                    {notes.length >= 2 ? (notes.length * (notes.length - 1)) / 2 : 0}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {notes.length} notes to compare
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium">Active Voters</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">
+                    {new Set(votes.map((v: any) => v.participantId)).size}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Of {participants.length} participants
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Participant Voting Progress */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Participant Progress</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {participants.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No participants have joined yet
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {participants.map((participant) => {
+                      const participantVotes = votes.filter((v: any) => v.participantId === participant.id);
+                      const totalPairs = notes.length >= 2 ? (notes.length * (notes.length - 1)) / 2 : 0;
+                      const progress = totalPairs > 0 ? Math.round((participantVotes.length / totalPairs) * 100) : 0;
+                      const isComplete = participantVotes.length >= totalPairs && totalPairs > 0;
+
+                      return (
+                        <div key={participant.id} className="space-y-2" data-testid={`voting-progress-${participant.id}`}>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div
+                                className={`h-2 w-2 rounded-full ${
+                                  participant.isOnline ? "bg-green-500" : "bg-gray-300"
+                                }`}
+                              />
+                              <span className="font-medium">{participant.displayName}</span>
+                              {isComplete && (
+                                <Badge variant="default" className="ml-2">Complete</Badge>
+                              )}
+                            </div>
+                            <span className="text-sm text-muted-foreground">
+                              {participantVotes.length} / {totalPairs} votes
+                            </span>
+                          </div>
+                          <div className="h-2 bg-muted rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-primary transition-all"
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Vote Winners Leaderboard */}
+            {votes.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Most Preferred Ideas</CardTitle>
+                  <p className="text-sm text-muted-foreground">Based on pairwise comparisons</p>
+                </CardHeader>
+                <CardContent>
+                  {(() => {
+                    // Calculate win counts for each note
+                    const winCounts = new Map<string, number>();
+                    notes.forEach(note => winCounts.set(note.id, 0));
+                    votes.forEach((vote: any) => {
+                      const currentWins = winCounts.get(vote.winnerNoteId) || 0;
+                      winCounts.set(vote.winnerNoteId, currentWins + 1);
+                    });
+
+                    // Sort notes by win count
+                    const sortedNotes = [...notes]
+                      .map(note => ({ note, wins: winCounts.get(note.id) || 0 }))
+                      .sort((a, b) => b.wins - a.wins)
+                      .slice(0, 10);
+
+                    return (
+                      <div className="space-y-3">
+                        {sortedNotes.map(({ note, wins }, index) => (
+                          <div key={note.id} className="flex items-start gap-3" data-testid={`leaderboard-item-${index}`}>
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-sm">
+                              {index + 1}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm leading-relaxed">{note.content}</p>
+                              {note.category && (
+                                <Badge variant="secondary" className="mt-1 text-xs">
+                                  {note.category}
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex-shrink-0 text-right">
+                              <div className="text-lg font-bold">{wins}</div>
+                              <div className="text-xs text-muted-foreground">wins</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Empty State */}
+            {votes.length === 0 && (
+              <div className="flex min-h-[400px] items-center justify-center rounded-lg border-2 border-dashed">
+                <div className="text-center">
+                  <Users className="mx-auto h-12 w-12 text-muted-foreground" />
+                  <p className="mt-4 text-lg font-medium">No votes yet</p>
+                  <p className="mt-2 text-sm text-muted-foreground max-w-md">
+                    Participants can start voting once they navigate to the voting page
+                  </p>
+                </div>
               </div>
             )}
           </TabsContent>
