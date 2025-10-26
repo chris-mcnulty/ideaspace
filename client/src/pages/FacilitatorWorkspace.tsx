@@ -32,6 +32,7 @@ import {
   XCircle,
   Users,
   StickyNote,
+  Sparkles,
 } from "lucide-react";
 import type { Organization, Space, Note, Participant } from "@shared/schema";
 
@@ -54,8 +55,15 @@ export default function FacilitatorWorkspace() {
       case 'note_updated':
       case 'note_deleted':
       case 'notes_deleted':
+      case 'categories_updated':
         // Invalidate notes query to refetch latest data
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/notes`] });
+        if (message.type === 'categories_updated') {
+          toast({
+            title: "AI Categorization Complete",
+            description: message.data?.summary || "Notes have been organized into categories",
+          });
+        }
         break;
       case 'participant_joined':
       case 'participant_left':
@@ -63,7 +71,7 @@ export default function FacilitatorWorkspace() {
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/participants`] });
         break;
     }
-  }, [params.space]);
+  }, [params.space, toast]);
 
   useWebSocket({
     spaceId: params.space,
@@ -187,6 +195,28 @@ export default function FacilitatorWorkspace() {
       toast({
         variant: "destructive",
         title: "Failed to update session",
+        description: error.message,
+      });
+    },
+  });
+
+  // AI Categorization mutation
+  const categorizeMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", `/api/spaces/${params.space}/categorize`, {});
+      return await response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/notes`] });
+      toast({
+        title: "AI Categorization Started",
+        description: `Processing ${notes.length} notes...`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Categorization Failed",
         description: error.message,
       });
     },
@@ -424,6 +454,15 @@ export default function FacilitatorWorkspace() {
                     </Button>
                   </>
                 )}
+                <Button
+                  variant="outline"
+                  onClick={() => categorizeMutation.mutate()}
+                  disabled={notes.length === 0 || categorizeMutation.isPending}
+                  data-testid="button-ai-categorize"
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  {categorizeMutation.isPending ? "Categorizing..." : "AI Categorize"}
+                </Button>
                 <Dialog open={isAddNoteDialogOpen} onOpenChange={setIsAddNoteDialogOpen}>
                   <DialogTrigger asChild>
                     <Button data-testid="button-add-note">
