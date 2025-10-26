@@ -9,6 +9,7 @@ import { categorizeNotes } from "./services/openai";
 import { getNextPair, calculateProgress } from "./services/pairwise";
 import { hashPassword, requireAuth, requireRole, requireGlobalAdmin, requireCompanyAdmin, requireFacilitator } from "./auth";
 import { generateWorkspaceCode, isValidWorkspaceCode } from "./services/workspace-code";
+import { sendAccessRequestEmail } from "./services/email";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Workspace code lookup (public endpoint for entry flow)
@@ -404,6 +405,219 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete space" });
+    }
+  });
+
+  // Access Requests
+  // Submit an access request (public endpoint for guests)
+  app.post("/api/access-requests", async (req, res) => {
+    try {
+      const data = z.object({
+        spaceId: z.string(),
+        email: z.string().email(),
+        name: z.string(),
+        message: z.string().optional(),
+      }).parse(req.body);
+
+      // Check if space exists
+      const space = await storage.getSpace(data.spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      // Check if there's already a pending request for this email/space
+      const existing = await storage.checkExistingAccessRequest(data.spaceId, data.email);
+      if (existing) {
+        return res.status(400).json({ 
+          error: "You already have a pending access request for this workspace" 
+        });
+      }
+
+      // Check if user with this email already has access
+      const existingUser = await storage.getUserByEmail(data.email);
+      if (existingUser) {
+        // Check if user has permissions for this space
+        const org = await storage.getOrganization(space.organizationId);
+        if (org && existingUser.organizationId === org.id) {
+          return res.status(400).json({ 
+            error: "You already have access to this workspace. Please log in." 
+          });
+        }
+        
+        // Check if user is a facilitator of this space
+        const facilitators = await storage.getSpaceFacilitatorsBySpace(data.spaceId);
+        if (facilitators.some(f => f.userId === existingUser.id)) {
+          return res.status(400).json({ 
+            error: "You already have access to this workspace. Please log in." 
+          });
+        }
+      }
+
+      // Create access request
+      const accessRequest = await storage.createAccessRequest({
+        spaceId: data.spaceId,
+        email: data.email,
+        displayName: data.name,
+        message: data.message || null,
+        status: "pending",
+        userId: null,
+        resolvedBy: null,
+      });
+
+      // Get organization info for email
+      const org = await storage.getOrganization(space.organizationId);
+
+      // Notify facilitators and company admins
+      const facilitators = await storage.getSpaceFacilitatorsBySpace(data.spaceId);
+      const companyAdmins = org ? await storage.getCompanyAdminsByOrganization(org.id) : [];
+      
+      // Get unique user IDs to notify
+      const userIdsToNotify = new Set([
+        ...facilitators.map(f => f.userId),
+        ...companyAdmins.map(ca => ca.userId),
+      ]);
+
+      // Send email notifications
+      const baseUrl = req.get('origin') || 'http://localhost:5000';
+      const grantAccessUrl = `${baseUrl}/admin?tab=access-requests&spaceId=${data.spaceId}`;
+
+      for (const userId of Array.from(userIdsToNotify)) {
+        try {
+          const user = await storage.getUser(userId);
+          if (user && user.email) {
+            await sendAccessRequestEmail(
+              user.email,
+              user.displayName || user.username,
+              {
+                workspaceName: space.name,
+                requesterName: data.name,
+                requesterEmail: data.email,
+                message: data.message,
+                grantAccessUrl,
+                organizationName: org?.name || "Organization",
+              }
+            );
+          }
+        } catch (emailError) {
+          console.error(`Failed to send email to user ${userId}:`, emailError);
+        }
+      }
+
+      res.status(201).json(accessRequest);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Access request error:", error);
+      res.status(500).json({ error: "Failed to submit access request" });
+    }
+  });
+
+  // List access requests for a space (facilitators and admins only)
+  app.get("/api/spaces/:spaceId/access-requests", requireAuth, async (req, res) => {
+    try {
+      const { spaceId } = req.params;
+      const currentUser = req.user as User;
+      
+      // Check authorization
+      const space = await storage.getSpace(spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      // Check if user has permission to view access requests
+      let hasPermission = false;
+      
+      if (currentUser.role === "global_admin") {
+        hasPermission = true;
+      } else if (currentUser.role === "company_admin" && currentUser.organizationId === space.organizationId) {
+        hasPermission = true;
+      } else if (currentUser.role === "facilitator" || currentUser.role === "user") {
+        // Check if user is facilitator of this space
+        const facilitators = await storage.getSpaceFacilitatorsBySpace(spaceId);
+        hasPermission = facilitators.some(f => f.userId === currentUser.id);
+      }
+
+      if (!hasPermission) {
+        return res.status(403).json({ error: "Insufficient permissions" });
+      }
+
+      const requests = await storage.getAccessRequestsBySpace(spaceId);
+      res.json(requests);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch access requests" });
+    }
+  });
+
+  // Approve or deny an access request (facilitators and admins only)
+  app.patch("/api/access-requests/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const data = z.object({
+        status: z.enum(["approved", "denied"]),
+      }).parse(req.body);
+
+      const currentUser = req.user as User;
+      const request = await storage.getAccessRequest(id);
+      
+      if (!request) {
+        return res.status(404).json({ error: "Access request not found" });
+      }
+
+      if (request.status !== "pending") {
+        return res.status(400).json({ error: "Access request already resolved" });
+      }
+
+      // Check authorization
+      const space = await storage.getSpace(request.spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      let hasPermission = false;
+      
+      if (currentUser.role === "global_admin") {
+        hasPermission = true;
+      } else if (currentUser.role === "company_admin" && currentUser.organizationId === space.organizationId) {
+        hasPermission = true;
+      } else if (currentUser.role === "facilitator" || currentUser.role === "user") {
+        const facilitators = await storage.getSpaceFacilitatorsBySpace(request.spaceId);
+        hasPermission = facilitators.some(f => f.userId === currentUser.id);
+      }
+
+      if (!hasPermission) {
+        return res.status(403).json({ error: "Insufficient permissions" });
+      }
+
+      // Update request status
+      const updated = await storage.updateAccessRequest(id, {
+        status: data.status,
+        resolvedBy: currentUser.id,
+      });
+
+      // If approved, create or update user and add them as facilitator or participant
+      if (data.status === "approved") {
+        // Check if user with this email already exists
+        let user = await storage.getUserByEmail(request.email);
+        
+        if (!user) {
+          // Create a new user account (they'll need to set password on first login)
+          // For now, we'll just add them to the workspace as a participant
+          // They can register later to claim the account
+          // Note: This is a placeholder - full implementation would involve invitation emails
+        }
+        
+        // TODO: Add user as participant or facilitator to the workspace
+        // This will be implemented in a later task
+      }
+
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Failed to update access request:", error);
+      res.status(500).json({ error: "Failed to update access request" });
     }
   });
 

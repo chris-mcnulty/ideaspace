@@ -360,7 +360,12 @@ export class DbStorage implements IStorage {
   }
 
   async updateAccessRequest(id: string, request: Partial<InsertAccessRequest>): Promise<AccessRequest | undefined> {
-    const [updated] = await db.update(accessRequests).set(request).where(eq(accessRequests.id, id)).returning();
+    // Add resolvedAt timestamp when status changes
+    const updateData = {
+      ...request,
+      ...(request.status && request.status !== "pending" ? { resolvedAt: new Date() } : {}),
+    };
+    const [updated] = await db.update(accessRequests).set(updateData as any).where(eq(accessRequests.id, id)).returning();
     return updated;
   }
 
