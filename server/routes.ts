@@ -4,6 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { insertOrganizationSchema, insertSpaceSchema, insertParticipantSchema, insertNoteSchema, insertVoteSchema, insertRankingSchema } from "@shared/schema";
 import { z } from "zod";
+import { categorizeNotes } from "./services/openai";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Organizations
@@ -222,6 +223,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete notes" });
+    }
+  });
+
+  app.post("/api/spaces/:spaceId/categorize", async (req, res) => {
+    try {
+      const { spaceId } = req.params;
+      
+      // Fetch all notes for this space
+      const notes = await storage.getNotesBySpace(spaceId);
+      if (notes.length === 0) {
+        return res.status(400).json({ error: "No notes to categorize" });
+      }
+
+      // Call GPT-5 to categorize notes
+      const result = await categorizeNotes(notes.map(n => ({ id: n.id, content: n.content })));
+      
+      // Update notes with AI-generated categories
+      const updatePromises = result.categories.map(({ noteId, category }) => 
+        storage.updateNote(noteId, { category, isAiCategory: true })
+      );
+      
+      await Promise.all(updatePromises);
+      
+      // Broadcast category updates to all connected clients
+      broadcast({ 
+        type: "categories_updated", 
+        data: { 
+          spaceId, 
+          categories: result.categories,
+          summary: result.summary 
+        } 
+      });
+      
+      res.json({ 
+        success: true, 
+        categoriesApplied: result.categories.length,
+        summary: result.summary 
+      });
+    } catch (error) {
+      console.error("Categorization error:", error);
+      res.status(500).json({ error: "Failed to categorize notes" });
     }
   });
 
