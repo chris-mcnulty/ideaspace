@@ -31,6 +31,13 @@ Aurora is built as a multi-tenant web application with a clear separation of con
 - **AI Integration**: Leverages OpenAI API (GPT-5) via Replit AI Integrations for:
   - **Note Categorization**: Production-ready service with Zod validation, retry logic, and real-time WebSocket broadcasts for category updates
   - **Card Rewrites**: Facilitators can generate 1-3 AI-powered variations of any card while preserving category, with dialog UI to select and apply variations
+  - **AI Usage Tracking**: Comprehensive cost monitoring system with:
+    - Database-backed logging of all AI operations (categorization, rewrites) tracking tokens (input/output), estimated costs, model names, and timestamps
+    - Three-tier analytics: overall platform usage, per-organization usage, and per-workspace usage
+    - Admin Panel UI with filters for organization, workspace, and time range (24h, 7d, 30d, all time)
+    - Summary metrics displaying total operations, tokens consumed, and estimated costs in dollars
+    - Real-time cost estimation based on GPT-5 pricing ($1.50/1M input tokens, $6/1M output tokens)
+    - Detailed operation logs showing individual AI calls with token breakdowns and cost per operation
 - **Pairwise Voting**: Employs a round-robin algorithm for deterministic pair generation, tracking progress, and displaying results in a leaderboard.
 - **Stack Ranking (Borda Count)**: Complete implementation with drag-and-drop interface for participants to rank ideas, Borda count algorithm for scoring (top rank gets N points, descending to 1 point), real-time leaderboard display, and facilitator progress tracking. Includes validation ensuring all notes are ranked with sequential positions.
 - **Guest Access Control System**: Comprehensive workspace access management with configurable guest permissions (default: disabled). Features include:
