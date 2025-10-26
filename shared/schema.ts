@@ -41,6 +41,7 @@ export const participants = pgTable("participants", {
   spaceId: varchar("space_id").notNull().references(() => spaces.id),
   userId: varchar("user_id").references(() => users.id),
   displayName: text("display_name").notNull(), // For guest users, randomized name
+  email: text("email"), // Optional email for guest participants (for linking to accounts later)
   isGuest: boolean("is_guest").notNull().default(false),
   isOnline: boolean("is_online").notNull().default(false),
   profileData: jsonb("profile_data"), // For registered users: email, company, job_title, etc.

@@ -78,6 +78,8 @@ export interface IStorage {
   createParticipant(participant: InsertParticipant): Promise<Participant>;
   updateParticipant(id: string, participant: Partial<InsertParticipant>): Promise<Participant | undefined>;
   deleteParticipant(id: string): Promise<boolean>;
+  findOrphanedParticipantsByEmail(email: string): Promise<Participant[]>;
+  linkParticipantToUser(participantId: string, userId: string): Promise<Participant | undefined>;
 
   // Notes
   getNote(id: string): Promise<Note | undefined>;
@@ -225,6 +227,24 @@ export class DbStorage implements IStorage {
   async deleteParticipant(id: string): Promise<boolean> {
     const result = await db.delete(participants).where(eq(participants.id, id));
     return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async findOrphanedParticipantsByEmail(email: string): Promise<Participant[]> {
+    // Find guest participants without userId that match the email
+    return db.select().from(participants).where(
+      and(
+        eq(participants.email, email),
+        eq(participants.userId, null as any)
+      )
+    );
+  }
+
+  async linkParticipantToUser(participantId: string, userId: string): Promise<Participant | undefined> {
+    const [updated] = await db.update(participants)
+      .set({ userId, isGuest: false })
+      .where(eq(participants.id, participantId))
+      .returning();
+    return updated;
   }
 
   // Notes
