@@ -37,6 +37,7 @@ import {
   BookOpen,
   FileStack,
   Loader2,
+  Download,
 } from "lucide-react";
 import type { Organization, Space, Note, Participant } from "@shared/schema";
 import { Leaderboard } from "@/components/Leaderboard";
@@ -967,12 +968,24 @@ export default function FacilitatorWorkspace() {
                   Track participant voting progress
                 </p>
               </div>
-              <Button
-                onClick={() => window.open(`/o/${params.org}/s/${params.space}/vote`, '_blank')}
-                data-testid="button-test-voting"
-              >
-                Test Voting View
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    window.location.href = `/api/spaces/${params.space}/export/pairwise`;
+                  }}
+                  data-testid="button-export-voting"
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Export Results
+                </Button>
+                <Button
+                  onClick={() => window.open(`/o/${params.org}/s/${params.space}/vote`, '_blank')}
+                  data-testid="button-test-voting"
+                >
+                  Test Voting View
+                </Button>
+              </div>
             </div>
 
             {/* Voting Statistics */}
@@ -1142,12 +1155,24 @@ export default function FacilitatorWorkspace() {
                   Track participant ranking progress and view Borda count results
                 </p>
               </div>
-              <Button
-                onClick={() => window.open(`/o/${params.org}/s/${params.space}/rank`, '_blank')}
-                data-testid="button-test-ranking"
-              >
-                Test Ranking View
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    window.location.href = `/api/spaces/${params.space}/export/ranking`;
+                  }}
+                  data-testid="button-export-ranking"
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Export Results
+                </Button>
+                <Button
+                  onClick={() => window.open(`/o/${params.org}/s/${params.space}/rank`, '_blank')}
+                  data-testid="button-test-ranking"
+                >
+                  Test Ranking View
+                </Button>
+              </div>
             </div>
 
             {/* Ranking Statistics */}

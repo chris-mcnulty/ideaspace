@@ -10,6 +10,7 @@ import { categorizeNotes, rewriteCard } from "./services/openai";
 import { getNextPair, calculateProgress } from "./services/pairwise";
 import { validateRanking, calculateBordaScores, calculateRankingProgress, hasParticipantCompleted } from "./services/stack-ranking";
 import { validateAllocation, calculateMarketplaceScores, calculateAllocationProgress, hasParticipantCompleted as hasParticipantCompletedAllocation, getParticipantRemainingBudget, DEFAULT_COIN_BUDGET } from "./services/marketplace";
+import { generatePairwiseExport, generateStackRankingExport, generateMarketplaceExport } from "./services/export";
 import { hashPassword, requireAuth, requireRole, requireGlobalAdmin, requireCompanyAdmin, requireFacilitator } from "./auth";
 import { generateWorkspaceCode, isValidWorkspaceCode } from "./services/workspace-code";
 import { sendAccessRequestEmail } from "./services/email";
@@ -1843,6 +1844,177 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Failed to fetch marketplace budget:", error);
       res.status(500).json({ error: "Failed to fetch marketplace budget" });
+    }
+  });
+
+  // Export Endpoints (Facilitator/Admin only)
+  // Export pairwise voting results
+  app.get("/api/spaces/:spaceId/export/pairwise", requireAuth, async (req, res) => {
+    try {
+      const { spaceId } = req.params;
+      
+      // Check if user is facilitator or admin for this space
+      const space = await storage.getSpace(spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      // Verify user is facilitator or admin
+      const user = req.user as User;
+      const isFacilitator = await storage.getSpaceFacilitatorsByUser(user.id);
+      const hasFacilitatorAccess = isFacilitator.some(f => f.spaceId === spaceId);
+      
+      // Check organization access for company admins
+      let hasAccess = false;
+      if (user.role === 'global_admin') {
+        hasAccess = true;
+      } else if (user.role === 'company_admin') {
+        // Company admins can only access spaces in their organization
+        const companyAdmins = await storage.getCompanyAdminsByUser(user.id);
+        hasAccess = companyAdmins.some(ca => ca.organizationId === space.organizationId);
+      } else if (hasFacilitatorAccess) {
+        hasAccess = true;
+      }
+
+      if (!hasAccess) {
+        return res.status(403).json({ error: "Access denied. Facilitator or admin access required." });
+      }
+
+      // Get notes and votes
+      const notes = await storage.getNotesBySpace(spaceId);
+      const votes = await storage.getVotesBySpace(spaceId);
+
+      // Calculate win/loss stats
+      const voteStats = new Map<string, { wins: number; losses: number; winRate: number }>();
+      
+      notes.forEach(note => {
+        voteStats.set(note.id, { wins: 0, losses: 0, winRate: 0 });
+      });
+
+      votes.forEach(vote => {
+        const winnerStats = voteStats.get(vote.winnerNoteId);
+        const loserStats = voteStats.get(vote.loserNoteId);
+        if (winnerStats) winnerStats.wins++;
+        if (loserStats) loserStats.losses++;
+      });
+
+      // Calculate win rates
+      voteStats.forEach((stats, noteId) => {
+        const totalVotes = stats.wins + stats.losses;
+        stats.winRate = totalVotes > 0 ? stats.wins / totalVotes : 0;
+      });
+
+      const exportText = generatePairwiseExport(notes, voteStats);
+      
+      // Set headers for file download
+      res.setHeader('Content-Type', 'text/plain');
+      res.setHeader('Content-Disposition', `attachment; filename="pairwise-voting-${spaceId}-${Date.now()}.txt"`);
+      res.send(exportText);
+    } catch (error) {
+      console.error("Failed to export pairwise voting:", error);
+      res.status(500).json({ error: "Failed to export pairwise voting data" });
+    }
+  });
+
+  // Export stack ranking results
+  app.get("/api/spaces/:spaceId/export/ranking", requireAuth, async (req, res) => {
+    try {
+      const { spaceId } = req.params;
+      
+      // Check if user is facilitator or admin for this space
+      const space = await storage.getSpace(spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      // Verify user is facilitator or admin
+      const user = req.user as User;
+      const isFacilitator = await storage.getSpaceFacilitatorsByUser(user.id);
+      const hasFacilitatorAccess = isFacilitator.some(f => f.spaceId === spaceId);
+      
+      // Check organization access for company admins
+      let hasAccess = false;
+      if (user.role === 'global_admin') {
+        hasAccess = true;
+      } else if (user.role === 'company_admin') {
+        // Company admins can only access spaces in their organization
+        const companyAdmins = await storage.getCompanyAdminsByUser(user.id);
+        hasAccess = companyAdmins.some(ca => ca.organizationId === space.organizationId);
+      } else if (hasFacilitatorAccess) {
+        hasAccess = true;
+      }
+
+      if (!hasAccess) {
+        return res.status(403).json({ error: "Access denied. Facilitator or admin access required." });
+      }
+
+      // Get notes and rankings
+      const notes = await storage.getNotesBySpace(spaceId);
+      const rankings = await storage.getRankingsBySpace(spaceId);
+
+      // Calculate Borda scores
+      const leaderboard = calculateBordaScores(notes, rankings);
+
+      const exportText = generateStackRankingExport(leaderboard);
+      
+      // Set headers for file download
+      res.setHeader('Content-Type', 'text/plain');
+      res.setHeader('Content-Disposition', `attachment; filename="stack-ranking-${spaceId}-${Date.now()}.txt"`);
+      res.send(exportText);
+    } catch (error) {
+      console.error("Failed to export stack ranking:", error);
+      res.status(500).json({ error: "Failed to export stack ranking data" });
+    }
+  });
+
+  // Export marketplace allocation results
+  app.get("/api/spaces/:spaceId/export/marketplace", requireAuth, async (req, res) => {
+    try {
+      const { spaceId } = req.params;
+      
+      // Check if user is facilitator or admin for this space
+      const space = await storage.getSpace(spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      // Verify user is facilitator or admin
+      const user = req.user as User;
+      const isFacilitator = await storage.getSpaceFacilitatorsByUser(user.id);
+      const hasFacilitatorAccess = isFacilitator.some(f => f.spaceId === spaceId);
+      
+      // Check organization access for company admins
+      let hasAccess = false;
+      if (user.role === 'global_admin') {
+        hasAccess = true;
+      } else if (user.role === 'company_admin') {
+        // Company admins can only access spaces in their organization
+        const companyAdmins = await storage.getCompanyAdminsByUser(user.id);
+        hasAccess = companyAdmins.some(ca => ca.organizationId === space.organizationId);
+      } else if (hasFacilitatorAccess) {
+        hasAccess = true;
+      }
+
+      if (!hasAccess) {
+        return res.status(403).json({ error: "Access denied. Facilitator or admin access required." });
+      }
+
+      // Get notes and allocations
+      const notes = await storage.getNotesBySpace(spaceId);
+      const allocations = await storage.getMarketplaceAllocationsBySpace(spaceId);
+
+      // Calculate marketplace scores
+      const leaderboard = calculateMarketplaceScores(notes, allocations);
+
+      const exportText = generateMarketplaceExport(leaderboard);
+      
+      // Set headers for file download
+      res.setHeader('Content-Type', 'text/plain');
+      res.setHeader('Content-Disposition', `attachment; filename="marketplace-allocation-${spaceId}-${Date.now()}.txt"`);
+      res.send(exportText);
+    } catch (error) {
+      console.error("Failed to export marketplace allocation:", error);
+      res.status(500).json({ error: "Failed to export marketplace allocation data" });
     }
   });
 

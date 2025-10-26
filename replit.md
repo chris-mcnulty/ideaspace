@@ -105,6 +105,16 @@ Aurora is built as a multi-tenant web application with a clear separation of con
       - Real-time budget display showing remaining coins and allocation percentage
       - Navigation integration in participant footer
       - WebSocket broadcasts for allocation updates
+      - Export functionality: Categorized text file with total coins, average coins per participant, and AI categorization status
+    - **Export System**: Facilitators and admins can export categorized snapshots of all voting modules:
+      - Export service (server/services/export.ts) generating formatted text files
+      - Pairwise Voting export: Win/loss records, win rates, categorized by AI-assigned categories
+      - Stack Ranking export: Borda count scores, average ranks, participant counts, categorized
+      - Marketplace Allocation export: Total coins, average coins, participant counts, categorized
+      - Export buttons integrated into FacilitatorWorkspace tabs for Voting and Ranking
+      - API endpoints: /api/spaces/:spaceId/export/pairwise, /ranking, /marketplace
+      - Text format optimized for GenAI analytics consumption
+      - Includes timestamp, totals, and detailed breakdowns by category
 - **In Progress**: None
 - **Pending**: 
     - Facilitator dashboard for assigned workspaces
