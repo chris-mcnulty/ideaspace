@@ -16,10 +16,16 @@ Aurora is a sophisticated web application that enables facilitators to guide coh
 - ✅ **Dark Mode Design System** based on Synozur reference:
   - Primary purple (`274 95% 52%` - #810FFB) throughout
   - Dark backgrounds (`240 8% 6%` - very dark blue-black)
-  - Montserrat font (fallback for Avenir Next LT Pro)
+  - **Avenir Next LT Pro** custom font (Regular 400, Bold 700) loaded from `/fonts/`
   - Gradient text effects for hero sections
   - Automatic elevation on hover/active states
   - Dark mode enabled by default
+- ✅ **Branding Assets** integrated:
+  - Custom Avenir Next LT Pro fonts (Regular & Bold)
+  - Synozur logos (horizontal, vertical, mark - color & white versions)
+  - Favicon using Synozur mark
+  - All assets stored in `client/public/` for production deployment
+  - Logos integrated in landing page, org home, and headers
 - ✅ **Facilitator Workspace** (/o/:org/s/:space/facilitate) with:
   - Note preloading, add, edit, delete operations
   - Bulk selection and deletion

@@ -14,9 +14,10 @@
 - **Accessibility-first** - WCAG 2.1 AA compliance
 
 **Font Stack:**
-- Primary: **Montserrat** (fallback for Avenir Next LT Pro) - Professional sans-serif
+- Primary: **Avenir Next LT Pro** (custom font, 400 Regular & 700 Bold)
 - Fallback: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif
 - Monospace: "Roboto Mono", "Courier New", monospace
+- **Note**: Custom Avenir Next LT Pro fonts loaded via @font-face from `/fonts/`
 
 ---
 
