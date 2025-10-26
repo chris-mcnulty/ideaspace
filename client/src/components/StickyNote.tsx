@@ -1,5 +1,6 @@
-import { GripVertical, User } from "lucide-react";
+import { GripVertical, User, Edit2, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface StickyNoteProps {
@@ -12,6 +13,10 @@ interface StickyNoteProps {
   className?: string;
   onClick?: () => void;
   selected?: boolean;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }
 
 export default function StickyNote({
@@ -23,6 +28,10 @@ export default function StickyNote({
   className,
   onClick,
   selected,
+  onEdit,
+  onDelete,
+  canEdit = false,
+  canDelete = false,
 }: StickyNoteProps) {
   const colors = [
     "bg-yellow-100 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700",
@@ -68,6 +77,40 @@ export default function StickyNote({
       {timestamp && (
         <div className="mt-1 font-mono text-xs opacity-40">
           {timestamp.toLocaleTimeString()}
+        </div>
+      )}
+
+      {/* Edit/Delete buttons - shown on hover */}
+      {(canEdit || canDelete) && (
+        <div className="absolute -right-2 -top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          {canEdit && onEdit && (
+            <Button
+              size="icon"
+              variant="secondary"
+              className="h-6 w-6 rounded-full"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              data-testid="button-edit-note"
+            >
+              <Edit2 className="h-3 w-3" />
+            </Button>
+          )}
+          {canDelete && onDelete && (
+            <Button
+              size="icon"
+              variant="destructive"
+              className="h-6 w-6 rounded-full"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              data-testid="button-delete-note"
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          )}
         </div>
       )}
     </div>
