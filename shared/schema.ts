@@ -14,10 +14,12 @@ export const organizations = pgTable("organizations", {
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  organizationId: varchar("organization_id").references(() => organizations.id),
+  email: text("email").notNull().unique(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
-  role: text("role").notNull().default("participant"), // publisher, org_admin, facilitator, participant
+  organizationId: varchar("organization_id").references(() => organizations.id),
+  role: text("role").notNull().default("user"), // global_admin, company_admin, facilitator, user
+  displayName: text("display_name"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -26,8 +28,10 @@ export const spaces = pgTable("spaces", {
   organizationId: varchar("organization_id").notNull().references(() => organizations.id),
   name: text("name").notNull(),
   purpose: text("purpose").notNull(),
-  status: text("status").notNull().default("draft"), // draft, open, closed, processing
+  code: varchar("code", { length: 4 }).notNull().unique(), // 4-digit workspace code
+  status: text("status").notNull().default("draft"), // draft, open, closed, processing, archived
   hidden: boolean("hidden").notNull().default(false),
+  guestAllowed: boolean("guest_allowed").notNull().default(false), // Default: guests NOT allowed
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -71,6 +75,22 @@ export const rankings = pgTable("rankings", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Association table: company admins can manage specific organizations
+export const companyAdmins = pgTable("company_admins", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  organizationId: varchar("organization_id").notNull().references(() => organizations.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Association table: facilitators are assigned to specific workspaces
+export const spaceFacilitators = pgTable("space_facilitators", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  spaceId: varchar("space_id").notNull().references(() => spaces.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Insert schemas
 export const insertOrganizationSchema = createInsertSchema(organizations).omit({
   id: true,
@@ -108,6 +128,16 @@ export const insertRankingSchema = createInsertSchema(rankings).omit({
   createdAt: true,
 });
 
+export const insertCompanyAdminSchema = createInsertSchema(companyAdmins).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSpaceFacilitatorSchema = createInsertSchema(spaceFacilitators).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type Organization = typeof organizations.$inferSelect;
 export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
@@ -129,3 +159,9 @@ export type InsertVote = z.infer<typeof insertVoteSchema>;
 
 export type Ranking = typeof rankings.$inferSelect;
 export type InsertRanking = z.infer<typeof insertRankingSchema>;
+
+export type CompanyAdmin = typeof companyAdmins.$inferSelect;
+export type InsertCompanyAdmin = z.infer<typeof insertCompanyAdminSchema>;
+
+export type SpaceFacilitator = typeof spaceFacilitators.$inferSelect;
+export type InsertSpaceFacilitator = z.infer<typeof insertSpaceFacilitatorSchema>;

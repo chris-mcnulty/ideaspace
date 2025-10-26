@@ -12,33 +12,92 @@ async function seed() {
   });
   console.log("✓ Created organization:", org.name);
 
-  // Create spaces
+  // Create users with different roles (password: "password123" for all - will be hashed later)
+  const globalAdmin = await storage.createUser({
+    email: "admin@synozur.com",
+    username: "globaladmin",
+    password: "password123", // TODO: Hash passwords when auth is implemented
+    role: "global_admin",
+    displayName: "Global Administrator",
+    organizationId: null,
+  });
+  
+  const companyAdmin = await storage.createUser({
+    email: "admin@acme.com",
+    username: "acmeadmin",
+    password: "password123",
+    role: "company_admin",
+    displayName: "Acme Administrator",
+    organizationId: org.id,
+  });
+  
+  const facilitator = await storage.createUser({
+    email: "facilitator@acme.com",
+    username: "facilitator1",
+    password: "password123",
+    role: "facilitator",
+    displayName: "Jane Facilitator",
+    organizationId: org.id,
+  });
+  
+  const regularUser = await storage.createUser({
+    email: "user@acme.com",
+    username: "user1",
+    password: "password123",
+    role: "user",
+    displayName: "John User",
+    organizationId: org.id,
+  });
+  
+  console.log("✓ Created 4 users with different roles");
+
+  // Assign company admin to Acme organization
+  await storage.createCompanyAdmin({
+    userId: companyAdmin.id,
+    organizationId: org.id,
+  });
+  console.log("✓ Assigned company admin to Acme");
+
+  // Create spaces with 4-digit codes
   const productSpace = await storage.createSpace({
     organizationId: org.id,
     name: "Product Vision 2025",
     purpose: "Envision the future of our product roadmap and prioritize key initiatives for next year",
+    code: "1234",
     status: "open",
     hidden: false,
+    guestAllowed: true, // Allow guests for testing
   });
-  console.log("✓ Created space:", productSpace.name);
+  console.log("✓ Created space:", productSpace.name, `(Code: ${productSpace.code})`);
 
   const workshopSpace = await storage.createSpace({
     organizationId: org.id,
     name: "Customer Experience Workshop",
     purpose: "Brainstorm and rank improvements to enhance customer satisfaction and retention",
+    code: "5678",
     status: "draft",
     hidden: false,
+    guestAllowed: false, // Default: no guests
   });
-  console.log("✓ Created space:", workshopSpace.name);
+  console.log("✓ Created space:", workshopSpace.name, `(Code: ${workshopSpace.code})`);
 
   const leadershipSpace = await storage.createSpace({
     organizationId: org.id,
     name: "Leadership Strategy Retreat",
     purpose: "Executive team strategic planning session (facilitators and admins only)",
+    code: "9012",
     status: "open",
     hidden: true,
+    guestAllowed: false,
   });
-  console.log("✓ Created hidden space:", leadershipSpace.name);
+  console.log("✓ Created hidden space:", leadershipSpace.name, `(Code: ${leadershipSpace.code})`);
+
+  // Assign facilitator to Product Vision space
+  await storage.createSpaceFacilitator({
+    userId: facilitator.id,
+    spaceId: productSpace.id,
+  });
+  console.log("✓ Assigned facilitator to Product Vision space");
 
   // Create some participants
   const alice = await storage.createParticipant({

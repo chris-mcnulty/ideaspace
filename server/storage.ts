@@ -2,6 +2,8 @@ import { db } from "./db";
 import {
   type Organization,
   type InsertOrganization,
+  type User,
+  type InsertUser,
   type Space,
   type InsertSpace,
   type Participant,
@@ -12,12 +14,19 @@ import {
   type InsertVote,
   type Ranking,
   type InsertRanking,
+  type CompanyAdmin,
+  type InsertCompanyAdmin,
+  type SpaceFacilitator,
+  type InsertSpaceFacilitator,
   organizations,
+  users,
   spaces,
   participants,
   notes,
   votes,
   rankings,
+  companyAdmins,
+  spaceFacilitators,
 } from "@shared/schema";
 import { eq, and, desc } from "drizzle-orm";
 
@@ -28,12 +37,33 @@ export interface IStorage {
   createOrganization(org: InsertOrganization): Promise<Organization>;
   updateOrganization(id: string, org: Partial<InsertOrganization>): Promise<Organization | undefined>;
 
+  // Users
+  getUser(id: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined>;
+  deleteUser(id: string): Promise<boolean>;
+
   // Spaces
   getSpace(id: string): Promise<Space | undefined>;
+  getSpaceByCode(code: string): Promise<Space | undefined>;
   getSpacesByOrganization(organizationId: string): Promise<Space[]>;
   createSpace(space: InsertSpace): Promise<Space>;
   updateSpace(id: string, space: Partial<InsertSpace>): Promise<Space | undefined>;
   deleteSpace(id: string): Promise<boolean>;
+
+  // Company Admins (association)
+  getCompanyAdminsByOrganization(organizationId: string): Promise<CompanyAdmin[]>;
+  getCompanyAdminsByUser(userId: string): Promise<CompanyAdmin[]>;
+  createCompanyAdmin(companyAdmin: InsertCompanyAdmin): Promise<CompanyAdmin>;
+  deleteCompanyAdmin(id: string): Promise<boolean>;
+
+  // Space Facilitators (association)
+  getSpaceFacilitatorsBySpace(spaceId: string): Promise<SpaceFacilitator[]>;
+  getSpaceFacilitatorsByUser(userId: string): Promise<SpaceFacilitator[]>;
+  createSpaceFacilitator(spaceFacilitator: InsertSpaceFacilitator): Promise<SpaceFacilitator>;
+  deleteSpaceFacilitator(id: string): Promise<boolean>;
 
   // Participants
   getParticipant(id: string): Promise<Participant | undefined>;
@@ -84,9 +114,45 @@ export class DbStorage implements IStorage {
     return updated;
   }
 
+  // Users
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    return user;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    return user;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username)).limit(1);
+    return user;
+  }
+
+  async createUser(user: InsertUser): Promise<User> {
+    const [created] = await db.insert(users).values(user).returning();
+    return created;
+  }
+
+  async updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined> {
+    const [updated] = await db.update(users).set(user).where(eq(users.id, id)).returning();
+    return updated;
+  }
+
+  async deleteUser(id: string): Promise<boolean> {
+    const result = await db.delete(users).where(eq(users.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
   // Spaces
   async getSpace(id: string): Promise<Space | undefined> {
     const [space] = await db.select().from(spaces).where(eq(spaces.id, id)).limit(1);
+    return space;
+  }
+
+  async getSpaceByCode(code: string): Promise<Space | undefined> {
+    const [space] = await db.select().from(spaces).where(eq(spaces.code, code)).limit(1);
     return space;
   }
 
@@ -199,6 +265,44 @@ export class DbStorage implements IStorage {
     const result = await db.delete(rankings).where(
       and(eq(rankings.participantId, participantId), eq(rankings.spaceId, spaceId))
     );
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Company Admins
+  async getCompanyAdminsByOrganization(organizationId: string): Promise<CompanyAdmin[]> {
+    return db.select().from(companyAdmins).where(eq(companyAdmins.organizationId, organizationId));
+  }
+
+  async getCompanyAdminsByUser(userId: string): Promise<CompanyAdmin[]> {
+    return db.select().from(companyAdmins).where(eq(companyAdmins.userId, userId));
+  }
+
+  async createCompanyAdmin(companyAdmin: InsertCompanyAdmin): Promise<CompanyAdmin> {
+    const [created] = await db.insert(companyAdmins).values(companyAdmin).returning();
+    return created;
+  }
+
+  async deleteCompanyAdmin(id: string): Promise<boolean> {
+    const result = await db.delete(companyAdmins).where(eq(companyAdmins.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Space Facilitators
+  async getSpaceFacilitatorsBySpace(spaceId: string): Promise<SpaceFacilitator[]> {
+    return db.select().from(spaceFacilitators).where(eq(spaceFacilitators.spaceId, spaceId));
+  }
+
+  async getSpaceFacilitatorsByUser(userId: string): Promise<SpaceFacilitator[]> {
+    return db.select().from(spaceFacilitators).where(eq(spaceFacilitators.userId, userId));
+  }
+
+  async createSpaceFacilitator(spaceFacilitator: InsertSpaceFacilitator): Promise<SpaceFacilitator> {
+    const [created] = await db.insert(spaceFacilitators).values(spaceFacilitator).returning();
+    return created;
+  }
+
+  async deleteSpaceFacilitator(id: string): Promise<boolean> {
+    const result = await db.delete(spaceFacilitators).where(eq(spaceFacilitators.id, id));
     return result.rowCount ? result.rowCount > 0 : false;
   }
 }
