@@ -6,7 +6,7 @@ import multer from "multer";
 import { storage } from "./storage";
 import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User } from "@shared/schema";
 import { z } from "zod";
-import { categorizeNotes } from "./services/openai";
+import { categorizeNotes, rewriteCard } from "./services/openai";
 import { getNextPair, calculateProgress } from "./services/pairwise";
 import { validateRanking, calculateBordaScores, calculateRankingProgress, hasParticipantCompleted } from "./services/stack-ranking";
 import { hashPassword, requireAuth, requireRole, requireGlobalAdmin, requireCompanyAdmin, requireFacilitator } from "./auth";
@@ -1230,6 +1230,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete notes" });
+    }
+  });
+
+  // Protected: Facilitators and admins can generate AI-powered rewrites of a note
+  app.post("/api/notes/:id/rewrite", requireFacilitator, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { count = 3 } = req.body as { count?: number };
+
+      // Validate count
+      if (count < 1 || count > 3) {
+        return res.status(400).json({ error: "Count must be between 1 and 3" });
+      }
+
+      // Fetch the note
+      const note = await storage.getNote(id);
+      if (!note) {
+        return res.status(404).json({ error: "Note not found" });
+      }
+
+      // Generate AI rewrites
+      let result;
+      try {
+        result = await rewriteCard(note.content, note.category, count);
+      } catch (rewriteError) {
+        const errorMessage = rewriteError instanceof Error 
+          ? rewriteError.message 
+          : 'Unknown error during rewrite';
+        console.error("AI rewrite failed:", errorMessage);
+        return res.status(500).json({ 
+          error: "AI rewrite failed", 
+          details: errorMessage 
+        });
+      }
+
+      res.json({
+        original: {
+          id: note.id,
+          content: note.content,
+          category: note.category
+        },
+        variations: result.variations
+      });
+    } catch (error) {
+      console.error("Rewrite endpoint error:", error);
+      res.status(500).json({ error: "Failed to rewrite note" });
     }
   });
 
