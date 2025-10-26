@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Building2, Plus, LogOut, Loader2, Mail, Clock, Check, X, BookOpen, FileStack } from "lucide-react";
+import { Building2, Plus, LogOut, Loader2, Mail, Clock, Check, X, BookOpen, FileStack, Activity } from "lucide-react";
 import type { Organization, Space, User, AccessRequest, WorkspaceTemplate } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
@@ -135,6 +135,10 @@ export default function AdminPanel() {
               <FileStack className="h-4 w-4 mr-2" />
               Templates
             </TabsTrigger>
+            <TabsTrigger value="ai-usage" data-testid="tab-ai-usage">
+              <Activity className="h-4 w-4 mr-2" />
+              AI Usage
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="workspaces" className="space-y-6">
@@ -200,6 +204,13 @@ export default function AdminPanel() {
 
           <TabsContent value="templates">
             <TemplatesTab 
+              currentUser={currentUser}
+              organizations={displayOrgs}
+            />
+          </TabsContent>
+
+          <TabsContent value="ai-usage">
+            <AiUsageTab 
               currentUser={currentUser}
               organizations={displayOrgs}
             />
@@ -801,6 +812,241 @@ function TemplateDetails({ templateId }: { templateId: string }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function AiUsageTab({ 
+  currentUser, 
+  organizations 
+}: { 
+  currentUser: User;
+  organizations: Organization[];
+}) {
+  const [selectedOrgId, setSelectedOrgId] = useState<string | "all">(
+    currentUser.role === "company_admin" && organizations.length > 0 
+      ? organizations[0].id 
+      : "all"
+  );
+  const [selectedSpaceId, setSelectedSpaceId] = useState<string | "all">("all");
+  const [timeRange, setTimeRange] = useState<"24h" | "7d" | "30d" | "all">("30d");
+
+  // Fetch spaces for selected organization
+  const { data: spaces = [] } = useQuery<Space[]>({
+    queryKey: ["/api/admin/organizations", selectedOrgId, "spaces"],
+    enabled: selectedOrgId !== "all",
+  });
+
+  // Build API endpoint based on filters
+  const getUsageEndpoint = () => {
+    const params = new URLSearchParams();
+    
+    if (selectedOrgId !== "all") {
+      params.append("organizationId", selectedOrgId);
+    }
+    
+    if (selectedSpaceId !== "all") {
+      params.append("spaceId", selectedSpaceId);
+    }
+    
+    if (timeRange !== "all") {
+      const now = new Date();
+      const startDate = new Date();
+      switch (timeRange) {
+        case "24h":
+          startDate.setHours(now.getHours() - 24);
+          break;
+        case "7d":
+          startDate.setDate(now.getDate() - 7);
+          break;
+        case "30d":
+          startDate.setDate(now.getDate() - 30);
+          break;
+      }
+      params.append("startDate", startDate.toISOString());
+    }
+
+    return `/api/admin/ai-usage?${params.toString()}`;
+  };
+
+  // Fetch usage statistics
+  const { data: usageLogs = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/admin/ai-usage", selectedOrgId, selectedSpaceId, timeRange],
+    queryFn: async () => {
+      const response = await fetch(getUsageEndpoint());
+      if (!response.ok) throw new Error("Failed to fetch AI usage");
+      return response.json();
+    },
+  });
+
+  // Calculate summary statistics
+  const summary = usageLogs.reduce((acc, log) => {
+    acc.totalOperations++;
+    acc.totalTokens += log.inputTokens + log.outputTokens;
+    acc.totalCost += log.estimatedCostCents;
+    return acc;
+  }, { totalOperations: 0, totalTokens: 0, totalCost: 0 });
+
+  return (
+    <div className="space-y-6">
+      {/* Filters */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Filters</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-3">
+            {/* Organization Filter */}
+            {currentUser.role === "global_admin" && (
+              <div>
+                <label className="text-sm font-medium mb-2 block">Organization</label>
+                <select
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+                  value={selectedOrgId}
+                  onChange={(e) => {
+                    setSelectedOrgId(e.target.value);
+                    setSelectedSpaceId("all");
+                  }}
+                  data-testid="select-organization"
+                >
+                  <option value="all">All Organizations</option>
+                  {organizations.map((org) => (
+                    <option key={org.id} value={org.id}>
+                      {org.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Workspace Filter */}
+            <div>
+              <label className="text-sm font-medium mb-2 block">Workspace</label>
+              <select
+                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+                value={selectedSpaceId}
+                onChange={(e) => setSelectedSpaceId(e.target.value)}
+                disabled={selectedOrgId === "all"}
+                data-testid="select-workspace"
+              >
+                <option value="all">All Workspaces</option>
+                {spaces.map((space) => (
+                  <option key={space.id} value={space.id}>
+                    {space.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Time Range Filter */}
+            <div>
+              <label className="text-sm font-medium mb-2 block">Time Range</label>
+              <select
+                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+                value={timeRange}
+                onChange={(e) => setTimeRange(e.target.value as any)}
+                data-testid="select-time-range"
+              >
+                <option value="24h">Last 24 Hours</option>
+                <option value="7d">Last 7 Days</option>
+                <option value="30d">Last 30 Days</option>
+                <option value="all">All Time</option>
+              </select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Summary Cards */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Operations</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-total-operations">
+              {summary.totalOperations.toLocaleString()}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Tokens</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-total-tokens">
+              {summary.totalTokens.toLocaleString()}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Estimated Cost</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-total-cost">
+              ${(summary.totalCost / 100).toFixed(2)}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Usage Log Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent AI Operations</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin mr-2" />
+              Loading usage data...
+            </div>
+          ) : usageLogs.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No AI usage found for the selected filters</p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {usageLogs.map((log: any, index: number) => (
+                <div 
+                  key={log.id || index} 
+                  className="flex items-center justify-between p-3 rounded-md bg-muted/30"
+                  data-testid={`usage-log-${index}`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge variant="outline" className="text-xs">
+                        {log.operation}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {log.modelName}
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {new Date(log.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-medium">
+                      {(log.inputTokens + log.outputTokens).toLocaleString()} tokens
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      ${(log.estimatedCostCents / 100).toFixed(4)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
