@@ -34,9 +34,16 @@ Aurora is a sophisticated web application that enables facilitators to guide coh
   - Session controls (start, pause, close)
   - Participant viewing with online/offline status
   - Real-time WebSocket integration for live updates
+- ✅ **Participant Ideation View** (/o/:org/s/:space/participate) with:
+  - White whiteboard canvas (rgb 255,255,255) with dark header/footer UI
+  - Sticky note creation form with color selection
+  - Real-time note display in responsive grid layout
+  - WebSocket connection status indicator
+  - Seamless integration with waiting room join flow (participantId in sessionStorage)
+  - Colorful sticky notes (yellow/blue/green/pink) on white workspace
 
 ### In Progress
-- Participant ideation view with collaborative whiteboard
+- None
 
 ### Pending
 - AI categorization integration (OpenAI)
@@ -45,6 +52,7 @@ Aurora is a sophisticated web application that enables facilitators to guide coh
 - Results view with cohort and personalized summaries
 
 ### Backlog (Future Features)
+- **Drag-and-drop for sticky notes**: Use @dnd-kit to enable note repositioning on whiteboard
 - **Organization-level branding customization**: Allow individual organizations to override the default Synozur design with their own:
   - Custom color palette (primary, accent, backgrounds)
   - Custom font selection
