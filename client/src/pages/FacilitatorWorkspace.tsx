@@ -55,6 +55,8 @@ export default function FacilitatorWorkspace() {
   const [templateName, setTemplateName] = useState("");
   const [templateType, setTemplateType] = useState("general");
   const [templateDescription, setTemplateDescription] = useState("");
+  const [rewriteDialogNote, setRewriteDialogNote] = useState<Note | null>(null);
+  const [rewriteVariations, setRewriteVariations] = useState<Array<{ version: number; content: string }>>([]);
 
   // WebSocket connection for real-time updates
   const handleWebSocketMessage = useCallback((message: { type: string; data: any }) => {
@@ -202,6 +204,32 @@ export default function FacilitatorWorkspace() {
         title: "Failed to delete note",
         description: error.message,
       });
+    },
+  });
+
+  // Rewrite note mutation (AI-powered variations)
+  const rewriteNoteMutation = useMutation({
+    mutationFn: async ({ noteId, count }: { noteId: string; count: number }) => {
+      const response = await apiRequest("POST", `/api/notes/${noteId}/rewrite`, { count });
+      return response as { 
+        original: { id: string; content: string; category: string | null }; 
+        variations: Array<{ version: number; content: string }> 
+      };
+    },
+    onSuccess: (data, variables) => {
+      setRewriteVariations(data.variations);
+      toast({
+        title: "AI Rewrites Generated",
+        description: `${data.variations.length} variations created`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to generate rewrites",
+        description: error.message,
+      });
+      setRewriteDialogNote(null);
     },
   });
 
@@ -862,6 +890,20 @@ export default function FacilitatorWorkspace() {
                                 size="sm"
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  setRewriteDialogNote(note);
+                                  setRewriteVariations([]);
+                                  rewriteNoteMutation.mutate({ noteId: note.id, count: 3 });
+                                }}
+                                disabled={rewriteNoteMutation.isPending}
+                                data-testid={`button-rewrite-note-${note.id}`}
+                              >
+                                <Sparkles className="h-3 w-3 text-primary" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   deleteNoteMutation.mutate(note.id);
                                 }}
                                 data-testid={`button-delete-note-${note.id}`}
@@ -1192,6 +1234,100 @@ export default function FacilitatorWorkspace() {
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* AI Rewrite Dialog */}
+      <Dialog open={rewriteDialogNote !== null} onOpenChange={(open) => !open && setRewriteDialogNote(null)}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              AI-Powered Rewrites
+            </DialogTitle>
+            <DialogDescription>
+              Below are AI-generated variations of this card. Each maintains the same core meaning and category.
+            </DialogDescription>
+          </DialogHeader>
+
+          {rewriteDialogNote && (
+            <div className="space-y-4">
+              {/* Original Note */}
+              <div>
+                <Label className="text-sm font-medium">Original</Label>
+                <Card className="mt-2 bg-muted/20">
+                  <CardContent className="pt-4">
+                    <p className="text-sm">{rewriteDialogNote.content}</p>
+                    {rewriteDialogNote.category && (
+                      <Badge variant="secondary" className="mt-2">
+                        {rewriteDialogNote.category}
+                      </Badge>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* AI Variations */}
+              <div>
+                <Label className="text-sm font-medium">AI Variations</Label>
+                {rewriteNoteMutation.isPending ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="ml-3 text-sm text-muted-foreground">Generating variations...</p>
+                  </div>
+                ) : rewriteVariations.length > 0 ? (
+                  <div className="mt-2 space-y-3">
+                    {rewriteVariations.map((variation) => (
+                      <Card key={variation.version} className="hover-elevate">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                          <CardTitle className="text-sm font-medium">
+                            Version {variation.version}
+                          </CardTitle>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={async () => {
+                              try {
+                                await apiRequest("PATCH", `/api/notes/${rewriteDialogNote.id}`, {
+                                  content: variation.content,
+                                });
+                                queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/notes`] });
+                                toast({
+                                  title: "Note updated",
+                                  description: "The note has been updated with the selected variation",
+                                });
+                                setRewriteDialogNote(null);
+                              } catch (error) {
+                                toast({
+                                  variant: "destructive",
+                                  title: "Failed to update note",
+                                  description: error instanceof Error ? error.message : "Unknown error",
+                                });
+                              }
+                            }}
+                            data-testid={`button-use-variation-${variation.version}`}
+                          >
+                            Use This
+                          </Button>
+                        </CardHeader>
+                        <CardContent>
+                          <p className="text-sm">{variation.content}</p>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground mt-2">No variations available</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRewriteDialogNote(null)} data-testid="button-close-rewrite-dialog">
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
