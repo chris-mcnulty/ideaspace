@@ -1,5 +1,19 @@
-/* Avenir Next LT Pro Font - Using Google Fonts as fallback since we don't have the actual font files */
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
+/* Avenir Next LT Pro Custom Fonts */
+@font-face {
+  font-family: 'Avenir Next LT Pro';
+  src: url('/fonts/AvenirNextLTPro-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Avenir Next LT Pro';
+  src: url('/fonts/AvenirNextLTPro-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 
 @tailwind base;
 @tailwind components;
@@ -60,8 +74,8 @@
   --chart-4: 41 100% 64%;
   --chart-5: 0 84% 60%;
 
-  --font-sans: 'Montserrat', -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-  --font-serif: 'Montserrat', -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --font-sans: 'Avenir Next LT Pro', -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --font-serif: 'Avenir Next LT Pro', -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'Roboto Mono', 'Courier New', monospace;
   --radius: 0.75rem;
   --shadow-2xs: 0px 1px 2px 0px rgba(0,0,0,0.05);

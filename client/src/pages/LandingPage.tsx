@@ -33,9 +33,13 @@ export default function LandingPage() {
     <div className="min-h-screen bg-background">
       <header className="border-b">
         <div className="container mx-auto flex h-16 items-center justify-between px-6">
-          <div className="flex items-center gap-2">
-            <Building2 className="h-6 w-6 text-primary" />
-            <span className="text-lg font-semibold">Synozur Aurora</span>
+          <div className="flex items-center gap-3">
+            <img 
+              src="/logos/synozur-horizontal-color.png" 
+              alt="Synozur Alliance" 
+              className="h-8"
+              data-testid="img-logo"
+            />
           </div>
           <Button variant="outline" data-testid="button-publisher-login">
             Publisher Login

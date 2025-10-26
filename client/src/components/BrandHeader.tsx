@@ -34,12 +34,14 @@ export default function BrandHeader({
       <div className="flex h-full items-center justify-between px-6">
         <div className="flex items-center gap-3">
           {orgLogo ? (
-            <img src={orgLogo} alt={orgName} className="h-8 w-auto object-contain" />
+            <img src={orgLogo} alt={orgName} className="h-8 w-auto object-contain" data-testid="img-org-logo" />
           ) : (
-            <div className="flex items-center gap-2">
-              <Building2 className="h-6 w-6 text-primary" />
-              <span className="text-lg font-semibold">{orgName}</span>
-            </div>
+            <img 
+              src="/logos/synozur-horizontal-color.png" 
+              alt="Synozur Alliance" 
+              className="h-8 w-auto object-contain"
+              data-testid="img-default-logo"
+            />
           )}
         </div>
 
