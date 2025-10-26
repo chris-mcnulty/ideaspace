@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, LogIn } from "lucide-react";
+import { ArrowLeft, LogIn, Eye, EyeOff } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function Login() {
@@ -12,11 +12,14 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [emailNotVerified, setEmailNotVerified] = useState(false);
   const [, setLocation] = useLocation();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setEmailNotVerified(false);
     setIsLoading(true);
 
     try {
@@ -41,10 +44,44 @@ export default function Login() {
         }
       } else {
         const data = await response.json();
-        setError(data.error || "Invalid email or password");
+        
+        // Check if email verification is required
+        if (response.status === 403 && data.emailVerified === false) {
+          setEmailNotVerified(true);
+          setError(data.message || "Please verify your email address before logging in.");
+        } else {
+          setError(data.error || "Invalid email or password");
+        }
       }
     } catch (err) {
       setError("Unable to connect. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setError(""); 
+        setEmailNotVerified(false);
+        alert(data.message || "Verification email sent! Please check your inbox.");
+      } else {
+        setError(data.error || "Failed to resend verification email");
+      }
+    } catch (err) {
+      setError("Unable to resend verification email. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -108,20 +145,50 @@ export default function Login() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  data-testid="input-password"
-                  autoComplete="current-password"
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    data-testid="input-password"
+                    autoComplete="current-password"
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                    onClick={() => setShowPassword(!showPassword)}
+                    data-testid="button-toggle-password"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </Button>
+                </div>
               </div>
               {error && (
-                <div className="text-sm text-destructive text-center bg-destructive/10 p-3 rounded-md" data-testid="text-error">
-                  {error}
+                <div className="text-sm text-destructive text-center bg-destructive/10 p-3 rounded-md space-y-2" data-testid="text-error">
+                  <p>{error}</p>
+                  {emailNotVerified && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleResendVerification}
+                      disabled={isLoading}
+                      data-testid="button-resend-verification"
+                      className="w-full"
+                    >
+                      Resend Verification Email
+                    </Button>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -134,17 +201,27 @@ export default function Login() {
               >
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>
-              <p className="text-xs text-center text-muted-foreground">
-                Joining a workspace?{" "}
+              <div className="flex flex-col items-center gap-2 text-xs text-muted-foreground">
                 <button 
                   type="button"
-                  onClick={() => setLocation("/")}
+                  onClick={() => setLocation("/forgot-password")}
                   className="text-primary hover:underline"
-                  data-testid="link-join-workspace"
+                  data-testid="link-forgot-password"
                 >
-                  Use a 4-digit code instead
+                  Forgot your password?
                 </button>
-              </p>
+                <p>
+                  Joining a workspace?{" "}
+                  <button 
+                    type="button"
+                    onClick={() => setLocation("/")}
+                    className="text-primary hover:underline"
+                    data-testid="link-join-workspace"
+                  >
+                    Use a 4-digit code instead
+                  </button>
+                </p>
+              </div>
             </CardFooter>
           </form>
         </Card>
