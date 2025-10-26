@@ -52,7 +52,7 @@ Aurora is built as a multi-tenant web application with a clear separation of con
     - Landing page with Synozur Maturity Modeler design.
     - AI Categorization integration using GPT-5.
     - Pairwise Voting Module with DuelCard component and progress tracking.
-    - Role-Based Access Control (RBAC) system with 4-digit workspace codes and admin panel.
+    - Role-Based Access Control (RBAC) system with 8-digit workspace codes (nnnn-nnnn format) and admin panel.
     - **Guest Access Control System** with access requests, admin approval workflow, SendGrid email notifications, and automatic participant-to-account linking.
 - **In Progress**: Facilitator dashboard for assigned workspaces.
 - **Pending**: Stack ranking module (Borda count) and results view (cohort/personalized summaries).

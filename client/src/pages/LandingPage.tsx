@@ -13,8 +13,8 @@ export default function LandingPage() {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleCodeEntry = async () => {
-    if (!workspaceCode || workspaceCode.length !== 4) {
-      setError("Please enter a valid 4-digit workspace code");
+    if (!workspaceCode || workspaceCode.length !== 9) {
+      setError("Please enter a valid 8-digit workspace code");
       return;
     }
 
@@ -39,8 +39,16 @@ export default function LandingPage() {
   };
 
   const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, "").slice(0, 4);
-    setWorkspaceCode(value);
+    // Remove all non-digits and limit to 8 digits
+    const digits = e.target.value.replace(/\D/g, "").slice(0, 8);
+    
+    // Format as nnnn-nnnn
+    let formatted = digits;
+    if (digits.length > 4) {
+      formatted = `${digits.slice(0, 4)}-${digits.slice(4)}`;
+    }
+    
+    setWorkspaceCode(formatted);
     setError("");
   };
 
@@ -107,22 +115,22 @@ export default function LandingPage() {
                     <h2 className="text-xl font-semibold text-foreground">Enter Workspace Code</h2>
                   </div>
                   <p className="text-sm text-muted-foreground text-center mt-2">
-                    Your facilitator will provide a 4-digit code
+                    Your facilitator will provide an 8-digit code
                   </p>
                 </CardHeader>
                 <CardContent className="bg-card/95 backdrop-blur">
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="workspace-code" className="text-center block">4-Digit Code</Label>
+                      <Label htmlFor="workspace-code" className="text-center block">8-Digit Code</Label>
                       <Input
                         id="workspace-code"
-                        placeholder="0000"
+                        placeholder="0000-0000"
                         value={workspaceCode}
                         onChange={handleCodeChange}
                         onKeyDown={(e) => e.key === "Enter" && handleCodeEntry()}
                         data-testid="input-workspace-code"
                         className="bg-input/80 text-center text-2xl font-mono tracking-widest"
-                        maxLength={4}
+                        maxLength={9}
                         autoComplete="off"
                       />
                       {error && (
@@ -131,7 +139,7 @@ export default function LandingPage() {
                     </div>
                     <Button 
                       className="w-full bg-primary hover:bg-primary/90" 
-                      disabled={workspaceCode.length !== 4 || isLoading}
+                      disabled={workspaceCode.length !== 9 || isLoading}
                       data-testid="button-join-workspace"
                       onClick={handleCodeEntry}
                     >

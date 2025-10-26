@@ -28,7 +28,7 @@ export const spaces = pgTable("spaces", {
   organizationId: varchar("organization_id").notNull().references(() => organizations.id),
   name: text("name").notNull(),
   purpose: text("purpose").notNull(),
-  code: varchar("code", { length: 4 }).notNull().unique(), // 4-digit workspace code
+  code: varchar("code", { length: 9 }).notNull().unique(), // 8-digit workspace code (nnnn-nnnn)
   status: text("status").notNull().default("draft"), // draft, open, closed, processing, archived
   hidden: boolean("hidden").notNull().default(false),
   guestAllowed: boolean("guest_allowed").notNull().default(false), // Default: guests NOT allowed
@@ -125,7 +125,7 @@ export const insertSpaceSchema = createInsertSchema(spaces).omit({
 
 // API schema for creating spaces (code is optional, auto-generated if not provided)
 export const createSpaceApiSchema = insertSpaceSchema.extend({
-  code: z.string().length(4).regex(/^\d{4}$/).optional(),
+  code: z.string().length(9).regex(/^\d{4}-\d{4}$/).optional(),
 });
 
 export const insertParticipantSchema = createInsertSchema(participants).omit({
