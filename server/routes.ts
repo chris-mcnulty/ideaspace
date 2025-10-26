@@ -923,10 +923,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const currentUser = req.user as User;
       const data = z.object({
-        spaceId: z.string(),
-        name: z.string().min(1),
-        type: z.string().min(1),
-        description: z.string().optional(),
+        spaceId: z.string().min(1, "Workspace ID is required"),
+        name: z.string().min(1, "Template name is required").trim(),
+        type: z.string().min(1, "Template type is required").trim(),
+        description: z.string().trim().optional(),
       }).parse(req.body);
 
       const space = await storage.getSpace(data.spaceId);
@@ -974,21 +974,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { organizationId } = req.query;
 
       let templates;
-      if (organizationId && typeof organizationId === 'string') {
-        // Verify user has access to this organization
-        if (currentUser.role === 'global_admin') {
-          templates = await storage.getWorkspaceTemplates(organizationId);
-        } else if (currentUser.organizationId === organizationId) {
+      
+      // Global admins can see all templates or filter by organization
+      if (currentUser.role === 'global_admin') {
+        if (organizationId && typeof organizationId === 'string') {
           templates = await storage.getWorkspaceTemplates(organizationId);
         } else {
-          return res.status(403).json({ error: "Insufficient permissions" });
+          templates = await storage.getWorkspaceTemplates();
         }
-      } else if (currentUser.role === 'global_admin') {
-        // Global admins can see all templates
-        templates = await storage.getWorkspaceTemplates();
-      } else {
-        // Other users see templates for their organization
-        templates = await storage.getWorkspaceTemplates(currentUser.organizationId || undefined);
+      } 
+      // Company admins can only see templates for their organization
+      else if (currentUser.role === 'company_admin') {
+        if (!currentUser.organizationId) {
+          return res.status(403).json({ error: "No organization associated with user" });
+        }
+        // Ignore organizationId query param if provided by company admin - always use their org
+        templates = await storage.getWorkspaceTemplates(currentUser.organizationId);
+      }
+      // Other roles (facilitator, user) can see templates for their organization
+      else {
+        if (!currentUser.organizationId) {
+          return res.status(403).json({ error: "No organization associated with user" });
+        }
+        templates = await storage.getWorkspaceTemplates(currentUser.organizationId);
       }
 
       res.json(templates);

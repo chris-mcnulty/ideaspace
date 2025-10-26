@@ -577,7 +577,13 @@ function TemplatesTab({
   const organizationId = currentUser.role === "company_admin" ? currentUser.organizationId : undefined;
   
   const { data: templates = [], isLoading } = useQuery<WorkspaceTemplate[]>({
-    queryKey: ["/api/templates", { organizationId }],
+    queryKey: organizationId ? ["/api/templates", { organizationId }] : ["/api/templates"],
+    queryFn: async () => {
+      const params = organizationId ? `?organizationId=${organizationId}` : '';
+      const response = await fetch(`/api/templates${params}`);
+      if (!response.ok) throw new Error("Failed to fetch templates");
+      return response.json();
+    },
   });
 
   // Delete template mutation
