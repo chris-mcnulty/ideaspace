@@ -2,8 +2,9 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import passport from "passport";
+import multer from "multer";
 import { storage } from "./storage";
-import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, type User } from "@shared/schema";
+import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User } from "@shared/schema";
 import { z } from "zod";
 import { categorizeNotes } from "./services/openai";
 import { getNextPair, calculateProgress } from "./services/pairwise";
@@ -11,8 +12,34 @@ import { validateRanking, calculateBordaScores, calculateRankingProgress, hasPar
 import { hashPassword, requireAuth, requireRole, requireGlobalAdmin, requireCompanyAdmin, requireFacilitator } from "./auth";
 import { generateWorkspaceCode, isValidWorkspaceCode } from "./services/workspace-code";
 import { sendAccessRequestEmail } from "./services/email";
+import { fileUploadService } from "./services/file-upload";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Configure multer for file uploads (max 10MB)
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB
+    },
+    fileFilter: (req, file, cb) => {
+      // Allow common document types
+      const allowedMimes = [
+        'application/pdf',
+        'text/plain',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ];
+      
+      if (allowedMimes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Invalid file type. Only PDF, TXT, DOC, DOCX, XLS, XLSX are allowed.'));
+      }
+    },
+  });
+
   // Workspace code lookup (public endpoint for entry flow)
   app.get("/api/spaces/lookup/:code", async (req, res) => {
     try {
@@ -642,6 +669,251 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error("Failed to update access request:", error);
       res.status(500).json({ error: "Failed to update access request" });
+    }
+  });
+
+  // Knowledge Base Documents
+  // Upload a document
+  app.post("/api/knowledge-base/documents", requireAuth, upload.single('file'), async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const file = req.file;
+      
+      if (!file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      const data = z.object({
+        title: z.string().min(1),
+        description: z.string().optional(),
+        scope: z.enum(['system', 'organization', 'workspace']),
+        organizationId: z.string().optional(),
+        spaceId: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+      }).parse(JSON.parse(req.body.metadata || '{}'));
+
+      // Validate scope-specific permissions
+      if (data.scope === 'system' && currentUser.role !== 'global_admin') {
+        return res.status(403).json({ error: "Only global admins can upload system-level documents" });
+      }
+
+      if (data.scope === 'organization') {
+        if (!data.organizationId) {
+          return res.status(400).json({ error: "Organization ID required for organization scope" });
+        }
+        
+        // Check if user is global admin or company admin of this org
+        if (currentUser.role !== 'global_admin') {
+          if (currentUser.role !== 'company_admin' || currentUser.organizationId !== data.organizationId) {
+            const companyAdmins = await storage.getCompanyAdminsByUser(currentUser.id);
+            const hasPermission = companyAdmins.some(ca => ca.organizationId === data.organizationId);
+            if (!hasPermission) {
+              return res.status(403).json({ error: "Insufficient permissions for this organization" });
+            }
+          }
+        }
+      }
+
+      if (data.scope === 'workspace') {
+        if (!data.spaceId) {
+          return res.status(400).json({ error: "Workspace ID required for workspace scope" });
+        }
+
+        const space = await storage.getSpace(data.spaceId);
+        if (!space) {
+          return res.status(404).json({ error: "Workspace not found" });
+        }
+
+        // Check if user is global admin, company admin of org, or facilitator of space
+        let hasPermission = false;
+        if (currentUser.role === 'global_admin') {
+          hasPermission = true;
+        } else if (currentUser.role === 'company_admin' && currentUser.organizationId === space.organizationId) {
+          hasPermission = true;
+        } else {
+          const facilitators = await storage.getSpaceFacilitatorsBySpace(data.spaceId);
+          hasPermission = facilitators.some(f => f.userId === currentUser.id);
+        }
+
+        if (!hasPermission) {
+          return res.status(403).json({ error: "Insufficient permissions for this workspace" });
+        }
+      }
+
+      // Save file to local storage
+      const uploadedFile = await fileUploadService.saveFile(
+        file.buffer,
+        file.originalname,
+        file.mimetype
+      );
+
+      // Create document record
+      const document = await storage.createKnowledgeBaseDocument({
+        title: data.title,
+        description: data.description || null,
+        filename: uploadedFile.originalName,
+        filePath: uploadedFile.filePath,
+        fileSize: uploadedFile.size,
+        mimeType: uploadedFile.mimeType,
+        scope: data.scope,
+        organizationId: data.organizationId || null,
+        spaceId: data.spaceId || null,
+        tags: data.tags || null,
+        uploadedBy: currentUser.id,
+      });
+
+      res.status(201).json(document);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Failed to upload document:", error);
+      res.status(500).json({ error: "Failed to upload document" });
+    }
+  });
+
+  // List documents by scope
+  app.get("/api/knowledge-base/documents", requireAuth, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const { scope, scopeId, spaceId } = req.query;
+
+      // If requesting documents for a specific workspace
+      if (spaceId && typeof spaceId === 'string') {
+        const space = await storage.getSpace(spaceId);
+        if (!space) {
+          return res.status(404).json({ error: "Workspace not found" });
+        }
+
+        // Get all applicable documents (system + organization + workspace)
+        const documents = await storage.getKnowledgeBaseDocumentsForSpace(spaceId, space.organizationId);
+        return res.json(documents);
+      }
+
+      // Otherwise, get documents by specific scope
+      if (!scope || typeof scope !== 'string') {
+        return res.status(400).json({ error: "Scope parameter required" });
+      }
+
+      // Validate permissions for requested scope
+      if (scope === 'system' && currentUser.role !== 'global_admin') {
+        return res.status(403).json({ error: "Only global admins can view system documents" });
+      }
+
+      if (scope === 'organization') {
+        const orgId = typeof scopeId === 'string' ? scopeId : undefined;
+        if (!orgId) {
+          return res.status(400).json({ error: "Organization ID required" });
+        }
+
+        // Check permissions
+        if (currentUser.role !== 'global_admin') {
+          if (currentUser.role !== 'company_admin' || currentUser.organizationId !== orgId) {
+            const companyAdmins = await storage.getCompanyAdminsByUser(currentUser.id);
+            const hasPermission = companyAdmins.some(ca => ca.organizationId === orgId);
+            if (!hasPermission) {
+              return res.status(403).json({ error: "Insufficient permissions" });
+            }
+          }
+        }
+      }
+
+      if (scope === 'workspace') {
+        const workspaceId = typeof scopeId === 'string' ? scopeId : undefined;
+        if (!workspaceId) {
+          return res.status(400).json({ error: "Workspace ID required" });
+        }
+
+        const space = await storage.getSpace(workspaceId);
+        if (!space) {
+          return res.status(404).json({ error: "Workspace not found" });
+        }
+
+        // Check permissions
+        let hasPermission = false;
+        if (currentUser.role === 'global_admin') {
+          hasPermission = true;
+        } else if (currentUser.role === 'company_admin' && currentUser.organizationId === space.organizationId) {
+          hasPermission = true;
+        } else {
+          const facilitators = await storage.getSpaceFacilitatorsBySpace(workspaceId);
+          hasPermission = facilitators.some(f => f.userId === currentUser.id);
+        }
+
+        if (!hasPermission) {
+          return res.status(403).json({ error: "Insufficient permissions" });
+        }
+      }
+
+      const documents = await storage.getKnowledgeBaseDocumentsByScope(
+        scope,
+        typeof scopeId === 'string' ? scopeId : undefined
+      );
+      res.json(documents);
+    } catch (error) {
+      console.error("Failed to fetch documents:", error);
+      res.status(500).json({ error: "Failed to fetch documents" });
+    }
+  });
+
+  // Delete a document
+  app.delete("/api/knowledge-base/documents/:id", requireAuth, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const { id } = req.params;
+
+      const document = await storage.getKnowledgeBaseDocument(id);
+      if (!document) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+
+      // Check permissions based on scope
+      let hasPermission = false;
+
+      if (document.scope === 'system') {
+        hasPermission = currentUser.role === 'global_admin';
+      } else if (document.scope === 'organization' && document.organizationId) {
+        if (currentUser.role === 'global_admin') {
+          hasPermission = true;
+        } else if (currentUser.role === 'company_admin' && currentUser.organizationId === document.organizationId) {
+          hasPermission = true;
+        } else {
+          const companyAdmins = await storage.getCompanyAdminsByUser(currentUser.id);
+          hasPermission = companyAdmins.some(ca => ca.organizationId === document.organizationId);
+        }
+      } else if (document.scope === 'workspace' && document.spaceId) {
+        const space = await storage.getSpace(document.spaceId);
+        if (space) {
+          if (currentUser.role === 'global_admin') {
+            hasPermission = true;
+          } else if (currentUser.role === 'company_admin' && currentUser.organizationId === space.organizationId) {
+            hasPermission = true;
+          } else {
+            const facilitators = await storage.getSpaceFacilitatorsBySpace(document.spaceId);
+            hasPermission = facilitators.some(f => f.userId === currentUser.id);
+          }
+        }
+      }
+
+      // Also allow the uploader to delete their own document
+      if (document.uploadedBy === currentUser.id) {
+        hasPermission = true;
+      }
+
+      if (!hasPermission) {
+        return res.status(403).json({ error: "Insufficient permissions to delete this document" });
+      }
+
+      // Delete file from filesystem
+      await fileUploadService.deleteFile(document.filePath);
+
+      // Delete document record
+      await storage.deleteKnowledgeBaseDocument(id);
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to delete document:", error);
+      res.status(500).json({ error: "Failed to delete document" });
     }
   });
 

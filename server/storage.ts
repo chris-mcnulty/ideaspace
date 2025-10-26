@@ -20,6 +20,8 @@ import {
   type InsertSpaceFacilitator,
   type AccessRequest,
   type InsertAccessRequest,
+  type KnowledgeBaseDocument,
+  type InsertKnowledgeBaseDocument,
   organizations,
   users,
   spaces,
@@ -30,8 +32,9 @@ import {
   companyAdmins,
   spaceFacilitators,
   accessRequests,
+  knowledgeBaseDocuments,
 } from "@shared/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, or, isNull } from "drizzle-orm";
 
 export interface IStorage {
   // Organizations
@@ -107,6 +110,14 @@ export interface IStorage {
   createAccessRequest(request: InsertAccessRequest): Promise<AccessRequest>;
   updateAccessRequest(id: string, request: Partial<InsertAccessRequest>): Promise<AccessRequest | undefined>;
   checkExistingAccessRequest(spaceId: string, email: string): Promise<AccessRequest | undefined>;
+
+  // Knowledge Base Documents
+  getKnowledgeBaseDocument(id: string): Promise<KnowledgeBaseDocument | undefined>;
+  getKnowledgeBaseDocumentsByScope(scope: string, scopeId?: string): Promise<KnowledgeBaseDocument[]>;
+  getKnowledgeBaseDocumentsForSpace(spaceId: string, organizationId: string): Promise<KnowledgeBaseDocument[]>;
+  createKnowledgeBaseDocument(document: InsertKnowledgeBaseDocument): Promise<KnowledgeBaseDocument>;
+  updateKnowledgeBaseDocument(id: string, document: Partial<InsertKnowledgeBaseDocument>): Promise<KnowledgeBaseDocument | undefined>;
+  deleteKnowledgeBaseDocument(id: string): Promise<boolean>;
 }
 
 export class DbStorage implements IStorage {
@@ -394,6 +405,56 @@ export class DbStorage implements IStorage {
       and(eq(accessRequests.spaceId, spaceId), eq(accessRequests.email, email), eq(accessRequests.status, "pending"))
     ).limit(1);
     return existing;
+  }
+
+  // Knowledge Base Documents
+  async getKnowledgeBaseDocument(id: string): Promise<KnowledgeBaseDocument | undefined> {
+    const [document] = await db.select().from(knowledgeBaseDocuments).where(eq(knowledgeBaseDocuments.id, id)).limit(1);
+    return document;
+  }
+
+  async getKnowledgeBaseDocumentsByScope(scope: string, scopeId?: string): Promise<KnowledgeBaseDocument[]> {
+    if (scope === "system") {
+      return db.select().from(knowledgeBaseDocuments).where(eq(knowledgeBaseDocuments.scope, "system")).orderBy(desc(knowledgeBaseDocuments.createdAt));
+    } else if (scope === "organization" && scopeId) {
+      return db.select().from(knowledgeBaseDocuments).where(
+        and(eq(knowledgeBaseDocuments.scope, "organization"), eq(knowledgeBaseDocuments.organizationId, scopeId))
+      ).orderBy(desc(knowledgeBaseDocuments.createdAt));
+    } else if (scope === "workspace" && scopeId) {
+      return db.select().from(knowledgeBaseDocuments).where(
+        and(eq(knowledgeBaseDocuments.scope, "workspace"), eq(knowledgeBaseDocuments.spaceId, scopeId))
+      ).orderBy(desc(knowledgeBaseDocuments.createdAt));
+    }
+    return [];
+  }
+
+  async getKnowledgeBaseDocumentsForSpace(spaceId: string, organizationId: string): Promise<KnowledgeBaseDocument[]> {
+    return db.select().from(knowledgeBaseDocuments).where(
+      or(
+        eq(knowledgeBaseDocuments.scope, "system"),
+        and(eq(knowledgeBaseDocuments.scope, "organization"), eq(knowledgeBaseDocuments.organizationId, organizationId)),
+        and(eq(knowledgeBaseDocuments.scope, "workspace"), eq(knowledgeBaseDocuments.spaceId, spaceId))
+      )
+    ).orderBy(desc(knowledgeBaseDocuments.createdAt));
+  }
+
+  async createKnowledgeBaseDocument(document: InsertKnowledgeBaseDocument): Promise<KnowledgeBaseDocument> {
+    const [created] = await db.insert(knowledgeBaseDocuments).values(document).returning();
+    return created;
+  }
+
+  async updateKnowledgeBaseDocument(id: string, document: Partial<InsertKnowledgeBaseDocument>): Promise<KnowledgeBaseDocument | undefined> {
+    const updateData = {
+      ...document,
+      updatedAt: new Date(),
+    };
+    const [updated] = await db.update(knowledgeBaseDocuments).set(updateData as any).where(eq(knowledgeBaseDocuments.id, id)).returning();
+    return updated;
+  }
+
+  async deleteKnowledgeBaseDocument(id: string): Promise<boolean> {
+    const result = await db.delete(knowledgeBaseDocuments).where(eq(knowledgeBaseDocuments.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
   }
 }
 
