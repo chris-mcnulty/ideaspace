@@ -42,8 +42,10 @@ Aurora is a sophisticated web application that enables facilitators to guide coh
 - **Organization-level branding customization**: Allow individual organizations to override the default Synozur design with their own:
   - Custom color palette (primary, accent, backgrounds)
   - Custom font selection
-  - Organization logo
+  - Organization logo upload and management (horizontal, vertical, white versions)
+  - Favicon customization per organization
   - Example: Synozur (default dark purple theme) vs Microsoft (custom branding)
+  - Storage: Upload logos to database or object storage with organization association
 
 ## Architecture
 
