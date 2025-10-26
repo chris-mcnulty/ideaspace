@@ -90,6 +90,7 @@ export default function ParticipantView() {
   // Edit note mutation
   const editNoteMutation = useMutation({
     mutationFn: async ({ noteId, content }: { noteId: string; content: string }) => {
+      // ParticipantId is verified server-side via session
       return await apiRequest("PATCH", `/api/notes/${noteId}`, { content });
     },
     onSuccess: () => {
@@ -113,6 +114,7 @@ export default function ParticipantView() {
   // Delete note mutation
   const deleteNoteMutation = useMutation({
     mutationFn: async (noteId: string) => {
+      // ParticipantId is verified server-side via session
       return await apiRequest("DELETE", `/api/notes/${noteId}`);
     },
     onSuccess: () => {

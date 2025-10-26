@@ -28,7 +28,9 @@ Aurora is built as a multi-tenant web application with a clear separation of con
 - **Multi-Tenancy**: Implemented with a URL structure of `/o/:org/s/:space`, allowing for organization isolation and custom branding support.
 - **Real-time Collaboration**: Utilizes WebSocket connections (`/ws`) for live note creation, updates, deletion, and participant presence tracking, broadcasting updates to all connected clients.
 - **Role-Based Access Control (RBAC)**: Defines four roles: Global Admin, Company Admin, Facilitator, and User, each with specific permissions and access scopes, managed through a robust authentication and authorization system using `bcrypt`, `passport.js`, and `express-session`.
-- **AI Integration**: Leverages OpenAI API (GPT-5) via Replit AI Integrations for note categorization, including production-ready service with Zod validation, retry logic, and real-time WebSocket broadcasts for category updates.
+- **AI Integration**: Leverages OpenAI API (GPT-5) via Replit AI Integrations for:
+  - **Note Categorization**: Production-ready service with Zod validation, retry logic, and real-time WebSocket broadcasts for category updates
+  - **Card Rewrites**: Facilitators can generate 1-3 AI-powered variations of any card while preserving category, with dialog UI to select and apply variations
 - **Pairwise Voting**: Employs a round-robin algorithm for deterministic pair generation, tracking progress, and displaying results in a leaderboard.
 - **Stack Ranking (Borda Count)**: Complete implementation with drag-and-drop interface for participants to rank ideas, Borda count algorithm for scoring (top rank gets N points, descending to 1 point), real-time leaderboard display, and facilitator progress tracking. Includes validation ensuring all notes are ranked with sequential positions.
 - **Guest Access Control System**: Comprehensive workspace access management with configurable guest permissions (default: disabled). Features include:
@@ -38,7 +40,8 @@ Aurora is built as a multi-tenant web application with a clear separation of con
   - Admin panel with dedicated Access Requests tab for reviewing and managing requests
   - Automatic participant-to-account linking (guests who later register/login have their participation history preserved)
   - Support for anonymous participation with random name generation (e.g., "Powerful Andromeda")
-- **Facilitator Controls**: Provides a comprehensive workspace for facilitators to manage notes (preload, add, edit, delete, merge, bulk select), control session states, and trigger AI categorization.
+- **Facilitator Controls**: Provides a comprehensive workspace for facilitators to manage notes (preload, add, edit, delete, merge, bulk select, AI-powered rewrites), control session states, and trigger AI categorization.
+- **Participant Editing Permissions**: Participants can edit and delete their own cards when the workspace status is "open", with server-side session validation to prevent impersonation. Edit/delete buttons appear on hover for owned cards, with facilitators retaining full edit/delete access at all times.
 - **Knowledge Base System**: Three-tiered document management system for grounding AI categorization and personalized results:
   - **System Scope**: Global admins can upload documents available across all organizations and workspaces
   - **Organization Scope**: Company admins can upload documents for their organization's workspaces

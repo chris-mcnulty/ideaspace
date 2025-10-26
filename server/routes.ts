@@ -1123,6 +1123,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const participant = await storage.createParticipant(data);
+      
+      // Store participant ID in session for authentication
+      if (req.session) {
+        req.session.participantId = participant.id;
+      }
+      
       res.status(201).json(participant);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1161,6 +1167,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/notes", async (req, res) => {
     try {
       const data = insertNoteSchema.parse(req.body);
+      
+      // Security: Verify participantId ownership
+      // Facilitators/admins can create notes on behalf of participants (preloading)
+      // Participants can only create notes as themselves (use session participantId)
+      const user = req.user as User | undefined;
+      const isFacilitatorOrAdmin = user && ["facilitator", "company_admin", "global_admin"].includes(user.role);
+      
+      if (!isFacilitatorOrAdmin) {
+        // For participants, override participantId with session value to prevent forgery
+        const sessionParticipantId = req.session?.participantId;
+        if (!sessionParticipantId) {
+          return res.status(401).json({ error: "No participant session found. Please rejoin the workspace." });
+        }
+        data.participantId = sessionParticipantId;
+      }
+      
       const note = await storage.createNote(data);
       
       // Broadcast to WebSocket clients
@@ -1177,6 +1199,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/notes/:id", async (req, res) => {
     try {
+      // First, get the note to check permissions
+      const existingNote = await storage.getNote(req.params.id);
+      if (!existingNote) {
+        return res.status(404).json({ error: "Note not found" });
+      }
+
+      // Get the space to check if it's open
+      const space = await storage.getSpace(existingNote.spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Space not found" });
+      }
+
+      // Check permissions: 
+      // 1. User is facilitator/admin (can always edit)
+      // 2. OR space is "open" AND participant owns the note
+      const user = req.user as User | undefined;
+      const isFacilitatorOrAdmin = user && ["facilitator", "company_admin", "global_admin"].includes(user.role);
+      
+      // For participant edits, use session-verified participantId (not client-supplied)
+      const sessionParticipantId = req.session?.participantId;
+      const isOwner = existingNote.participantId === sessionParticipantId;
+      const canParticipantEdit = sessionParticipantId && isOwner && space.status === "open";
+
+      if (!isFacilitatorOrAdmin && !canParticipantEdit) {
+        return res.status(403).json({ error: "You can only edit your own notes when the session is open" });
+      }
+
       const data = insertNoteSchema.partial().parse(req.body);
       const note = await storage.updateNote(req.params.id, data);
       if (!note) {
@@ -1197,6 +1246,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/notes/:id", async (req, res) => {
     try {
+      // First, get the note to check permissions
+      const existingNote = await storage.getNote(req.params.id);
+      if (!existingNote) {
+        return res.status(404).json({ error: "Note not found" });
+      }
+
+      // Get the space to check if it's open
+      const space = await storage.getSpace(existingNote.spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Space not found" });
+      }
+
+      // Check permissions: 
+      // 1. User is facilitator/admin (can always delete)
+      // 2. OR space is "open" AND participant owns the note
+      const user = req.user as User | undefined;
+      const isFacilitatorOrAdmin = user && ["facilitator", "company_admin", "global_admin"].includes(user.role);
+      
+      // For participant deletes, use session-verified participantId (not client-supplied)
+      const sessionParticipantId = req.session?.participantId;
+      const isOwner = existingNote.participantId === sessionParticipantId;
+      const canParticipantDelete = sessionParticipantId && isOwner && space.status === "open";
+
+      if (!isFacilitatorOrAdmin && !canParticipantDelete) {
+        return res.status(403).json({ error: "You can only delete your own notes when the session is open" });
+      }
+
       const deleted = await storage.deleteNote(req.params.id);
       if (!deleted) {
         return res.status(404).json({ error: "Note not found" });
