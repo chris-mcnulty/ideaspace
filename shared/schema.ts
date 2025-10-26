@@ -33,6 +33,13 @@ export const spaces = pgTable("spaces", {
   hidden: boolean("hidden").notNull().default(false),
   guestAllowed: boolean("guest_allowed").notNull().default(false), // Default: guests NOT allowed
   icon: text("icon").notNull().default("brain"), // Workspace icon identifier
+  sessionMode: text("session_mode").notNull().default("live"), // 'live' or 'async'
+  ideationStartsAt: timestamp("ideation_starts_at"),
+  ideationEndsAt: timestamp("ideation_ends_at"),
+  votingStartsAt: timestamp("voting_starts_at"),
+  votingEndsAt: timestamp("voting_ends_at"),
+  rankingStartsAt: timestamp("ranking_starts_at"),
+  rankingEndsAt: timestamp("ranking_ends_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
