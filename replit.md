@@ -28,6 +28,14 @@ Aurora is built as a multi-tenant web application with a clear separation of con
 - **Multi-Tenancy**: Implemented with a URL structure of `/o/:org/s/:space`, allowing for organization isolation and custom branding support.
 - **Real-time Collaboration**: Utilizes WebSocket connections (`/ws`) for live note creation, updates, deletion, and participant presence tracking, broadcasting updates to all connected clients.
 - **Role-Based Access Control (RBAC)**: Defines four roles: Global Admin, Company Admin, Facilitator, and User, each with specific permissions and access scopes, managed through a robust authentication and authorization system using `bcrypt`, `passport.js`, and `express-session`.
+- **Email Verification & Password Reset**: Complete authentication enhancement system:
+  - **Email Verification**: Required for all new user registrations (admins exempt). 24-hour verification tokens sent via SendGrid upon registration.
+  - **Password Reset**: Secure password reset flow with 1-hour expiry tokens. Users can request reset via email, verify token validity, and set new password.
+  - **Password Visibility Toggle**: Eye/EyeOff icons on all password inputs for improved UX.
+  - **Resend Verification**: Login page detects unverified emails and offers resend button.
+  - **Token Management**: Database-backed token storage with automatic expiry handling and single-use reset tokens.
+  - **Frontend Pages**: `/login`, `/forgot-password`, `/reset-password`, `/verify-email` with full error handling and success flows.
+  - **Security**: Tokens stored securely, emails don't reveal account existence, server-side validation on all endpoints.
 - **AI Integration**: Leverages OpenAI API (GPT-5) via Replit AI Integrations for:
   - **Note Categorization**: Production-ready service with Zod validation, retry logic, and real-time WebSocket broadcasts for category updates
   - **Card Rewrites**: Facilitators can generate 1-3 AI-powered variations of any card while preserving category, with dialog UI to select and apply variations
