@@ -33,8 +33,10 @@ import {
   Users,
   StickyNote,
   Sparkles,
+  ListOrdered,
 } from "lucide-react";
 import type { Organization, Space, Note, Participant } from "@shared/schema";
+import { Leaderboard } from "@/components/Leaderboard";
 
 export default function FacilitatorWorkspace() {
   const params = useParams() as { org: string; space: string };
@@ -106,6 +108,19 @@ export default function FacilitatorWorkspace() {
   // Fetch votes
   const { data: votes = [] } = useQuery<any[]>({
     queryKey: [`/api/spaces/${params.space}/votes`],
+    enabled: !!params.space,
+  });
+
+  // Fetch ranking leaderboard
+  const { data: leaderboardData } = useQuery<{ leaderboard: any[]; totalNotes: number; totalRankings: number }>({
+    queryKey: [`/api/spaces/${params.space}/leaderboard`],
+    enabled: !!params.space,
+  });
+  const leaderboard = leaderboardData?.leaderboard || [];
+
+  // Fetch ranking progress
+  const { data: rankingProgress } = useQuery<{ totalParticipants: number; completedCount: number; completionPercentage: number }>({
+    queryKey: [`/api/spaces/${params.space}/ranking-progress`],
     enabled: !!params.space,
   });
 
@@ -462,6 +477,10 @@ export default function FacilitatorWorkspace() {
             </TabsTrigger>
             <TabsTrigger value="voting" data-testid="tab-voting">
               Voting ({votes.length})
+            </TabsTrigger>
+            <TabsTrigger value="ranking" data-testid="tab-ranking">
+              <ListOrdered className="mr-2 h-4 w-4" />
+              Ranking
             </TabsTrigger>
           </TabsList>
 
@@ -895,6 +914,97 @@ export default function FacilitatorWorkspace() {
                   <p className="mt-4 text-lg font-medium">No votes yet</p>
                   <p className="mt-2 text-sm text-muted-foreground max-w-md">
                     Participants can start voting once they navigate to the voting page
+                  </p>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="ranking" className="mt-6 space-y-6">
+            {/* Ranking Header */}
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">Stack Ranking</h2>
+                <p className="text-muted-foreground mt-1">
+                  Track participant ranking progress and view Borda count results
+                </p>
+              </div>
+              <Button
+                onClick={() => window.open(`/o/${params.org}/s/${params.space}/rank`, '_blank')}
+                data-testid="button-test-ranking"
+              >
+                Test Ranking View
+              </Button>
+            </div>
+
+            {/* Ranking Statistics */}
+            <div className="grid gap-4 md:grid-cols-3">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium">Participants Completed</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">
+                    {rankingProgress?.completedCount || 0}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Of {rankingProgress?.totalParticipants || participants.length} participants
+                  </p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium">Completion Rate</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">
+                    {rankingProgress?.completionPercentage?.toFixed(0) || 0}%
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {rankingProgress?.completedCount || 0} / {rankingProgress?.totalParticipants || participants.length} completed
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium">Ideas to Rank</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">
+                    {notes.length}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Notes available for ranking
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Leaderboard */}
+            {leaderboard.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Borda Count Leaderboard</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Ideas ranked by Borda count scoring (higher is better)
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <Leaderboard scores={leaderboard} />
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Empty State */}
+            {leaderboard.length === 0 && (
+              <div className="flex min-h-[400px] items-center justify-center rounded-lg border-2 border-dashed">
+                <div className="text-center">
+                  <ListOrdered className="mx-auto h-12 w-12 text-muted-foreground" />
+                  <p className="mt-4 text-lg font-medium">No rankings yet</p>
+                  <p className="mt-2 text-sm text-muted-foreground max-w-md">
+                    Participants can start ranking once they navigate to the ranking page
                   </p>
                 </div>
               </div>
