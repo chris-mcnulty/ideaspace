@@ -83,6 +83,7 @@ export interface IStorage {
   // Spaces
   getSpace(id: string): Promise<Space | undefined>;
   getSpaceByCode(code: string): Promise<Space | undefined>;
+  getAllSpaces(): Promise<Space[]>;
   getSpacesByOrganization(organizationId: string): Promise<Space[]>;
   createSpace(space: InsertSpace): Promise<Space>;
   updateSpace(id: string, space: Partial<InsertSpace>): Promise<Space | undefined>;
@@ -271,6 +272,10 @@ export class DbStorage implements IStorage {
   async getSpaceByCode(code: string): Promise<Space | undefined> {
     const [space] = await db.select().from(spaces).where(eq(spaces.code, code)).limit(1);
     return space;
+  }
+
+  async getAllSpaces(): Promise<Space[]> {
+    return db.select().from(spaces).orderBy(desc(spaces.createdAt));
   }
 
   async getSpacesByOrganization(organizationId: string): Promise<Space[]> {

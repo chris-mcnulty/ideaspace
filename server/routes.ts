@@ -664,6 +664,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get workspaces for current user (facilitator dashboard)
+  app.get("/api/my-workspaces", requireAuth, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      let spaces: any[] = [];
+
+      // Global admins can see all workspaces
+      if (currentUser.role === "global_admin") {
+        spaces = await storage.getAllSpaces();
+      } 
+      // Company admins can see all workspaces in their organization
+      else if (currentUser.role === "company_admin" && currentUser.organizationId) {
+        spaces = await storage.getSpacesByOrganization(currentUser.organizationId);
+      } 
+      // Facilitators can only see workspaces they're assigned to
+      else if (currentUser.role === "facilitator") {
+        const facilitatorAssignments = await storage.getSpaceFacilitatorsByUser(currentUser.id);
+        const spaceIds = facilitatorAssignments.map((a: any) => a.spaceId);
+        const spaceResults = await Promise.all(
+          spaceIds.map((id: string) => storage.getSpace(id))
+        );
+        // Filter out any null results
+        spaces = spaceResults.filter((s: any) => s !== null);
+      }
+      // Regular users don't have access to any workspaces as facilitators
+      else {
+        spaces = [];
+      }
+
+      // Enrich each workspace with stats
+      const enrichedSpaces = await Promise.all(
+        spaces.map(async (space: any) => {
+          const [participants, notes, org] = await Promise.all([
+            storage.getParticipantsBySpace(space.id),
+            storage.getNotesBySpace(space.id),
+            storage.getOrganization(space.organizationId),
+          ]);
+
+          return {
+            ...space,
+            organization: org,
+            stats: {
+              participantCount: participants.length,
+              noteCount: notes.length,
+            },
+          };
+        })
+      );
+
+      res.json(enrichedSpaces);
+    } catch (error) {
+      console.error("Failed to fetch user workspaces:", error);
+      res.status(500).json({ error: "Failed to fetch workspaces" });
+    }
+  });
+
   // Protected: Require facilitator or above to create spaces
   app.post("/api/spaces", requireFacilitator, async (req, res) => {
     try {
