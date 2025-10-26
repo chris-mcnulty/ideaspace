@@ -127,12 +127,10 @@ export default function AdminPanel() {
               <Mail className="h-4 w-4 mr-2" />
               Access Requests
             </TabsTrigger>
-            {currentUser.role === "global_admin" && (
-              <TabsTrigger value="knowledge-base" data-testid="tab-knowledge-base">
-                <BookOpen className="h-4 w-4 mr-2" />
-                Knowledge Base
-              </TabsTrigger>
-            )}
+            <TabsTrigger value="knowledge-base" data-testid="tab-knowledge-base">
+              <BookOpen className="h-4 w-4 mr-2" />
+              Knowledge Base
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="workspaces" className="space-y-6">
@@ -172,15 +170,29 @@ export default function AdminPanel() {
             />
           </TabsContent>
 
-          {currentUser.role === "global_admin" && (
-            <TabsContent value="knowledge-base">
+          <TabsContent value="knowledge-base">
+            {currentUser.role === "global_admin" ? (
               <KnowledgeBaseManager
                 scope="system"
                 title="System-Wide Knowledge Base"
                 description="Upload documents that will be available across all organizations and workspaces for AI grounding"
               />
-            </TabsContent>
-          )}
+            ) : currentUser.role === "company_admin" && companyOrg ? (
+              <KnowledgeBaseManager
+                scope="organization"
+                scopeId={companyOrg.id}
+                title={`${companyOrg.name} Knowledge Base`}
+                description="Upload documents that will be available across all workspaces in your organization for AI grounding"
+              />
+            ) : (
+              <Card>
+                <CardContent className="pt-6 text-center text-muted-foreground">
+                  <BookOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No access to Knowledge Base</p>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
         </Tabs>
       </main>
     </div>

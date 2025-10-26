@@ -34,9 +34,11 @@ import {
   StickyNote,
   Sparkles,
   ListOrdered,
+  BookOpen,
 } from "lucide-react";
 import type { Organization, Space, Note, Participant } from "@shared/schema";
 import { Leaderboard } from "@/components/Leaderboard";
+import { KnowledgeBaseManager } from "@/components/KnowledgeBaseManager";
 
 export default function FacilitatorWorkspace() {
   const params = useParams() as { org: string; space: string };
@@ -481,6 +483,10 @@ export default function FacilitatorWorkspace() {
             <TabsTrigger value="ranking" data-testid="tab-ranking">
               <ListOrdered className="mr-2 h-4 w-4" />
               Ranking
+            </TabsTrigger>
+            <TabsTrigger value="knowledge-base" data-testid="tab-knowledge-base">
+              <BookOpen className="mr-2 h-4 w-4" />
+              Knowledge Base
             </TabsTrigger>
           </TabsList>
 
@@ -1009,6 +1015,15 @@ export default function FacilitatorWorkspace() {
                 </div>
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="knowledge-base" className="mt-6">
+            <KnowledgeBaseManager
+              scope="workspace"
+              scopeId={space.id}
+              title={`${space.name} Knowledge Base`}
+              description="Upload documents specific to this workspace to help ground AI categorization and personalized results"
+            />
           </TabsContent>
         </Tabs>
       </main>
