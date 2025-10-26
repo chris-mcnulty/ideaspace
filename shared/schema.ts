@@ -124,6 +124,43 @@ export const knowledgeBaseDocuments = pgTable("knowledge_base_documents", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Workspace Templates: Reusable workspace configurations with seeded content
+export const workspaceTemplates = pgTable("workspace_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(), // e.g., "Company Values Ideation"
+  type: text("type").notNull(), // e.g., "values", "vision", "strategy", "general"
+  description: text("description"),
+  organizationId: varchar("organization_id").references(() => organizations.id), // null for system templates
+  sourceSpaceId: varchar("source_space_id").references(() => spaces.id), // Optional: workspace it was cloned from
+  settings: jsonb("settings"), // Workspace settings like guestAllowed, status, etc.
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Template Notes: Seeded notes included in templates
+export const workspaceTemplateNotes = pgTable("workspace_template_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").notNull().references(() => workspaceTemplates.id),
+  content: text("content").notNull(),
+  category: text("category"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Template Documents: Knowledge base documents linked to templates
+export const workspaceTemplateDocuments = pgTable("workspace_template_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").notNull().references(() => workspaceTemplates.id),
+  title: text("title").notNull(),
+  description: text("description"),
+  filename: text("filename").notNull(),
+  filePath: text("file_path").notNull(),
+  fileSize: integer("file_size").notNull(),
+  mimeType: text("mime_type").notNull(),
+  tags: text("tags").array(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Insert schemas
 export const insertOrganizationSchema = createInsertSchema(organizations).omit({
   id: true,
@@ -188,6 +225,22 @@ export const insertKnowledgeBaseDocumentSchema = createInsertSchema(knowledgeBas
   updatedAt: true,
 });
 
+export const insertWorkspaceTemplateSchema = createInsertSchema(workspaceTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertWorkspaceTemplateNoteSchema = createInsertSchema(workspaceTemplateNotes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertWorkspaceTemplateDocumentSchema = createInsertSchema(workspaceTemplateDocuments).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type Organization = typeof organizations.$inferSelect;
 export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
@@ -221,3 +274,12 @@ export type InsertAccessRequest = z.infer<typeof insertAccessRequestSchema>;
 
 export type KnowledgeBaseDocument = typeof knowledgeBaseDocuments.$inferSelect;
 export type InsertKnowledgeBaseDocument = z.infer<typeof insertKnowledgeBaseDocumentSchema>;
+
+export type WorkspaceTemplate = typeof workspaceTemplates.$inferSelect;
+export type InsertWorkspaceTemplate = z.infer<typeof insertWorkspaceTemplateSchema>;
+
+export type WorkspaceTemplateNote = typeof workspaceTemplateNotes.$inferSelect;
+export type InsertWorkspaceTemplateNote = z.infer<typeof insertWorkspaceTemplateNoteSchema>;
+
+export type WorkspaceTemplateDocument = typeof workspaceTemplateDocuments.$inferSelect;
+export type InsertWorkspaceTemplateDocument = z.infer<typeof insertWorkspaceTemplateDocumentSchema>;
