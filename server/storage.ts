@@ -34,6 +34,7 @@ export interface IStorage {
   // Organizations
   getOrganization(id: string): Promise<Organization | undefined>;
   getOrganizationBySlug(slug: string): Promise<Organization | undefined>;
+  getAllOrganizations(): Promise<Organization[]>;
   createOrganization(org: InsertOrganization): Promise<Organization>;
   updateOrganization(id: string, org: Partial<InsertOrganization>): Promise<Organization | undefined>;
 
@@ -41,6 +42,8 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getAllUsers(): Promise<User[]>;
+  getUsersByOrganization(organizationId: string): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined>;
   deleteUser(id: string): Promise<boolean>;
@@ -60,6 +63,7 @@ export interface IStorage {
   deleteCompanyAdmin(id: string): Promise<boolean>;
 
   // Space Facilitators (association)
+  getSpaceFacilitator(id: string): Promise<SpaceFacilitator | undefined>;
   getSpaceFacilitatorsBySpace(spaceId: string): Promise<SpaceFacilitator[]>;
   getSpaceFacilitatorsByUser(userId: string): Promise<SpaceFacilitator[]>;
   createSpaceFacilitator(spaceFacilitator: InsertSpaceFacilitator): Promise<SpaceFacilitator>;
@@ -104,6 +108,10 @@ export class DbStorage implements IStorage {
     return org;
   }
 
+  async getAllOrganizations(): Promise<Organization[]> {
+    return db.select().from(organizations).orderBy(organizations.name);
+  }
+
   async createOrganization(org: InsertOrganization): Promise<Organization> {
     const [created] = await db.insert(organizations).values(org).returning();
     return created;
@@ -128,6 +136,14 @@ export class DbStorage implements IStorage {
   async getUserByUsername(username: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.username, username)).limit(1);
     return user;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return db.select().from(users).orderBy(desc(users.createdAt));
+  }
+
+  async getUsersByOrganization(organizationId: string): Promise<User[]> {
+    return db.select().from(users).where(eq(users.organizationId, organizationId)).orderBy(desc(users.createdAt));
   }
 
   async createUser(user: InsertUser): Promise<User> {
@@ -288,6 +304,11 @@ export class DbStorage implements IStorage {
   }
 
   // Space Facilitators
+  async getSpaceFacilitator(id: string): Promise<SpaceFacilitator | undefined> {
+    const [facilitator] = await db.select().from(spaceFacilitators).where(eq(spaceFacilitators.id, id)).limit(1);
+    return facilitator;
+  }
+
   async getSpaceFacilitatorsBySpace(spaceId: string): Promise<SpaceFacilitator[]> {
     return db.select().from(spaceFacilitators).where(eq(spaceFacilitators.spaceId, spaceId));
   }

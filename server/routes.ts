@@ -158,6 +158,150 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(userWithoutPassword);
   });
 
+  // Admin Panel APIs
+  // List all organizations (global admin only)
+  app.get("/api/admin/organizations", requireGlobalAdmin, async (req, res) => {
+    try {
+      const organizations = await storage.getAllOrganizations();
+      res.json(organizations);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch organizations" });
+    }
+  });
+
+  // List users (company admins see only their org, global admins see all)
+  app.get("/api/admin/users", requireCompanyAdmin, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      let users: User[];
+
+      if (currentUser.role === "global_admin") {
+        users = await storage.getAllUsers();
+      } else if (currentUser.role === "company_admin" && currentUser.organizationId) {
+        users = await storage.getUsersByOrganization(currentUser.organizationId);
+      } else {
+        return res.status(403).json({ error: "Insufficient permissions" });
+      }
+
+      // Remove passwords from response
+      const usersWithoutPasswords = users.map(({ password, ...user }) => user);
+      res.json(usersWithoutPasswords);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch users" });
+    }
+  });
+
+  // List workspaces by organization (with auth checks)
+  app.get("/api/admin/organizations/:orgId/spaces", requireCompanyAdmin, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const { orgId } = req.params;
+
+      // Company admins can only view their own organization's workspaces
+      if (currentUser.role === "company_admin" && currentUser.organizationId !== orgId) {
+        return res.status(403).json({ error: "Cannot access other organization's workspaces" });
+      }
+
+      const spaces = await storage.getSpacesByOrganization(orgId);
+      res.json(spaces);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch workspaces" });
+    }
+  });
+
+  // Associate user as company admin
+  app.post("/api/admin/company-admins", requireGlobalAdmin, async (req, res) => {
+    try {
+      const data = z.object({
+        userId: z.string(),
+        organizationId: z.string(),
+      }).parse(req.body);
+
+      const companyAdmin = await storage.createCompanyAdmin(data);
+      res.status(201).json(companyAdmin);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create company admin association" });
+    }
+  });
+
+  // Remove company admin association
+  app.delete("/api/admin/company-admins/:id", requireGlobalAdmin, async (req, res) => {
+    try {
+      const deleted = await storage.deleteCompanyAdmin(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Company admin association not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete company admin association" });
+    }
+  });
+
+  // Associate user as space facilitator
+  app.post("/api/admin/space-facilitators", requireCompanyAdmin, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const data = z.object({
+        userId: z.string(),
+        spaceId: z.string(),
+      }).parse(req.body);
+
+      // Verify space exists and belongs to accessible organization
+      const space = await storage.getSpace(data.spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Space not found" });
+      }
+
+      // Company admins can only assign facilitators in their own organization
+      if (currentUser.role === "company_admin" && space.organizationId !== currentUser.organizationId) {
+        return res.status(403).json({ error: "Cannot assign facilitators to other organization's workspaces" });
+      }
+
+      const spaceFacilitator = await storage.createSpaceFacilitator(data);
+      res.status(201).json(spaceFacilitator);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create space facilitator association" });
+    }
+  });
+
+  // Remove space facilitator association
+  app.delete("/api/admin/space-facilitators/:id", requireCompanyAdmin, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      
+      // Fetch the facilitator association to check organization ownership
+      const facilitator = await storage.getSpaceFacilitator(req.params.id);
+      if (!facilitator) {
+        return res.status(404).json({ error: "Space facilitator association not found" });
+      }
+
+      // Get the space to verify organization
+      const space = await storage.getSpace(facilitator.spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Associated space not found" });
+      }
+
+      // Company admins can only remove facilitators from their own organization
+      if (currentUser.role === "company_admin" && space.organizationId !== currentUser.organizationId) {
+        return res.status(403).json({ error: "Cannot remove facilitators from other organization's workspaces" });
+      }
+      
+      const deleted = await storage.deleteSpaceFacilitator(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Failed to delete facilitator association" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete space facilitator association" });
+    }
+  });
+
   // Organizations
   app.get("/api/organizations/:slug", async (req, res) => {
     try {
