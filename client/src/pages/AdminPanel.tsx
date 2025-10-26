@@ -3,12 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Building2, Plus, LogOut, Loader2, Mail, Clock, Check, X } from "lucide-react";
+import { Building2, Plus, LogOut, Loader2, Mail, Clock, Check, X, BookOpen } from "lucide-react";
 import type { Organization, Space, User, AccessRequest } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useState } from "react";
+import { KnowledgeBaseManager } from "@/components/KnowledgeBaseManager";
 
 export default function AdminPanel() {
   const [, setLocation] = useLocation();
@@ -126,6 +127,12 @@ export default function AdminPanel() {
               <Mail className="h-4 w-4 mr-2" />
               Access Requests
             </TabsTrigger>
+            {currentUser.role === "global_admin" && (
+              <TabsTrigger value="knowledge-base" data-testid="tab-knowledge-base">
+                <BookOpen className="h-4 w-4 mr-2" />
+                Knowledge Base
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="workspaces" className="space-y-6">
@@ -164,6 +171,16 @@ export default function AdminPanel() {
               organizations={displayOrgs}
             />
           </TabsContent>
+
+          {currentUser.role === "global_admin" && (
+            <TabsContent value="knowledge-base">
+              <KnowledgeBaseManager
+                scope="system"
+                title="System-Wide Knowledge Base"
+                description="Upload documents that will be available across all organizations and workspaces for AI grounding"
+              />
+            </TabsContent>
+          )}
         </Tabs>
       </main>
     </div>
