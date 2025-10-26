@@ -161,6 +161,22 @@ export const workspaceTemplateDocuments = pgTable("workspace_template_documents"
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// AI Usage Log: Track OpenAI API usage for monitoring and billing
+export const aiUsageLog = pgTable("ai_usage_log", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id").references(() => organizations.id), // null for system-level usage
+  spaceId: varchar("space_id").references(() => spaces.id), // null if not workspace-specific
+  userId: varchar("user_id").references(() => users.id), // Who triggered the AI operation
+  modelName: text("model_name").notNull(), // e.g., "gpt-5"
+  operation: text("operation").notNull(), // 'categorization', 'rewrite', 'summary', etc.
+  promptTokens: integer("prompt_tokens"),
+  completionTokens: integer("completion_tokens"),
+  totalTokens: integer("total_tokens"),
+  estimatedCostCents: integer("estimated_cost_cents"), // Cost in cents (for easy aggregation)
+  metadata: jsonb("metadata"), // Additional context (note count, variation count, etc.)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Insert schemas
 export const insertOrganizationSchema = createInsertSchema(organizations).omit({
   id: true,
@@ -241,6 +257,11 @@ export const insertWorkspaceTemplateDocumentSchema = createInsertSchema(workspac
   createdAt: true,
 });
 
+export const insertAiUsageLogSchema = createInsertSchema(aiUsageLog).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type Organization = typeof organizations.$inferSelect;
 export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
@@ -283,3 +304,6 @@ export type InsertWorkspaceTemplateNote = z.infer<typeof insertWorkspaceTemplate
 
 export type WorkspaceTemplateDocument = typeof workspaceTemplateDocuments.$inferSelect;
 export type InsertWorkspaceTemplateDocument = z.infer<typeof insertWorkspaceTemplateDocumentSchema>;
+
+export type AiUsageLog = typeof aiUsageLog.$inferSelect;
+export type InsertAiUsageLog = z.infer<typeof insertAiUsageLogSchema>;

@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { z } from "zod";
+import { logAiUsage, extractUsageMetrics } from "./aiUsageLogger";
 
 // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
 // This is using Replit's AI Integrations service, which provides OpenAI-compatible API access without requiring your own OpenAI API key.
@@ -11,6 +12,12 @@ const openai = new OpenAI({
 export interface Note {
   id: string;
   content: string;
+}
+
+export interface AiContext {
+  organizationId?: string;
+  spaceId?: string;
+  userId?: string;
 }
 
 export interface CategoryResult {
@@ -32,7 +39,11 @@ const categorizationResponseSchema = z.object({
   summary: z.string(),
 });
 
-export async function categorizeNotes(notes: Note[], maxRetries = 2): Promise<CategorizationResponse> {
+export async function categorizeNotes(
+  notes: Note[], 
+  context?: AiContext,
+  maxRetries = 2
+): Promise<CategorizationResponse> {
   if (notes.length === 0) {
     return {
       categories: [],
@@ -114,6 +125,24 @@ Respond with valid JSON in this exact format:
         result.summary += ` (${missingNotes.length} notes were automatically assigned to Uncategorized)`;
       }
 
+      // Log AI usage
+      const usage = extractUsageMetrics(completion);
+      if (usage && context) {
+        await logAiUsage({
+          organizationId: context.organizationId,
+          spaceId: context.spaceId,
+          userId: context.userId,
+          modelName: "gpt-5",
+          operation: "categorization",
+          usage,
+          metadata: {
+            noteCount: notes.length,
+            categoryCount: new Set(result.categories.map(c => c.category)).size,
+            attempt: attempt + 1,
+          },
+        });
+      }
+
       return result;
 
     } catch (error) {
@@ -154,6 +183,7 @@ const rewriteResponseSchema = z.object({
  * @param content - The original card content
  * @param category - Optional category to maintain context
  * @param count - Number of variations to generate (1-3, defaults to 3)
+ * @param context - AI usage tracking context (organizationId, spaceId, userId)
  * @param maxRetries - Maximum retry attempts
  * @returns Array of rewritten variations
  */
@@ -161,6 +191,7 @@ export async function rewriteCard(
   content: string, 
   category?: string | null, 
   count: number = 3,
+  context?: AiContext,
   maxRetries = 2
 ): Promise<RewriteResponse> {
   if (count < 1 || count > 3) {
@@ -235,6 +266,24 @@ Respond with valid JSON in this exact format:
       // Ensure we have the requested number of variations
       if (result.variations.length !== count) {
         throw new Error(`Expected ${count} variations but got ${result.variations.length}`);
+      }
+
+      // Log AI usage
+      const usage = extractUsageMetrics(completion);
+      if (usage && context) {
+        await logAiUsage({
+          organizationId: context.organizationId,
+          spaceId: context.spaceId,
+          userId: context.userId,
+          modelName: "gpt-5",
+          operation: "rewrite",
+          usage,
+          metadata: {
+            variationCount: count,
+            hasCategory: !!category,
+            attempt: attempt + 1,
+          },
+        });
       }
 
       return result;

@@ -1326,10 +1326,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Note not found" });
       }
 
-      // Generate AI rewrites
+      // Get space for context
+      const space = await storage.getSpace(note.spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Space not found" });
+      }
+
+      // Generate AI rewrites with usage tracking context
       let result;
       try {
-        result = await rewriteCard(note.content, note.category, count);
+        const user = req.user as User;
+        result = await rewriteCard(note.content, note.category, count, {
+          organizationId: space.organizationId,
+          spaceId: space.id,
+          userId: user?.id,
+        });
       } catch (rewriteError) {
         const errorMessage = rewriteError instanceof Error 
           ? rewriteError.message 
@@ -1360,16 +1371,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { spaceId } = req.params;
       
+      // Get space for context
+      const space = await storage.getSpace(spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Space not found" });
+      }
+      
       // Fetch all notes for this space
       const notes = await storage.getNotesBySpace(spaceId);
       if (notes.length === 0) {
         return res.status(400).json({ error: "No notes to categorize" });
       }
 
-      // Call GPT-5 to categorize notes
+      // Call GPT-5 to categorize notes with usage tracking context
       let result;
       try {
-        result = await categorizeNotes(notes.map(n => ({ id: n.id, content: n.content })));
+        const user = req.user as User;
+        result = await categorizeNotes(
+          notes.map(n => ({ id: n.id, content: n.content })),
+          {
+            organizationId: space.organizationId,
+            spaceId: space.id,
+            userId: user?.id,
+          }
+        );
       } catch (categorizationError) {
         const errorMessage = categorizationError instanceof Error 
           ? categorizationError.message 
