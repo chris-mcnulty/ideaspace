@@ -135,15 +135,14 @@ export async function generateCohortResults(
   // Sort by combined score
   notesWithScores.sort((a: any, b: any) => b.combinedScore - a.combinedScore);
 
-  // Fetch knowledge base documents for context
+  // Fetch knowledge base documents for context (workspace, organization, and system level)
   const kbDocs = await db
     .select()
     .from(knowledgeBaseDocuments)
     .where(
-      and(
-        inArray(knowledgeBaseDocuments.scope, ["system", "organization", "workspace"]),
-        sql`${knowledgeBaseDocuments.organizationId} = ${space.organizationId} OR ${knowledgeBaseDocuments.scope} = 'system'`
-      )
+      sql`(${knowledgeBaseDocuments.scope} = 'workspace' AND ${knowledgeBaseDocuments.spaceId} = ${spaceId}) OR 
+          (${knowledgeBaseDocuments.scope} = 'organization' AND ${knowledgeBaseDocuments.organizationId} = ${space.organizationId}) OR 
+          ${knowledgeBaseDocuments.scope} = 'system'`
     );
 
   // Build context for AI

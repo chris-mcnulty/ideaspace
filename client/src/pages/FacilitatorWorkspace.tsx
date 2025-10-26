@@ -41,6 +41,7 @@ import {
   FileStack,
   Loader2,
   Download,
+  Trophy,
 } from "lucide-react";
 import type { Organization, Space, Note, Participant } from "@shared/schema";
 import { Leaderboard } from "@/components/Leaderboard";
@@ -137,6 +138,35 @@ export default function FacilitatorWorkspace() {
   const { data: rankingProgress } = useQuery<{ totalParticipants: number; participantsCompleted: number; percentComplete: number; isComplete: boolean }>({
     queryKey: [`/api/spaces/${params.space}/ranking-progress`],
     enabled: !!params.space,
+  });
+
+  // Fetch cohort results
+  const { data: cohortResults, isLoading: cohortResultsLoading } = useQuery<any>({
+    queryKey: [`/api/spaces/${params.space}/results/cohort`],
+    enabled: !!params.space,
+    retry: false,
+  });
+
+  // Generate cohort results mutation
+  const generateCohortResultsMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", `/api/spaces/${params.space}/results/cohort`, {});
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/results/cohort`] });
+      toast({
+        title: "Cohort Results Generated",
+        description: "AI-powered summary has been created successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to generate results",
+        description: error.message,
+      });
+    },
   });
 
   // Add note mutation
@@ -608,6 +638,10 @@ export default function FacilitatorWorkspace() {
             <TabsTrigger value="knowledge-base" data-testid="tab-knowledge-base">
               <BookOpen className="mr-2 h-4 w-4" />
               Knowledge Base
+            </TabsTrigger>
+            <TabsTrigger value="results" data-testid="tab-results">
+              <Trophy className="mr-2 h-4 w-4" />
+              Results
             </TabsTrigger>
           </TabsList>
 
@@ -1277,6 +1311,150 @@ export default function FacilitatorWorkspace() {
               title={`${space.name} Knowledge Base`}
               description="Upload documents specific to this workspace to help ground AI categorization and personalized results"
             />
+          </TabsContent>
+
+          <TabsContent value="results" className="mt-6 space-y-6">
+            {cohortResultsLoading ? (
+              <div className="flex items-center justify-center min-h-[400px]">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span>Loading cohort results...</span>
+                </div>
+              </div>
+            ) : !cohortResults ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Trophy className="h-5 w-5 text-primary" />
+                    Generate Cohort Results
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-muted-foreground">
+                    Generate AI-powered cohort results based on all voting data, rankings, and marketplace allocations.
+                    This will create a comprehensive summary of the session's key themes, top ideas, and insights.
+                  </p>
+                  <Button
+                    onClick={() => generateCohortResultsMutation.mutate()}
+                    disabled={generateCohortResultsMutation.isPending}
+                    size="lg"
+                    data-testid="button-generate-cohort-results"
+                  >
+                    {generateCohortResultsMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Generating Results...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        Generate Cohort Results
+                      </>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Trophy className="h-5 w-5 text-primary" />
+                      Cohort Summary
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="prose prose-sm max-w-none dark:prose-invert">
+                      <p className="whitespace-pre-wrap">{cohortResults.summary}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {cohortResults.topIdeas && cohortResults.topIdeas.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Sparkles className="h-5 w-5 text-primary" />
+                        Top Ideas
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {cohortResults.topIdeas.map((idea: { rank: number; content: string; rationale: string }, index: number) => (
+                        <div key={index} className="space-y-2">
+                          <div className="flex items-start gap-3">
+                            <Badge variant="outline" className="mt-1">
+                              #{idea.rank}
+                            </Badge>
+                            <div className="flex-1">
+                              <p className="font-medium">{idea.content}</p>
+                              <p className="text-sm text-muted-foreground mt-1">{idea.rationale}</p>
+                            </div>
+                          </div>
+                          {index < cohortResults.topIdeas.length - 1 && <div className="border-t" />}
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {cohortResults.keyThemes && cohortResults.keyThemes.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <ListOrdered className="h-5 w-5 text-primary" />
+                        Key Themes
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex flex-wrap gap-2">
+                        {cohortResults.keyThemes.map((theme: string, index: number) => (
+                          <Badge key={index} variant="secondary">
+                            {theme}
+                          </Badge>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {cohortResults.insights && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Sparkles className="h-5 w-5 text-primary" />
+                        Key Insights
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="prose prose-sm max-w-none dark:prose-invert">
+                        <p className="whitespace-pre-wrap">{cohortResults.insights}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                <div className="flex justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={() => generateCohortResultsMutation.mutate()}
+                    disabled={generateCohortResultsMutation.isPending}
+                    data-testid="button-regenerate-results"
+                  >
+                    {generateCohortResultsMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Regenerating...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        Regenerate Results
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </main>
