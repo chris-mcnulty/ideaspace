@@ -40,6 +40,10 @@ export default function LandingPage() {
               className="h-8"
               data-testid="img-logo"
             />
+            <div className="h-6 w-px bg-border/40" data-testid="divider-separator" />
+            <span className="text-lg font-semibold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent" data-testid="text-app-name">
+              Aurora
+            </span>
           </div>
           <Button variant="outline" data-testid="button-publisher-login">
             Publisher Login
