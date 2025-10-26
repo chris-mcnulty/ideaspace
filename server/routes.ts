@@ -5,6 +5,7 @@ import { storage } from "./storage";
 import { insertOrganizationSchema, insertSpaceSchema, insertParticipantSchema, insertNoteSchema, insertVoteSchema, insertRankingSchema } from "@shared/schema";
 import { z } from "zod";
 import { categorizeNotes } from "./services/openai";
+import { getNextPair, calculateProgress } from "./services/pairwise";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Organizations
@@ -313,12 +314,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertVoteSchema.parse(req.body);
       const vote = await storage.createVote(data);
+      
+      // Broadcast vote update to all connected clients
+      broadcast({
+        type: "vote_recorded",
+        data: {
+          spaceId: vote.spaceId,
+          participantId: vote.participantId,
+        }
+      });
+      
       res.status(201).json(vote);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: error.errors });
       }
       res.status(500).json({ error: "Failed to create vote" });
+    }
+  });
+
+  // Get next pair of notes for participant to vote on
+  app.get("/api/spaces/:spaceId/participants/:participantId/next-pair", async (req, res) => {
+    try {
+      const { spaceId, participantId } = req.params;
+      
+      // Get all notes and participant's existing votes
+      const notes = await storage.getNotesBySpace(spaceId);
+      const existingVotes = await storage.getVotesByParticipant(participantId);
+      
+      // Calculate next pair and progress
+      const nextPair = getNextPair(notes, existingVotes);
+      const progress = calculateProgress(notes, existingVotes);
+      
+      if (!nextPair) {
+        return res.json({
+          pair: null,
+          progress,
+          message: progress.isComplete ? "All pairs voted" : "Not enough notes to vote"
+        });
+      }
+      
+      res.json({
+        pair: nextPair,
+        progress
+      });
+    } catch (error) {
+      console.error("Error fetching next pair:", error);
+      res.status(500).json({ error: "Failed to fetch next pair" });
     }
   });
 
