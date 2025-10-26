@@ -14,6 +14,7 @@ import WaitingRoom from "@/pages/WaitingRoom";
 import ParticipantView from "@/pages/ParticipantView";
 import FacilitatorWorkspace from "@/pages/FacilitatorWorkspace";
 import PairwiseVoting from "@/pages/PairwiseVoting";
+import StackRanking from "@/pages/StackRanking";
 
 import LandingPageExample from "@/components/examples/LandingPage";
 import OrganizationHomeExample from "@/components/examples/OrganizationHome";
@@ -43,6 +44,7 @@ function Router() {
       <Route path="/o/:org/s/:space" component={WaitingRoom} />
       <Route path="/o/:org/s/:space/participate" component={ParticipantView} />
       <Route path="/o/:org/s/:space/vote" component={PairwiseVoting} />
+      <Route path="/o/:org/s/:space/rank" component={StackRanking} />
       <Route path="/o/:org/s/:space/facilitate" component={FacilitatorWorkspace} />
       
       <Route path="/showcase" component={ComponentShowcase} />

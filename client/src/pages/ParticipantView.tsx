@@ -1,4 +1,4 @@
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import BrandHeader from "@/components/BrandHeader";
@@ -7,13 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Users, Clock } from "lucide-react";
+import { Plus, Users, Clock, Vote, ListOrdered } from "lucide-react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Organization, Space, Note, Participant } from "@shared/schema";
 
 export default function ParticipantView() {
   const params = useParams() as { org: string; space: string };
+  const [, navigate] = useLocation();
   const [noteContent, setNoteContent] = useState("");
   const [showNoteForm, setShowNoteForm] = useState(false);
   
@@ -193,15 +194,41 @@ export default function ParticipantView() {
         </div>
       </main>
 
-      {/* Dark Footer */}
-      <footer className="border-t bg-card px-6 py-3">
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4" />
-            <span>Session Status: {space?.status}</span>
+      {/* Dark Footer with Navigation */}
+      <footer className="border-t bg-card px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Clock className="h-4 w-4" />
+              <span>Status: {space?.status}</span>
+            </div>
+            <div className="text-sm text-muted-foreground">
+              {notes.length} {notes.length === 1 ? 'idea' : 'ideas'} shared
+            </div>
           </div>
-          <div>
-            {notes.length} {notes.length === 1 ? 'idea' : 'ideas'} shared
+          
+          {/* Navigation Buttons */}
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(`/o/${params.org}/s/${params.space}/vote`)}
+              className="gap-2"
+              data-testid="button-go-to-voting"
+            >
+              <Vote className="h-4 w-4" />
+              Pairwise Voting
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(`/o/${params.org}/s/${params.space}/rank`)}
+              className="gap-2"
+              data-testid="button-go-to-ranking"
+            >
+              <ListOrdered className="h-4 w-4" />
+              Stack Ranking
+            </Button>
           </div>
         </div>
       </footer>

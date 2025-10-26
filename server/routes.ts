@@ -7,6 +7,7 @@ import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, inse
 import { z } from "zod";
 import { categorizeNotes } from "./services/openai";
 import { getNextPair, calculateProgress } from "./services/pairwise";
+import { validateRanking, calculateBordaScores, calculateRankingProgress, hasParticipantCompleted } from "./services/stack-ranking";
 import { hashPassword, requireAuth, requireRole, requireGlobalAdmin, requireCompanyAdmin, requireFacilitator } from "./auth";
 import { generateWorkspaceCode, isValidWorkspaceCode } from "./services/workspace-code";
 import { sendAccessRequestEmail } from "./services/email";
@@ -944,6 +945,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         rankings: Array<{ noteId: string; rank: number }>;
       };
 
+      // Get all notes in the space for validation
+      const notes = await storage.getNotesBySpace(spaceId);
+      const noteIds = notes.map(n => n.id);
+      
+      // Validate the ranking
+      const validation = validateRanking(noteIds, rankingData);
+      if (!validation.valid) {
+        return res.status(400).json({ error: validation.error });
+      }
+
       // Delete existing rankings for this participant in this space
       await storage.deleteRankingsByParticipant(participantId, spaceId);
 
@@ -958,10 +969,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
           })
         )
       );
+      
+      // Broadcast ranking update to all connected clients
+      broadcast({
+        type: "ranking_submitted",
+        data: {
+          spaceId,
+          participantId,
+        }
+      });
 
       res.status(201).json(rankings);
     } catch (error) {
+      console.error("Failed to create rankings:", error);
       res.status(500).json({ error: "Failed to create rankings" });
+    }
+  });
+  
+  // Get participant's rankings
+  app.get("/api/spaces/:spaceId/participants/:participantId/rankings", async (req, res) => {
+    try {
+      const { participantId } = req.params;
+      const rankings = await storage.getRankingsByParticipant(participantId);
+      res.json(rankings);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch rankings" });
+    }
+  });
+  
+  // Get Borda count leaderboard for a space
+  app.get("/api/spaces/:spaceId/leaderboard", async (req, res) => {
+    try {
+      const { spaceId } = req.params;
+      
+      const notes = await storage.getNotesBySpace(spaceId);
+      const rankings = await storage.getRankingsBySpace(spaceId);
+      
+      const bordaScores = calculateBordaScores(notes, rankings);
+      
+      res.json({
+        leaderboard: bordaScores,
+        totalNotes: notes.length,
+        totalRankings: rankings.length,
+      });
+    } catch (error) {
+      console.error("Failed to fetch leaderboard:", error);
+      res.status(500).json({ error: "Failed to fetch leaderboard" });
+    }
+  });
+  
+  // Get ranking progress for a space
+  app.get("/api/spaces/:spaceId/ranking-progress", async (req, res) => {
+    try {
+      const { spaceId } = req.params;
+      
+      const participants = await storage.getParticipantsBySpace(spaceId);
+      const rankings = await storage.getRankingsBySpace(spaceId);
+      const notes = await storage.getNotesBySpace(spaceId);
+      
+      const participantIds = participants.map(p => p.id);
+      const progress = calculateRankingProgress(participantIds, rankings, notes.length);
+      
+      res.json(progress);
+    } catch (error) {
+      console.error("Failed to fetch ranking progress:", error);
+      res.status(500).json({ error: "Failed to fetch ranking progress" });
+    }
+  });
+  
+  // Check if participant has completed ranking
+  app.get("/api/spaces/:spaceId/participants/:participantId/ranking-status", async (req, res) => {
+    try {
+      const { spaceId, participantId } = req.params;
+      
+      const notes = await storage.getNotesBySpace(spaceId);
+      const rankings = await storage.getRankingsBySpace(spaceId);
+      
+      const isComplete = hasParticipantCompleted(participantId, rankings, notes.length);
+      
+      res.json({ isComplete });
+    } catch (error) {
+      console.error("Failed to fetch ranking status:", error);
+      res.status(500).json({ error: "Failed to fetch ranking status" });
     }
   });
 
