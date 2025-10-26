@@ -1,24 +1,9 @@
-import OpenAI from "openai";
+import { openai } from "./openai";
 import { db } from "../db";
 import { notes, votes, rankings, marketplaceAllocations, participants, spaces, knowledgeBaseDocuments, cohortResults, personalizedResults } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { CohortResult, PersonalizedResult } from "@shared/schema";
-
-// Initialize OpenAI client lazily
-let openaiClient: OpenAI | null = null;
-
-function getOpenAIClient(): OpenAI {
-  if (!openaiClient) {
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY environment variable is not set");
-    }
-    openaiClient = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
-  }
-  return openaiClient;
-}
 
 // Schema for validating AI-generated cohort results
 const CohortResultSchema = z.object({
@@ -185,7 +170,6 @@ ${kbContext}
 `;
 
   // Generate results using GPT-5
-  const openai = getOpenAIClient();
   const completion = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: [
@@ -360,7 +344,6 @@ ${cohortResult.keyThemes?.join(', ') || 'None identified'}
 `;
 
   // Generate personalized insights using GPT-5
-  const openai = getOpenAIClient();
   const completion = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: [

@@ -18,6 +18,7 @@ export default function Results() {
   const { data: personalizedResults, isLoading, error } = useQuery<PersonalizedResult>({
     queryKey: [`/api/spaces/${spaceId}/results/personalized`],
     retry: false,
+    enabled: !!spaceId,
   });
 
   // Mutation to generate personalized results
@@ -133,7 +134,10 @@ export default function Results() {
     );
   }
 
-  if (error || !personalizedResults) {
+  // Check if error is 401 (not a participant)
+  const isNotParticipant = error && (error as any).message?.includes("No participant session");
+
+  if (error && !personalizedResults) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <header className="border-b bg-card sticky top-0 z-50 backdrop-blur supports-[backdrop-filter]:bg-card/60">
@@ -157,8 +161,38 @@ export default function Results() {
           </div>
         </header>
         
-        <div className="flex flex-1 items-center justify-center">
-          <p className="text-muted-foreground">Failed to load results. Please try again later.</p>
+        <div className="flex flex-1 items-center justify-center p-6">
+          <Card className="max-w-md text-center">
+            <CardHeader>
+              <CardTitle>Personalized Results</CardTitle>
+              <CardDescription>
+                {isNotParticipant 
+                  ? "This page is for workspace participants only."
+                  : "Failed to load results. Please try again later."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {isNotParticipant ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    To view personalized results, you need to join this workspace as a participant. 
+                    If you're a facilitator or admin, you can view cohort results from the facilitator workspace.
+                  </p>
+                  <Button
+                    onClick={() => window.location.href = `/o/${org}/s/${spaceId}/facilitate`}
+                    variant="outline"
+                    data-testid="button-go-to-facilitator"
+                  >
+                    View Cohort Results
+                  </Button>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Unable to load your personalized results. Please try refreshing the page.
+                </p>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     );

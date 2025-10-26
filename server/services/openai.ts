@@ -9,6 +9,9 @@ const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY
 });
 
+// Export the OpenAI client for use in other services
+export { openai };
+
 export interface Note {
   id: string;
   content: string;
