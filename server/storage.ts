@@ -22,6 +22,12 @@ import {
   type InsertAccessRequest,
   type KnowledgeBaseDocument,
   type InsertKnowledgeBaseDocument,
+  type WorkspaceTemplate,
+  type InsertWorkspaceTemplate,
+  type WorkspaceTemplateNote,
+  type InsertWorkspaceTemplateNote,
+  type WorkspaceTemplateDocument,
+  type InsertWorkspaceTemplateDocument,
   organizations,
   users,
   spaces,
@@ -33,6 +39,9 @@ import {
   spaceFacilitators,
   accessRequests,
   knowledgeBaseDocuments,
+  workspaceTemplates,
+  workspaceTemplateNotes,
+  workspaceTemplateDocuments,
 } from "@shared/schema";
 import { eq, and, desc, or, isNull } from "drizzle-orm";
 
@@ -118,6 +127,14 @@ export interface IStorage {
   createKnowledgeBaseDocument(document: InsertKnowledgeBaseDocument): Promise<KnowledgeBaseDocument>;
   updateKnowledgeBaseDocument(id: string, document: Partial<InsertKnowledgeBaseDocument>): Promise<KnowledgeBaseDocument | undefined>;
   deleteKnowledgeBaseDocument(id: string): Promise<boolean>;
+
+  // Workspace Templates
+  getWorkspaceTemplate(id: string): Promise<WorkspaceTemplate | undefined>;
+  getWorkspaceTemplates(organizationId?: string): Promise<WorkspaceTemplate[]>;
+  createWorkspaceTemplateFromSpace(spaceId: string, name: string, type: string, description: string | undefined, createdBy: string): Promise<WorkspaceTemplate>;
+  deleteWorkspaceTemplate(id: string): Promise<boolean>;
+  getWorkspaceTemplateNotes(templateId: string): Promise<WorkspaceTemplateNote[]>;
+  getWorkspaceTemplateDocuments(templateId: string): Promise<WorkspaceTemplateDocument[]>;
 }
 
 export class DbStorage implements IStorage {
@@ -455,6 +472,86 @@ export class DbStorage implements IStorage {
   async deleteKnowledgeBaseDocument(id: string): Promise<boolean> {
     const result = await db.delete(knowledgeBaseDocuments).where(eq(knowledgeBaseDocuments.id, id));
     return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Workspace Templates
+  async getWorkspaceTemplate(id: string): Promise<WorkspaceTemplate | undefined> {
+    const [template] = await db.select().from(workspaceTemplates).where(eq(workspaceTemplates.id, id)).limit(1);
+    return template;
+  }
+
+  async getWorkspaceTemplates(organizationId?: string): Promise<WorkspaceTemplate[]> {
+    if (organizationId) {
+      return db.select().from(workspaceTemplates).where(
+        or(isNull(workspaceTemplates.organizationId), eq(workspaceTemplates.organizationId, organizationId))
+      ).orderBy(desc(workspaceTemplates.createdAt));
+    }
+    return db.select().from(workspaceTemplates).orderBy(desc(workspaceTemplates.createdAt));
+  }
+
+  async createWorkspaceTemplateFromSpace(spaceId: string, name: string, type: string, description: string | undefined, createdBy: string): Promise<WorkspaceTemplate> {
+    const space = await this.getSpace(spaceId);
+    if (!space) {
+      throw new Error("Space not found");
+    }
+
+    const spaceNotes = await this.getNotesBySpace(spaceId);
+    const spaceDocuments = await this.getKnowledgeBaseDocumentsByScope("workspace", spaceId);
+
+    const templateData: InsertWorkspaceTemplate = {
+      name,
+      type,
+      description,
+      organizationId: space.organizationId,
+      sourceSpaceId: spaceId,
+      settings: {
+        guestAllowed: space.guestAllowed,
+        status: "draft",
+      },
+      createdBy,
+    };
+
+    const [template] = await db.insert(workspaceTemplates).values(templateData).returning();
+
+    for (const note of spaceNotes) {
+      const templateNote: InsertWorkspaceTemplateNote = {
+        templateId: template.id,
+        content: note.content,
+        category: note.category,
+      };
+      await db.insert(workspaceTemplateNotes).values(templateNote);
+    }
+
+    for (const doc of spaceDocuments) {
+      const templateDoc: InsertWorkspaceTemplateDocument = {
+        templateId: template.id,
+        title: doc.title,
+        description: doc.description,
+        filename: doc.filename,
+        filePath: doc.filePath,
+        fileSize: doc.fileSize,
+        mimeType: doc.mimeType,
+        tags: doc.tags,
+      };
+      await db.insert(workspaceTemplateDocuments).values(templateDoc);
+    }
+
+    return template;
+  }
+
+  async deleteWorkspaceTemplate(id: string): Promise<boolean> {
+    await db.delete(workspaceTemplateNotes).where(eq(workspaceTemplateNotes.templateId, id));
+    await db.delete(workspaceTemplateDocuments).where(eq(workspaceTemplateDocuments.templateId, id));
+    const result = await db.delete(workspaceTemplates).where(eq(workspaceTemplates.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async getWorkspaceTemplateNotes(templateId: string): Promise<WorkspaceTemplateNote[]> {
+    return db.select().from(workspaceTemplateNotes).where(eq(workspaceTemplateNotes.templateId, templateId)).orderBy(workspaceTemplateNotes.createdAt);
+  }
+
+  async getWorkspaceTemplateDocuments(templateId: string): Promise<WorkspaceTemplateDocument[]> {
+    return db.select().from(workspaceTemplateDocuments).where(eq(workspaceTemplateDocuments.templateId, templateId)).orderBy(workspaceTemplateDocuments.createdAt);
   }
 }
 
