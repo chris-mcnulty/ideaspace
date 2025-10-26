@@ -14,6 +14,13 @@ import { generateWorkspaceCode, isValidWorkspaceCode } from "./services/workspac
 import { sendAccessRequestEmail } from "./services/email";
 import { fileUploadService } from "./services/file-upload";
 
+// Extend express-session types to include participantId
+declare module "express-session" {
+  interface SessionData {
+    participantId?: string;
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Configure multer for file uploads (max 10MB)
   const upload = multer({
@@ -1655,6 +1662,183 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Failed to fetch ranking status:", error);
       res.status(500).json({ error: "Failed to fetch ranking status" });
+    }
+  });
+
+  // AI Usage Statistics
+  // Get overall AI usage (global admin only)
+  app.get("/api/ai-usage/overall", requireGlobalAdmin, async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      
+      const usageLogs = await storage.getAiUsageLogs({
+        startDate: startDate ? new Date(startDate as string) : undefined,
+        endDate: endDate ? new Date(endDate as string) : undefined,
+      });
+
+      // Calculate aggregated statistics
+      const stats = {
+        totalCalls: usageLogs.length,
+        totalTokens: usageLogs.reduce((sum, log) => sum + (log.totalTokens || 0), 0),
+        totalCostCents: usageLogs.reduce((sum, log) => sum + (log.estimatedCostCents || 0), 0),
+        byOperation: {} as Record<string, { count: number; tokens: number; costCents: number }>,
+        byOrganization: {} as Record<string, { count: number; tokens: number; costCents: number }>,
+      };
+
+      // Group by operation
+      usageLogs.forEach(log => {
+        if (!stats.byOperation[log.operation]) {
+          stats.byOperation[log.operation] = { count: 0, tokens: 0, costCents: 0 };
+        }
+        stats.byOperation[log.operation].count++;
+        stats.byOperation[log.operation].tokens += log.totalTokens || 0;
+        stats.byOperation[log.operation].costCents += log.estimatedCostCents || 0;
+
+        // Group by organization
+        if (log.organizationId) {
+          if (!stats.byOrganization[log.organizationId]) {
+            stats.byOrganization[log.organizationId] = { count: 0, tokens: 0, costCents: 0 };
+          }
+          stats.byOrganization[log.organizationId].count++;
+          stats.byOrganization[log.organizationId].tokens += log.totalTokens || 0;
+          stats.byOrganization[log.organizationId].costCents += log.estimatedCostCents || 0;
+        }
+      });
+
+      res.json(stats);
+    } catch (error) {
+      console.error("Failed to fetch overall AI usage:", error);
+      res.status(500).json({ error: "Failed to fetch AI usage statistics" });
+    }
+  });
+
+  // Get organization-level AI usage (company admins for their org)
+  app.get("/api/ai-usage/organization/:organizationId", requireAuth, async (req, res) => {
+    try {
+      const { organizationId } = req.params;
+      const { startDate, endDate } = req.query;
+      const currentUser = req.user as User;
+
+      // Check permissions: global admin or company admin for this org
+      if (currentUser.role !== 'global_admin') {
+        if (currentUser.role !== 'company_admin' || currentUser.organizationId !== organizationId) {
+          const companyAdmins = await storage.getCompanyAdminsByUser(currentUser.id);
+          const hasPermission = companyAdmins.some(ca => ca.organizationId === organizationId);
+          if (!hasPermission) {
+            return res.status(403).json({ error: "Insufficient permissions" });
+          }
+        }
+      }
+
+      const usageLogs = await storage.getAiUsageLogs({
+        organizationId,
+        startDate: startDate ? new Date(startDate as string) : undefined,
+        endDate: endDate ? new Date(endDate as string) : undefined,
+      });
+
+      // Calculate aggregated statistics
+      const stats = {
+        organizationId,
+        totalCalls: usageLogs.length,
+        totalTokens: usageLogs.reduce((sum, log) => sum + (log.totalTokens || 0), 0),
+        totalCostCents: usageLogs.reduce((sum, log) => sum + (log.estimatedCostCents || 0), 0),
+        byOperation: {} as Record<string, { count: number; tokens: number; costCents: number }>,
+        byWorkspace: {} as Record<string, { count: number; tokens: number; costCents: number }>,
+      };
+
+      // Group by operation and workspace
+      usageLogs.forEach(log => {
+        if (!stats.byOperation[log.operation]) {
+          stats.byOperation[log.operation] = { count: 0, tokens: 0, costCents: 0 };
+        }
+        stats.byOperation[log.operation].count++;
+        stats.byOperation[log.operation].tokens += log.totalTokens || 0;
+        stats.byOperation[log.operation].costCents += log.estimatedCostCents || 0;
+
+        if (log.spaceId) {
+          if (!stats.byWorkspace[log.spaceId]) {
+            stats.byWorkspace[log.spaceId] = { count: 0, tokens: 0, costCents: 0 };
+          }
+          stats.byWorkspace[log.spaceId].count++;
+          stats.byWorkspace[log.spaceId].tokens += log.totalTokens || 0;
+          stats.byWorkspace[log.spaceId].costCents += log.estimatedCostCents || 0;
+        }
+      });
+
+      res.json(stats);
+    } catch (error) {
+      console.error("Failed to fetch organization AI usage:", error);
+      res.status(500).json({ error: "Failed to fetch AI usage statistics" });
+    }
+  });
+
+  // Get workspace-level AI usage (facilitators for their workspace)
+  app.get("/api/ai-usage/workspace/:spaceId", requireAuth, async (req, res) => {
+    try {
+      const { spaceId } = req.params;
+      const { startDate, endDate } = req.query;
+      const currentUser = req.user as User;
+
+      // Get workspace to verify permissions
+      const space = await storage.getSpace(spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      // Check permissions
+      let hasPermission = false;
+      if (currentUser.role === 'global_admin') {
+        hasPermission = true;
+      } else if (currentUser.role === 'company_admin' && currentUser.organizationId === space.organizationId) {
+        hasPermission = true;
+      } else {
+        const facilitators = await storage.getSpaceFacilitatorsBySpace(spaceId);
+        hasPermission = facilitators.some(f => f.userId === currentUser.id);
+      }
+
+      if (!hasPermission) {
+        return res.status(403).json({ error: "Insufficient permissions" });
+      }
+
+      const usageLogs = await storage.getAiUsageLogs({
+        spaceId,
+        startDate: startDate ? new Date(startDate as string) : undefined,
+        endDate: endDate ? new Date(endDate as string) : undefined,
+      });
+
+      // Calculate aggregated statistics
+      const stats = {
+        spaceId,
+        spaceName: space.name,
+        totalCalls: usageLogs.length,
+        totalTokens: usageLogs.reduce((sum, log) => sum + (log.totalTokens || 0), 0),
+        totalCostCents: usageLogs.reduce((sum, log) => sum + (log.estimatedCostCents || 0), 0),
+        byOperation: {} as Record<string, { count: number; tokens: number; costCents: number }>,
+        recentLogs: usageLogs.slice(0, 10).map(log => ({
+          id: log.id,
+          operation: log.operation,
+          modelName: log.modelName,
+          totalTokens: log.totalTokens,
+          estimatedCostCents: log.estimatedCostCents,
+          metadata: log.metadata,
+          createdAt: log.createdAt,
+        })),
+      };
+
+      // Group by operation
+      usageLogs.forEach(log => {
+        if (!stats.byOperation[log.operation]) {
+          stats.byOperation[log.operation] = { count: 0, tokens: 0, costCents: 0 };
+        }
+        stats.byOperation[log.operation].count++;
+        stats.byOperation[log.operation].tokens += log.totalTokens || 0;
+        stats.byOperation[log.operation].costCents += log.estimatedCostCents || 0;
+      });
+
+      res.json(stats);
+    } catch (error) {
+      console.error("Failed to fetch workspace AI usage:", error);
+      res.status(500).json({ error: "Failed to fetch AI usage statistics" });
     }
   });
 

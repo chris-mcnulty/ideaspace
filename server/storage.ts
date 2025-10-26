@@ -28,6 +28,7 @@ import {
   type InsertWorkspaceTemplateNote,
   type WorkspaceTemplateDocument,
   type InsertWorkspaceTemplateDocument,
+  type AiUsageLog,
   organizations,
   users,
   spaces,
@@ -42,8 +43,9 @@ import {
   workspaceTemplates,
   workspaceTemplateNotes,
   workspaceTemplateDocuments,
+  aiUsageLog,
 } from "@shared/schema";
-import { eq, and, desc, or, isNull } from "drizzle-orm";
+import { eq, and, desc, or, isNull, gte, lte } from "drizzle-orm";
 
 export interface IStorage {
   // Organizations
@@ -135,6 +137,15 @@ export interface IStorage {
   deleteWorkspaceTemplate(id: string): Promise<boolean>;
   getWorkspaceTemplateNotes(templateId: string): Promise<WorkspaceTemplateNote[]>;
   getWorkspaceTemplateDocuments(templateId: string): Promise<WorkspaceTemplateDocument[]>;
+
+  // AI Usage Logs
+  getAiUsageLogs(filters: {
+    organizationId?: string;
+    spaceId?: string;
+    userId?: string;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<AiUsageLog[]>;
 }
 
 export class DbStorage implements IStorage {
@@ -552,6 +563,45 @@ export class DbStorage implements IStorage {
 
   async getWorkspaceTemplateDocuments(templateId: string): Promise<WorkspaceTemplateDocument[]> {
     return db.select().from(workspaceTemplateDocuments).where(eq(workspaceTemplateDocuments.templateId, templateId)).orderBy(workspaceTemplateDocuments.createdAt);
+  }
+
+  // AI Usage Logs
+  async getAiUsageLogs(filters: {
+    organizationId?: string;
+    spaceId?: string;
+    userId?: string;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<AiUsageLog[]> {
+    const conditions = [];
+
+    if (filters.organizationId) {
+      conditions.push(eq(aiUsageLog.organizationId, filters.organizationId));
+    }
+
+    if (filters.spaceId) {
+      conditions.push(eq(aiUsageLog.spaceId, filters.spaceId));
+    }
+
+    if (filters.userId) {
+      conditions.push(eq(aiUsageLog.userId, filters.userId));
+    }
+
+    if (filters.startDate) {
+      conditions.push(gte(aiUsageLog.createdAt, filters.startDate));
+    }
+
+    if (filters.endDate) {
+      conditions.push(lte(aiUsageLog.createdAt, filters.endDate));
+    }
+
+    let query = db.select().from(aiUsageLog);
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+
+    return query.orderBy(desc(aiUsageLog.createdAt));
   }
 }
 
