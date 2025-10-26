@@ -69,6 +69,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         organizationId: null,
       });
       
+      // Link any orphaned guest participants with this email
+      try {
+        const orphanedParticipants = await storage.findOrphanedParticipantsByEmail(data.email);
+        for (const participant of orphanedParticipants) {
+          await storage.linkParticipantToUser(participant.id, user.id);
+        }
+      } catch (linkError) {
+        console.error("Failed to link orphaned participants:", linkError);
+        // Don't fail registration if linking fails
+      }
+      
       // Remove password from response
       const { password, ...userWithoutPassword } = user;
       res.status(201).json(userWithoutPassword);
@@ -130,10 +141,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) {
         return res.status(401).json({ error: info?.message || "Invalid credentials" });
       }
-      req.logIn(user, (err) => {
+      req.logIn(user, async (err) => {
         if (err) {
           return res.status(500).json({ error: "Login failed" });
         }
+        
+        // Link any orphaned guest participants with this email
+        try {
+          const orphanedParticipants = await storage.findOrphanedParticipantsByEmail(user.email);
+          for (const participant of orphanedParticipants) {
+            await storage.linkParticipantToUser(participant.id, user.id);
+          }
+        } catch (linkError) {
+          console.error("Failed to link orphaned participants:", linkError);
+          // Don't fail login if linking fails
+        }
+        
         // Remove password from response
         const { password, ...userWithoutPassword } = user;
         res.json(userWithoutPassword);
