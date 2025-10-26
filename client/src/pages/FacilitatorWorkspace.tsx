@@ -3,7 +3,10 @@ import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { UserProfileMenu } from "@/components/UserProfileMenu";
 import BrandHeader from "@/components/BrandHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +49,7 @@ import { KnowledgeBaseManager } from "@/components/KnowledgeBaseManager";
 export default function FacilitatorWorkspace() {
   const params = useParams() as { org: string; space: string };
   const { toast } = useToast();
+  const { isAuthenticated } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedNotes, setSelectedNotes] = useState<Set<string>>(new Set());
   const [isAddNoteDialogOpen, setIsAddNoteDialogOpen] = useState(false);
@@ -497,12 +501,29 @@ export default function FacilitatorWorkspace() {
 
   return (
     <div className="min-h-screen bg-background">
-      <BrandHeader
-        orgName={org.name}
-        orgLogo={org.logoUrl || undefined}
-        userName="Facilitator"
-        userRole="facilitator"
-      />
+      <header className="sticky top-0 z-50 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="flex h-full items-center justify-between px-6">
+          <div className="flex items-center gap-3">
+            {org?.logoUrl ? (
+              <img src={org.logoUrl} alt={org.name} className="h-8 w-auto object-contain" />
+            ) : (
+              <img 
+                src="/logos/synozur-horizontal-color.png" 
+                alt="Synozur Alliance" 
+                className="h-8 w-auto object-contain"
+              />
+            )}
+            <div className="h-6 w-px bg-border/40" />
+            <span className="text-lg font-semibold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
+              Aurora
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            {isAuthenticated && <UserProfileMenu />}
+          </div>
+        </div>
+      </header>
 
       {/* Header Section */}
       <section className="border-b bg-gradient-to-br from-background via-primary/5 to-background">

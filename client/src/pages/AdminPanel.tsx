@@ -11,6 +11,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useState } from "react";
 import { KnowledgeBaseManager } from "@/components/KnowledgeBaseManager";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { UserProfileMenu } from "@/components/UserProfileMenu";
 
 export default function AdminPanel() {
   const [, setLocation] = useLocation();
@@ -92,21 +93,9 @@ export default function AdminPanel() {
               Aurora Admin
             </span>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="text-sm">
-              <p className="font-medium">{currentUser.displayName || currentUser.username}</p>
-              <p className="text-xs text-muted-foreground capitalize">{currentUser.role.replace("_", " ")}</p>
-            </div>
+          <div className="flex items-center gap-2">
             <ThemeToggle />
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={handleLogout}
-              data-testid="button-logout"
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </Button>
+            <UserProfileMenu />
           </div>
         </div>
       </header>

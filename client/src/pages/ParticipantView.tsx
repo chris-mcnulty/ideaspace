@@ -19,12 +19,16 @@ import { Plus, Users, Clock, Vote, ListOrdered, Coins } from "lucide-react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { UserProfileMenu } from "@/components/UserProfileMenu";
 import type { Organization, Space, Note, Participant } from "@shared/schema";
 
 export default function ParticipantView() {
   const params = useParams() as { org: string; space: string };
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { isAuthenticated } = useAuth();
   const [noteContent, setNoteContent] = useState("");
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
@@ -159,14 +163,29 @@ export default function ParticipantView() {
   return (
     <div className="flex h-screen flex-col bg-background">
       {/* Dark Header */}
-      {org && (
-        <BrandHeader
-          orgName={org.name}
-          orgLogo={org.logoUrl || undefined}
-          userName="Participant"
-          userRole="participant"
-        />
-      )}
+      <header className="sticky top-0 z-50 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="flex h-full items-center justify-between px-6">
+          <div className="flex items-center gap-3">
+            {org?.logoUrl ? (
+              <img src={org.logoUrl} alt={org.name} className="h-8 w-auto object-contain" />
+            ) : (
+              <img 
+                src="/logos/synozur-horizontal-color.png" 
+                alt="Synozur Alliance" 
+                className="h-8 w-auto object-contain"
+              />
+            )}
+            <div className="h-6 w-px bg-border/40" />
+            <span className="text-lg font-semibold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
+              Aurora
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            {isAuthenticated && <UserProfileMenu />}
+          </div>
+        </div>
+      </header>
 
       {/* Dark Top Bar with Session Info */}
       <div className="border-b bg-card px-6 py-3">

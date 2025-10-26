@@ -11,6 +11,9 @@ import { Progress } from "@/components/ui/progress";
 import { CheckCircle2, GripVertical, Trophy } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { UserProfileMenu } from "@/components/UserProfileMenu";
 import BrandHeader from "@/components/BrandHeader";
 import type { Note } from "@shared/schema";
 
@@ -74,6 +77,7 @@ export default function StackRanking() {
   const params = useParams<{ org: string; space: string }>();
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { isAuthenticated } = useAuth();
   
   // Get participant ID from session storage (consistent with WaitingRoom/ParticipantView)
   const participantId = sessionStorage.getItem("participantId");
@@ -189,7 +193,25 @@ export default function StackRanking() {
   if (!notesData || notesData.length === 0) {
     return (
       <div className="min-h-screen flex flex-col bg-background">
-        <BrandHeader />
+        <header className="sticky top-0 z-50 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="flex h-full items-center justify-between px-6">
+            <div className="flex items-center gap-3">
+              <img 
+                src="/logos/synozur-horizontal-color.png" 
+                alt="Synozur Alliance" 
+                className="h-8 w-auto object-contain"
+              />
+              <div className="h-6 w-px bg-border/40" />
+              <span className="text-lg font-semibold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
+                Aurora
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <ThemeToggle />
+              {isAuthenticated && <UserProfileMenu />}
+            </div>
+          </div>
+        </header>
         <div className="flex-1 flex items-center justify-center p-8">
           <Card className="p-12 max-w-2xl text-center space-y-6">
             <Trophy className="h-24 w-24 text-muted-foreground mx-auto" />
@@ -210,7 +232,25 @@ export default function StackRanking() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <BrandHeader />
+      <header className="sticky top-0 z-50 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="flex h-full items-center justify-between px-6">
+          <div className="flex items-center gap-3">
+            <img 
+              src="/logos/synozur-horizontal-color.png" 
+              alt="Synozur Alliance" 
+              className="h-8 w-auto object-contain"
+            />
+            <div className="h-6 w-px bg-border/40" />
+            <span className="text-lg font-semibold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
+              Aurora
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            {isAuthenticated && <UserProfileMenu />}
+          </div>
+        </div>
+      </header>
       
       <div className="flex-1 p-8">
         <div className="max-w-4xl mx-auto space-y-6">

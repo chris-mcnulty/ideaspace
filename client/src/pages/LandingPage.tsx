@@ -6,8 +6,11 @@ import { ArrowRight, Users, Sparkles, TrendingUp, Hash } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { UserProfileMenu } from "@/components/UserProfileMenu";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function LandingPage() {
+  const { isAuthenticated } = useAuth();
   const [workspaceCode, setWorkspaceCode] = useState("");
   const [, setLocation] = useLocation();
   const [error, setError] = useState("");
@@ -71,13 +74,17 @@ export default function LandingPage() {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <Button 
-              variant="outline" 
-              data-testid="button-admin-login"
-              onClick={() => setLocation("/login")}
-            >
-              Admin Login
-            </Button>
+            {isAuthenticated ? (
+              <UserProfileMenu />
+            ) : (
+              <Button 
+                variant="outline" 
+                data-testid="button-admin-login"
+                onClick={() => setLocation("/login")}
+              >
+                Admin Login
+              </Button>
+            )}
           </div>
         </div>
       </header>

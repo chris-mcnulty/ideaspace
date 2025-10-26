@@ -3,12 +3,15 @@ import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import type { Organization, Space, Participant, User } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { useState } from "react";
 
 export default function WaitingRoomPage() {
@@ -18,6 +21,7 @@ export default function WaitingRoomPage() {
   const [requestEmail, setRequestEmail] = useState("");
   const [requestName, setRequestName] = useState("");
   const [requestMessage, setRequestMessage] = useState("");
+  const { isAuthenticated } = useAuth();
 
   // Check if user is authenticated
   const { data: currentUser } = useQuery<User>({
@@ -119,7 +123,14 @@ export default function WaitingRoomPage() {
   // If guest access is not allowed and user is not authenticated or doesn't have permission
   if (!guestAllowed && !hasPermission) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4" style={{ backgroundColor: "#0F1115" }}>
+      <div className="flex min-h-screen flex-col bg-background">
+        <header className="sticky top-0 z-50 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="flex h-full items-center justify-end gap-3 px-6">
+            <ThemeToggle />
+            {isAuthenticated && <UserProfileMenu />}
+          </div>
+        </header>
+        <div className="flex flex-1 items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle className="text-2xl">Access Required</CardTitle>
@@ -214,36 +225,45 @@ export default function WaitingRoomPage() {
             </div>
           </CardContent>
         </Card>
+        </div>
       </div>
     );
   }
 
   // User has permission or guest access is allowed - show normal waiting room
   return (
-    <WaitingRoomComponent
-      orgName={org.name}
-      spaceName={space.name}
-      spacePurpose={space.purpose}
-      status={space.status}
-      onJoinAnonymous={(guestName) => {
-        joinMutation.mutate({
-          displayName: guestName,
-          isGuest: !currentUser, // If user is logged in, not a guest
-        });
-      }}
-      onRegister={(data) => {
-        joinMutation.mutate({
-          displayName: data.name,
-          isGuest: false,
-          profileData: {
-            email: data.email,
-            company: data.company,
-            jobTitle: data.job_title,
-            industry: data.industry,
-            country: data.country,
-          },
-        });
-      }}
-    />
+    <div className="flex min-h-screen flex-col bg-background">
+      <header className="sticky top-0 z-50 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="flex h-full items-center justify-end gap-3 px-6">
+          <ThemeToggle />
+          {isAuthenticated && <UserProfileMenu />}
+        </div>
+      </header>
+      <WaitingRoomComponent
+        orgName={org.name}
+        spaceName={space.name}
+        spacePurpose={space.purpose}
+        status={space.status}
+        onJoinAnonymous={(guestName) => {
+          joinMutation.mutate({
+            displayName: guestName,
+            isGuest: !currentUser, // If user is logged in, not a guest
+          });
+        }}
+        onRegister={(data) => {
+          joinMutation.mutate({
+            displayName: data.name,
+            isGuest: false,
+            profileData: {
+              email: data.email,
+              company: data.company,
+              jobTitle: data.job_title,
+              industry: data.industry,
+              country: data.country,
+            },
+          });
+        }}
+      />
+    </div>
   );
 }
