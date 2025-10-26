@@ -1,7 +1,7 @@
 # Aurora - Multi-Tenant Collaborative Envisioning Platform
 
 ## Overview
-Aurora is a sophisticated web application designed to facilitate structured collaborative envisioning sessions for cohorts. Its primary purpose is to enable facilitators to guide participants through various stages, including real-time ideation, AI-powered categorization, pairwise voting, and stack ranking, culminating in personalized results generation. The platform aims to provide a robust, multi-tenant environment for organizations to conduct envisioning workshops effectively.
+Aurora is a web application facilitating structured collaborative envisioning sessions for cohorts. It enables facilitators to guide participants through real-time ideation, AI-powered categorization, pairwise voting, and stack ranking, culminating in personalized results. The platform provides a multi-tenant environment for organizations to conduct envisioning workshops.
 
 ## User Preferences
 - The user wants iterative development.
@@ -15,143 +15,41 @@ Aurora is a sophisticated web application designed to facilitate structured coll
   - Dark mode support
 
 ## System Architecture
-Aurora is built as a multi-tenant web application with a clear separation of concerns between frontend and backend.
+Aurora is a multi-tenant web application with a clear separation of concerns between frontend and backend.
 
 ### UI/UX Decisions
-- **Dark Mode Design System**: Based on Synozur reference, featuring a primary purple (`#810FFB`) accent, very dark blue-black backgrounds (`#0F1115`), and the **Avenir Next LT Pro** custom font.
-- **Branding**: Integrates custom Avenir Next LT Pro fonts, Synozur logos (horizontal, vertical, mark in color & white), and a favicon using the Synozur mark. The "Aurora app name" is displayed with purple gradient styling.
-- **Participant Ideation View**: Features a white whiteboard canvas with dark header/footer UI elements and colorful sticky notes (yellow/blue/green/pink).
-- **Landing Page**: Enhanced with a Synozur Maturity Modeler design, including an AI network background, gradient text hero heading (blue → purple → pink), and purple gradient treatments on feature cards.
-- **General Styling**: Gradient text effects for hero sections, automatic elevation on hover/active states, and a consistent Synozur logo | Aurora separator pattern.
+The design system features a dark mode with a primary purple accent, dark blue-black backgrounds, and the Avenir Next LT Pro custom font. Branding includes Synozur logos and a favicon. The participant ideation view uses a white canvas with colorful sticky notes, while the landing page incorporates an AI network background and gradient text. General styling uses gradient text effects and automatic elevation on hover states.
 
 ### Technical Implementations
-- **Multi-Tenancy**: Implemented with a URL structure of `/o/:org/s/:space`, allowing for organization isolation and custom branding support.
-- **Real-time Collaboration**: Utilizes WebSocket connections (`/ws`) for live note creation, updates, deletion, and participant presence tracking, broadcasting updates to all connected clients.
-- **Role-Based Access Control (RBAC)**: Defines four roles: Global Admin, Company Admin, Facilitator, and User, each with specific permissions and access scopes, managed through a robust authentication and authorization system using `bcrypt`, `passport.js`, and `express-session`.
-- **Email Verification & Password Reset**: Complete authentication enhancement system:
-  - **Email Verification**: Required for all new user registrations (admins exempt). 24-hour verification tokens sent via SendGrid upon registration.
-  - **Password Reset**: Secure password reset flow with 1-hour expiry tokens. Users can request reset via email, verify token validity, and set new password.
-  - **Password Visibility Toggle**: Eye/EyeOff icons on all password inputs for improved UX.
-  - **Resend Verification**: Login page detects unverified emails and offers resend button.
-  - **Token Management**: Database-backed token storage with automatic expiry handling and single-use reset tokens.
-  - **Frontend Pages**: `/login`, `/forgot-password`, `/reset-password`, `/verify-email` with full error handling and success flows.
-  - **Security**: Tokens stored securely, emails don't reveal account existence, server-side validation on all endpoints.
-- **AI Integration**: Leverages OpenAI API (GPT-5) via Replit AI Integrations for:
-  - **Note Categorization**: Production-ready service with Zod validation, retry logic, and real-time WebSocket broadcasts for category updates
-  - **Card Rewrites**: Facilitators can generate 1-3 AI-powered variations of any card while preserving category, with dialog UI to select and apply variations
-  - **AI Usage Tracking**: Comprehensive cost monitoring system with:
-    - Database-backed logging of all AI operations (categorization, rewrites) tracking tokens (input/output), estimated costs, model names, and timestamps
-    - Three-tier analytics: overall platform usage, per-organization usage, and per-workspace usage
-    - Admin Panel UI with filters for organization, workspace, and time range (24h, 7d, 30d, all time)
-    - Summary metrics displaying total operations, tokens consumed, and estimated costs in dollars
-    - Real-time cost estimation based on GPT-5 pricing ($1.50/1M input tokens, $6/1M output tokens)
-    - Detailed operation logs showing individual AI calls with token breakdowns and cost per operation
-- **Pairwise Voting**: Employs a round-robin algorithm for deterministic pair generation, tracking progress, and displaying results in a leaderboard.
-- **Stack Ranking (Borda Count)**: Complete implementation with drag-and-drop interface for participants to rank ideas, Borda count algorithm for scoring (top rank gets N points, descending to 1 point), real-time leaderboard display, and facilitator progress tracking. Includes validation ensuring all notes are ranked with sequential positions.
-- **Guest Access Control System**: Comprehensive workspace access management with configurable guest permissions (default: disabled). Features include:
-  - Per-workspace guest access toggle (`guestAllowed` field, default: false)
-  - Access request workflow for restricted workspaces (guest submits request → admin/facilitator approves)
-  - SendGrid email notifications to admins when access is requested
-  - Admin panel with dedicated Access Requests tab for reviewing and managing requests
-  - Automatic participant-to-account linking (guests who later register/login have their participation history preserved)
-  - Support for anonymous participation with random name generation (e.g., "Powerful Andromeda")
-- **Facilitator Controls**: Provides a comprehensive workspace for facilitators to manage notes (preload, add, edit, delete, merge, bulk select, AI-powered rewrites), control session states, and trigger AI categorization.
-- **Participant Editing Permissions**: Participants can edit and delete their own cards when the workspace status is "open", with server-side session validation to prevent impersonation. Edit/delete buttons appear on hover for owned cards, with facilitators retaining full edit/delete access at all times.
-- **Knowledge Base System**: Three-tiered document management system for grounding AI categorization and personalized results:
-  - **System Scope**: Global admins can upload documents available across all organizations and workspaces
-  - **Organization Scope**: Company admins can upload documents for their organization's workspaces
-  - **Workspace Scope**: Facilitators can upload workspace-specific documents
-  - Local file storage with secure upload handling (10MB limit, PDF/TXT/DOC/DOCX/XLS/XLSX support)
-  - Comprehensive RBAC with scope-based access control
-  - Reusable KnowledgeBaseManager component integrated into AdminPanel and FacilitatorWorkspace
-  - Document metadata including title, description, tags, file size, and upload timestamps
-
-### Feature Specifications
-- **Completed Features**:
-    - Database schema for multi-tenant architecture.
-    - Backend API routes and WebSocket server.
-    - Entry flow pages (Landing, Organization Home, Waiting Room, Participant View).
-    - Guest name generation.
-    - Comprehensive component library.
-    - Hidden spaces functionality.
-    - Facilitator Workspace with extensive note management, search, filter, session controls, and participant viewing.
-    - Participant Ideation View with sticky note creation and real-time display.
-    - Landing page with Synozur Maturity Modeler design.
-    - AI Categorization integration using GPT-5.
-    - Pairwise Voting Module with DuelCard component and progress tracking.
-    - Role-Based Access Control (RBAC) system with 8-digit workspace codes (nnnn-nnnn format) and admin panel.
-    - **Guest Access Control System** with access requests, admin approval workflow, SendGrid email notifications, and automatic participant-to-account linking.
-    - **Stack Ranking Module (Borda Count)**: Complete implementation with:
-      - Backend service implementing Borda count algorithm and validation
-      - Bulk ranking submission API with sequential rank validation
-      - Leaderboard API returning aggregated Borda scores
-      - Ranking progress tracking endpoint
-      - StackRanking page with @dnd-kit drag-and-drop sortable interface
-      - Leaderboard component displaying scores with trophy icons for top 3
-      - Facilitator workspace Ranking tab showing completion metrics and results
-      - Navigation integration in participant footer
-      - Direct join route (`/join/:code`) for workspace access
-    - **Knowledge Base System**: Three-tiered document storage and management:
-      - Database schema with scope (system/organization/workspace), metadata, and file paths
-      - File upload service with local storage handling, unique filename generation
-      - API endpoints with comprehensive RBAC checks for upload, list, and delete operations
-      - KnowledgeBaseManager component with file upload dialog and document list
-      - Integration in AdminPanel (global/company admins) and FacilitatorWorkspace (facilitators)
-      - Support for PDF, TXT, DOC, DOCX, XLS, XLSX files (max 10MB)
-    - **Marketplace Allocation Module**: Coin-based voting system where participants distribute a finite budget among ideas:
-      - Database schema (marketplace_allocations table) with participant-note-coin relationships
-      - Backend service implementing coin allocation logic, validation, and scoring
-      - DEFAULT_COIN_BUDGET of 100 coins per participant (server-enforced)
-      - Secure bulk allocation submission API with:
-        * Session-based participant authentication (prevents impersonation)
-        * Server-side budget validation (prevents budget bypass)
-        * Workspace membership verification (403 if participant doesn't belong to space)
-      - Marketplace leaderboard API aggregating total coins per note
-      - Allocation progress tracking endpoint
-      - Secure GET endpoints with IDOR protection (session validation on all participant-specific queries)
-      - Marketplace page with input controls and quick-add buttons (+5, +10, -5)
-      - Real-time budget display showing remaining coins and allocation percentage
-      - Navigation integration in participant footer
-      - WebSocket broadcasts for allocation updates
-      - Export functionality: Categorized text file with total coins, average coins per participant, and AI categorization status
-    - **Export System**: Facilitators and admins can export categorized snapshots of all voting modules:
-      - Export service (server/services/export.ts) generating formatted text files
-      - Pairwise Voting export: Win/loss records, win rates, categorized by AI-assigned categories
-      - Stack Ranking export: Borda count scores, average ranks, participant counts, categorized
-      - Marketplace Allocation export: Total coins, average coins, participant counts, categorized
-      - Export buttons integrated into FacilitatorWorkspace tabs for Voting and Ranking
-      - API endpoints: /api/spaces/:spaceId/export/pairwise, /ranking, /marketplace
-      - Text format optimized for GenAI analytics consumption
-      - Includes timestamp, totals, and detailed breakdowns by category
-    - **Results Generation System**: Complete AI-powered results system:
-      - Database schema: cohortResults and personalizedResults tables
-      - AI service using GPT-4o via Replit AI Integrations to analyze voting data
-      - Knowledge base integration: Workspace, organization, and system-scoped documents included in AI context
-      - Cohort results: Generate comprehensive summaries, top ideas, key themes, and insights for entire workspace
-      - Personalized results: Individual participant analysis with alignment scores, top contributions, and recommendations
-      - Facilitator workspace Results tab: Generate and view cohort summaries with regenerate capability
-      - Participant results page (/o/:org/s/:space/results): View personalized insights
-      - Graceful handling for non-participants (facilitators/admins directed to cohort results)
-      - Full RBAC: Facilitators/admins for cohort, participants for personalized
-      - API endpoints: POST/GET for both cohort and personalized results generation
-- **In Progress**: None
-- **Pending**: 
-    - Facilitator dashboard for assigned workspaces (homepage showing all spaces user can manage)
+- **Multi-Tenancy**: Supports organization isolation and custom branding via `/o/:org/s/:space` URL structure.
+- **Real-time Collaboration**: Utilizes WebSockets for live updates of notes and participant presence.
+- **Role-Based Access Control (RBAC)**: Defines Global Admin, Company Admin, Facilitator, and User roles with specific permissions, managed via `bcrypt`, `passport.js`, and `express-session`.
+- **Authentication Enhancements**: Includes email verification with SendGrid, secure password reset flows, and password visibility toggles.
+- **AI Integration**: Leverages OpenAI API (GPT-5) for production-ready note categorization with Zod validation and real-time WebSocket broadcasts, card rewrites (generating AI variations), and comprehensive AI usage tracking with cost monitoring and analytics.
+- **Pairwise Voting**: Implements a round-robin algorithm for deterministic pair generation and leaderboard display.
+- **Stack Ranking (Borda Count)**: Features a drag-and-drop interface for ranking, Borda count algorithm for scoring, real-time leaderboard, and facilitator progress tracking.
+- **Guest Access Control System**: Manages workspace access with configurable guest permissions, access request workflow, SendGrid email notifications, and automatic participant-to-account linking.
+- **Facilitator Controls**: Provides tools for managing notes (preload, add, edit, delete, merge, bulk select, AI rewrites), controlling session states, and triggering AI categorization.
+- **Participant Editing Permissions**: Allows participants to edit and delete their own cards when the workspace is "open".
+- **Knowledge Base System**: A three-tiered document management system (System, Organization, Workspace scopes) for grounding AI categorization, supporting PDF/TXT/DOC/DOCX/XLS/XLSX files with secure local storage and RBAC.
+- **Marketplace Allocation Module**: A coin-based voting system where participants distribute a finite budget among ideas, with real-time budget display, secure submission API, and export functionality.
+- **Export System**: Facilitators and admins can export categorized snapshots of all voting modules (Pairwise, Stack Ranking, Marketplace Allocation) into text files optimized for GenAI analytics.
+- **Results Generation System**: An AI-powered system using GPT-4o and knowledge base integration to generate cohort summaries and personalized participant results with alignment scores and recommendations.
+- **Facilitator Dashboard**: A central dashboard displaying all accessible workspaces with quick actions and RBAC for viewing permissions.
 
 ### System Design Choices
-- **Frontend**: React, Wouter (routing), TanStack Query, Tailwind CSS, Shadcn UI.
+- **Frontend**: React, Wouter, TanStack Query, Tailwind CSS, Shadcn UI.
 - **Backend**: Express.js, WebSocket (`ws`).
 - **Database**: PostgreSQL (Neon) with Drizzle ORM.
 
 ## External Dependencies
-- **Database**: PostgreSQL (via Neon)
+- **Database**: PostgreSQL (Neon)
 - **ORM**: Drizzle ORM
-- **AI Services**: OpenAI API (for GPT-5 categorization and summaries)
-- **Authentication**: `bcrypt` (for password hashing), `passport.js` (local strategy), `express-session`
-- **Email Service**: SendGrid (for access request notifications and transactional emails)
-- **File Upload**: `multer` (for multipart/form-data file uploads)
+- **AI Services**: OpenAI API
+- **Authentication**: `bcrypt`, `passport.js`, `express-session`
+- **Email Service**: SendGrid
+- **File Upload**: `multer`
 - **Routing**: Wouter
 - **State Management/Data Fetching**: TanStack Query
 - **Styling**: Tailwind CSS, Shadcn UI
 - **WebSocket**: `ws` library
-- **Font Hosting**: Custom Avenir Next LT Pro fonts loaded from `/fonts/`
