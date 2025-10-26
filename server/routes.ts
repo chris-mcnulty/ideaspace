@@ -917,6 +917,165 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Workspace Templates
+  // Create template from existing workspace
+  app.post("/api/templates", requireAuth, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const data = z.object({
+        spaceId: z.string(),
+        name: z.string().min(1),
+        type: z.string().min(1),
+        description: z.string().optional(),
+      }).parse(req.body);
+
+      const space = await storage.getSpace(data.spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      // Check permissions: must be global admin, company admin of the org, or facilitator of the workspace
+      let hasPermission = false;
+      if (currentUser.role === 'global_admin') {
+        hasPermission = true;
+      } else if (currentUser.role === 'company_admin' && currentUser.organizationId === space.organizationId) {
+        hasPermission = true;
+      } else {
+        const facilitators = await storage.getSpaceFacilitatorsBySpace(data.spaceId);
+        hasPermission = facilitators.some(f => f.userId === currentUser.id);
+      }
+
+      if (!hasPermission) {
+        return res.status(403).json({ error: "Insufficient permissions to create template from this workspace" });
+      }
+
+      const template = await storage.createWorkspaceTemplateFromSpace(
+        data.spaceId,
+        data.name,
+        data.type,
+        data.description,
+        currentUser.id
+      );
+
+      res.status(201).json(template);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Failed to create template:", error);
+      res.status(500).json({ error: "Failed to create template" });
+    }
+  });
+
+  // List templates
+  app.get("/api/templates", requireAuth, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const { organizationId } = req.query;
+
+      let templates;
+      if (organizationId && typeof organizationId === 'string') {
+        // Verify user has access to this organization
+        if (currentUser.role === 'global_admin') {
+          templates = await storage.getWorkspaceTemplates(organizationId);
+        } else if (currentUser.organizationId === organizationId) {
+          templates = await storage.getWorkspaceTemplates(organizationId);
+        } else {
+          return res.status(403).json({ error: "Insufficient permissions" });
+        }
+      } else if (currentUser.role === 'global_admin') {
+        // Global admins can see all templates
+        templates = await storage.getWorkspaceTemplates();
+      } else {
+        // Other users see templates for their organization
+        templates = await storage.getWorkspaceTemplates(currentUser.organizationId || undefined);
+      }
+
+      res.json(templates);
+    } catch (error) {
+      console.error("Failed to fetch templates:", error);
+      res.status(500).json({ error: "Failed to fetch templates" });
+    }
+  });
+
+  // Delete template
+  app.delete("/api/templates/:id", requireAuth, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const { id } = req.params;
+
+      const template = await storage.getWorkspaceTemplate(id);
+      if (!template) {
+        return res.status(404).json({ error: "Template not found" });
+      }
+
+      // Check permissions
+      let hasPermission = false;
+      if (currentUser.role === 'global_admin') {
+        hasPermission = true;
+      } else if (template.organizationId && currentUser.organizationId === template.organizationId) {
+        if (currentUser.role === 'company_admin') {
+          hasPermission = true;
+        } else if (template.createdBy === currentUser.id) {
+          // Allow creator to delete their own template
+          hasPermission = true;
+        }
+      }
+
+      if (!hasPermission) {
+        return res.status(403).json({ error: "Insufficient permissions to delete this template" });
+      }
+
+      await storage.deleteWorkspaceTemplate(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to delete template:", error);
+      res.status(500).json({ error: "Failed to delete template" });
+    }
+  });
+
+  // Get template details (notes and documents)
+  app.get("/api/templates/:id", requireAuth, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const { id } = req.params;
+
+      const template = await storage.getWorkspaceTemplate(id);
+      if (!template) {
+        return res.status(404).json({ error: "Template not found" });
+      }
+
+      // Check permissions
+      let hasPermission = false;
+      if (currentUser.role === 'global_admin') {
+        hasPermission = true;
+      } else if (template.organizationId && currentUser.organizationId === template.organizationId) {
+        hasPermission = true;
+      } else if (!template.organizationId) {
+        // System templates are accessible to all
+        hasPermission = true;
+      }
+
+      if (!hasPermission) {
+        return res.status(403).json({ error: "Insufficient permissions to view this template" });
+      }
+
+      const [notes, documents] = await Promise.all([
+        storage.getWorkspaceTemplateNotes(id),
+        storage.getWorkspaceTemplateDocuments(id),
+      ]);
+
+      res.json({
+        ...template,
+        notes,
+        documents,
+      });
+    } catch (error) {
+      console.error("Failed to fetch template details:", error);
+      res.status(500).json({ error: "Failed to fetch template details" });
+    }
+  });
+
   // Participants
   app.get("/api/spaces/:spaceId/participants", async (req, res) => {
     try {
