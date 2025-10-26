@@ -226,7 +226,7 @@ export default function LandingPage() {
                 size="lg" 
                 variant="outline" 
                 className="text-lg px-8 border-primary/30 hover:border-primary/50"
-                onClick={() => window.open('https://synozur.com', '_blank')}
+                onClick={() => window.open('https://www.synozur.com', '_blank')}
                 data-testid="button-visit-synozur"
               >
                 Visit Synozur.com
@@ -269,9 +269,9 @@ export default function LandingPage() {
             <div>
               <h3 className="font-semibold mb-4">Company</h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><a href="https://synozur.com" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">About Synozur</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Contact</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Privacy</a></li>
+                <li><a href="https://www.synozur.com/about" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">About Synozur</a></li>
+                <li><a href="https://www.synozur.com/contact" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Contact</a></li>
+                <li><a href="https://www.synozur.com/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">Privacy</a></li>
               </ul>
             </div>
           </div>
