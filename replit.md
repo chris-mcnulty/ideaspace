@@ -77,8 +77,25 @@ Aurora is a sophisticated web application that enables facilitators to guide coh
     - Leaderboard of most preferred ideas by win count
   - Successfully tested: 21/21 votes on 7 notes (21 unique pairs)
 
+- ✅ **Role-Based Access Control (RBAC) System**:
+  - Database schema: users table with roles (global_admin, company_admin, facilitator, user)
+  - Authentication: bcrypt password hashing, passport.js local strategy, express-session
+  - Authorization middleware: requireAuth, requireRole, requireGlobalAdmin, requireCompanyAdmin, requireFacilitator
+  - 4-digit workspace codes for entry (replaces organization search on landing page)
+  - Public registration creates standard "user" accounts only
+  - Admin-protected `/api/admin/users` endpoint for creating elevated roles with scoping rules
+  - Company admins restricted to their organization for all operations
+  - Global admins have unrestricted access across all organizations
+  - Landing page redesigned for 4-digit code entry (no company search)
+  - Login page (/login) for administrators and facilitators
+  - Admin panel UI (/admin) displaying organizations with grouped workspaces
+  - Workspace management: view, open, edit, archive actions by role
+  - Backend APIs: list organizations/users/workspaces with role-based filtering
+  - Company/facilitator association management endpoints
+
 ### In Progress
-- None
+- Facilitator dashboard to view all assigned workspaces
+- Guest access enforcement based on per-workspace settings
 
 ### Pending
 - Stack ranking module with Borda count
@@ -101,17 +118,20 @@ Aurora is a sophisticated web application that enables facilitators to guide coh
 - Organization isolation with custom branding support
 - Per-org spaces with visibility controls (public/hidden)
 
-### User Roles
-1. **Publisher (Synozur)**: Platform administrator
-2. **Org Admin**: Organization management
-3. **Facilitator**: Session control, full CRUD on notes
-4. **Participant**: Join sessions, create notes, vote, rank
+### User Roles & Permissions
+1. **Global Admin**: Platform super-admin with unrestricted access to all organizations, users, and workspaces
+2. **Company Admin**: Organization-scoped admin who can manage users, facilitators, and workspaces within their assigned organization(s)
+3. **Facilitator**: Workspace-scoped user who can facilitate sessions, manage notes, trigger AI categorization, and control session flow
+4. **User**: Standard participant who joins workspaces via 4-digit codes, creates notes, votes, and ranks ideas
 
 ### Database Schema
-- **organizations**: Multi-tenant isolation
-- **spaces**: Envisioning sessions within organizations
-- **participants**: Session attendees (registered or guest)
-- **notes**: Ideas/contributions from participants
+- **organizations**: Multi-tenant isolation with branding settings
+- **users**: Authentication and role-based access control (email, password hash, role, organizationId)
+- **companyAdmins**: Association table linking users to organizations as admins
+- **spaceFacilitators**: Association table linking users to specific workspaces as facilitators
+- **spaces**: Envisioning sessions with 4-digit codes, guest settings, and visibility flags
+- **participants**: Session attendees (registered users or anonymous guests with generated names)
+- **notes**: Ideas/contributions from participants with optional AI-generated categories
 - **votes**: Pairwise voting decisions
 - **rankings**: Stack-ranked preferences
 
@@ -145,16 +165,33 @@ Aurora is a sophisticated web application that enables facilitators to guide coh
 
 ## API Endpoints
 
+### Authentication
+- `POST /api/auth/register` - Public registration (creates user role only)
+- `POST /api/auth/login` - Login with email/password
+- `POST /api/auth/logout` - Logout current session
+- `GET /api/auth/me` - Get current authenticated user
+
+### Admin Panel
+- `POST /api/admin/users` - Create users with elevated roles (company admin+)
+- `GET /api/admin/users` - List users with role-based filtering
+- `GET /api/admin/organizations` - List all organizations (global admin)
+- `GET /api/admin/organizations/:orgId/spaces` - List workspaces by org (company admin+)
+- `POST /api/admin/company-admins` - Associate user as company admin (global admin)
+- `DELETE /api/admin/company-admins/:id` - Remove company admin association (global admin)
+- `POST /api/admin/space-facilitators` - Assign facilitator to workspace (company admin+)
+- `DELETE /api/admin/space-facilitators/:id` - Remove facilitator assignment (company admin+)
+
 ### Organizations
 - `GET /api/organizations/:slug` - Get org by slug
-- `POST /api/organizations` - Create organization
+- `POST /api/organizations` - Create organization (global admin)
 
 ### Spaces
+- `GET /api/spaces/lookup/:code` - Lookup workspace by 4-digit code (public)
 - `GET /api/organizations/:orgId/spaces` - List spaces
 - `GET /api/spaces/:id` - Get space details
-- `POST /api/spaces` - Create space
-- `PATCH /api/spaces/:id` - Update space
-- `DELETE /api/spaces/:id` - Delete space
+- `POST /api/spaces` - Create space (facilitator+)
+- `PATCH /api/spaces/:id` - Update space (facilitator+)
+- `DELETE /api/spaces/:id` - Delete space (company admin+)
 
 ### Participants
 - `GET /api/spaces/:spaceId/participants` - List participants
@@ -166,8 +203,8 @@ Aurora is a sophisticated web application that enables facilitators to guide coh
 - `POST /api/notes` - Create note (broadcasts via WebSocket)
 - `PATCH /api/notes/:id` - Update note (broadcasts)
 - `DELETE /api/notes/:id` - Delete note (broadcasts)
-- `POST /api/notes/bulk-delete` - Delete multiple notes
-- `POST /api/spaces/:spaceId/categorize` - AI categorize all notes using GPT-5
+- `POST /api/notes/bulk-delete` - Delete multiple notes (facilitator+)
+- `POST /api/spaces/:spaceId/categorize` - AI categorize all notes using GPT-5 (facilitator+)
 
 ### Voting
 - `GET /api/spaces/:spaceId/votes` - List all votes
@@ -184,6 +221,7 @@ Aurora is a sophisticated web application that enables facilitators to guide coh
 
 ### Required Secrets
 - `DATABASE_URL`: PostgreSQL connection string
+- `SESSION_SECRET`: Secret key for express-session cookie signing
 - `AI_INTEGRATIONS_OPENAI_API_KEY`: GPT-5 access via Replit AI Integrations (auto-configured)
 - `AI_INTEGRATIONS_OPENAI_BASE_URL`: Replit AI Integrations endpoint (auto-configured)
 

@@ -2,31 +2,46 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Building2, ArrowRight, Users, Sparkles, TrendingUp } from "lucide-react";
+import { ArrowRight, Users, Sparkles, TrendingUp, Hash } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
 
 export default function LandingPage() {
-  const [orgSearch, setOrgSearch] = useState("");
+  const [workspaceCode, setWorkspaceCode] = useState("");
   const [, setLocation] = useLocation();
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSearch = async () => {
-    if (!orgSearch) return;
+  const handleCodeEntry = async () => {
+    if (!workspaceCode || workspaceCode.length !== 4) {
+      setError("Please enter a valid 4-digit workspace code");
+      return;
+    }
+
+    setIsLoading(true);
+    setError("");
 
     try {
-      const slug = orgSearch.toLowerCase().replace(/\s+/g, "-");
-      const response = await fetch(`/api/organizations/${slug}`);
+      const response = await fetch(`/api/spaces/lookup/${workspaceCode}`);
       
       if (response.ok) {
-        const org = await response.json();
-        setLocation(`/o/${org.slug}`);
+        const { space, organization } = await response.json();
+        // Redirect to waiting room using organization slug and space ID (spaces don't have slugs)
+        setLocation(`/o/${organization.slug}/s/${space.id}`);
       } else {
-        setError("Organization not found. Please check the name and try again.");
+        setError("Workspace not found. Please check your code and try again.");
       }
     } catch (err) {
-      setError("Unable to search organizations. Please try again.");
+      setError("Unable to connect. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, "").slice(0, 4);
+    setWorkspaceCode(value);
+    setError("");
   };
 
   return (
@@ -45,8 +60,12 @@ export default function LandingPage() {
               Aurora
             </span>
           </div>
-          <Button variant="outline" data-testid="button-publisher-login">
-            Publisher Login
+          <Button 
+            variant="outline" 
+            data-testid="button-admin-login"
+            onClick={() => setLocation("/login")}
+          >
+            Admin Login
           </Button>
         </div>
       </header>
@@ -83,40 +102,58 @@ export default function LandingPage() {
 
               <Card className="mx-auto mt-12 max-w-md shadow-2xl border-purple-500/20">
                 <CardHeader className="bg-gradient-to-br from-card to-purple-950/20">
-                  <h2 className="text-xl font-semibold text-foreground">Find Your Organization</h2>
+                  <div className="flex items-center justify-center gap-2">
+                    <Hash className="h-5 w-5 text-primary" />
+                    <h2 className="text-xl font-semibold text-foreground">Enter Workspace Code</h2>
+                  </div>
+                  <p className="text-sm text-muted-foreground text-center mt-2">
+                    Your facilitator will provide a 4-digit code
+                  </p>
                 </CardHeader>
                 <CardContent className="bg-card/95 backdrop-blur">
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="org-search">Organization Name or Code</Label>
+                      <Label htmlFor="workspace-code" className="text-center block">4-Digit Code</Label>
                       <Input
-                        id="org-search"
-                        placeholder="Enter organization name..."
-                        value={orgSearch}
-                        onChange={(e) => {
-                          setOrgSearch(e.target.value);
-                          setError("");
-                        }}
-                        onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                        data-testid="input-org-search"
-                        className="bg-input/80"
+                        id="workspace-code"
+                        placeholder="0000"
+                        value={workspaceCode}
+                        onChange={handleCodeChange}
+                        onKeyDown={(e) => e.key === "Enter" && handleCodeEntry()}
+                        data-testid="input-workspace-code"
+                        className="bg-input/80 text-center text-2xl font-mono tracking-widest"
+                        maxLength={4}
+                        autoComplete="off"
                       />
                       {error && (
-                        <p className="text-sm text-destructive">{error}</p>
+                        <p className="text-sm text-destructive text-center" data-testid="text-error">{error}</p>
                       )}
                     </div>
                     <Button 
                       className="w-full bg-primary hover:bg-primary/90" 
-                      disabled={!orgSearch}
-                      data-testid="button-find-org"
-                      onClick={handleSearch}
+                      disabled={workspaceCode.length !== 4 || isLoading}
+                      data-testid="button-join-workspace"
+                      onClick={handleCodeEntry}
                     >
-                      Continue
-                      <ArrowRight className="ml-2 h-4 w-4" />
+                      {isLoading ? "Joining..." : "Join Workspace"}
+                      {!isLoading && <ArrowRight className="ml-2 h-4 w-4" />}
                     </Button>
                   </div>
                 </CardContent>
               </Card>
+
+              <div className="mt-8 text-sm text-gray-300">
+                <p>
+                  Facilitators and admins:{" "}
+                  <button 
+                    onClick={() => setLocation("/login")}
+                    className="text-primary hover:text-primary/80 underline underline-offset-2 transition-colors"
+                    data-testid="link-facilitator-login"
+                  >
+                    Sign in here
+                  </button>
+                </p>
+              </div>
             </div>
           </div>
         </section>
@@ -172,7 +209,7 @@ export default function LandingPage() {
               <Button 
                 size="lg" 
                 className="bg-primary hover:bg-primary/90 text-lg px-8"
-                onClick={() => document.getElementById('org-search')?.scrollIntoView({ behavior: 'smooth' })}
+                onClick={() => document.getElementById('workspace-code')?.focus()}
                 data-testid="button-start-session"
               >
                 Start Your Session

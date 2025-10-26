@@ -303,9 +303,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Organizations
-  app.get("/api/organizations/:slug", async (req, res) => {
+  app.get("/api/organizations/:slugOrId", async (req, res) => {
     try {
-      const org = await storage.getOrganizationBySlug(req.params.slug);
+      const param = req.params.slugOrId;
+      // Try to fetch by slug first, then by ID
+      let org = await storage.getOrganizationBySlug(param);
+      if (!org) {
+        org = await storage.getOrganization(param);
+      }
       if (!org) {
         return res.status(404).json({ error: "Organization not found" });
       }
