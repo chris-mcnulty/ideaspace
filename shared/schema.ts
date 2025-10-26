@@ -32,6 +32,7 @@ export const spaces = pgTable("spaces", {
   status: text("status").notNull().default("draft"), // draft, open, closed, processing, archived
   hidden: boolean("hidden").notNull().default(false),
   guestAllowed: boolean("guest_allowed").notNull().default(false), // Default: guests NOT allowed
+  icon: text("icon").notNull().default("brain"), // Workspace icon identifier
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
