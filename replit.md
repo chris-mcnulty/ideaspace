@@ -51,11 +51,22 @@ Aurora is a sophisticated web application that enables facilitators to guide coh
   - Call-to-action section with dual CTAs
   - Comprehensive footer with navigation and copyright
 
+- ✅ **AI Categorization Integration** (GPT-5 via Replit AI Integrations):
+  - Production-ready OpenAI service with Zod validation and retry logic
+  - POST `/api/spaces/:spaceId/categorize` endpoint with comprehensive error handling
+  - GPT-5 analyzes notes and generates 3-7 thematic categories
+  - Automatic "Uncategorized" fallback for missing assignments
+  - Real-time WebSocket broadcasts (`categories_updated` event)
+  - Facilitator UI with "AI Categorize" button and loading states
+  - Category-grouped note display with colored badges
+  - Sparkles icon indicators for AI-generated categories
+  - Promise.allSettled for graceful partial failure handling
+  - Successfully tested: 7 notes categorized into 5 themes
+
 ### In Progress
 - None
 
 ### Pending
-- AI categorization integration (OpenAI)
 - Pairwise voting module
 - Stack ranking module with Borda count
 - Results view with cohort and personalized summaries
@@ -143,6 +154,7 @@ Aurora is a sophisticated web application that enables facilitators to guide coh
 - `PATCH /api/notes/:id` - Update note (broadcasts)
 - `DELETE /api/notes/:id` - Delete note (broadcasts)
 - `POST /api/notes/bulk-delete` - Delete multiple notes
+- `POST /api/spaces/:spaceId/categorize` - AI categorize all notes using GPT-5
 
 ### Votes & Rankings
 - `GET /api/spaces/:spaceId/votes` - List votes
@@ -154,7 +166,8 @@ Aurora is a sophisticated web application that enables facilitators to guide coh
 
 ### Required Secrets
 - `DATABASE_URL`: PostgreSQL connection string
-- `OPENAI_API_KEY`: For AI categorization (pending implementation)
+- `AI_INTEGRATIONS_OPENAI_API_KEY`: GPT-5 access via Replit AI Integrations (auto-configured)
+- `AI_INTEGRATIONS_OPENAI_BASE_URL`: Replit AI Integrations endpoint (auto-configured)
 
 ### Development Commands
 - `npm run dev`: Start development server
@@ -184,8 +197,8 @@ Located in `client/src/components/`:
 - ResultsTabs, ReadoutViewer
 
 ## Next Steps
-1. Complete facilitator workspace with WebSocket integration
-2. Build participant ideation view
-3. Integrate OpenAI for AI categorization
-4. Implement voting and ranking modules
-5. Build results generation with AI summaries
+1. Implement pairwise voting module for participant prioritization
+2. Build stack ranking with Borda count for final prioritization
+3. Create results view with AI-generated cohort summaries
+4. Add personalized results generation for participants
+5. Implement drag-and-drop note repositioning (optional enhancement)
