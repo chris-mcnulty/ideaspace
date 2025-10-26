@@ -123,11 +123,20 @@ Aurora is built as a multi-tenant web application with a clear separation of con
       - API endpoints: /api/spaces/:spaceId/export/pairwise, /ranking, /marketplace
       - Text format optimized for GenAI analytics consumption
       - Includes timestamp, totals, and detailed breakdowns by category
+    - **Results Generation System**: Complete AI-powered results system:
+      - Database schema: cohortResults and personalizedResults tables
+      - AI service using GPT-4o via Replit AI Integrations to analyze voting data
+      - Knowledge base integration: Workspace, organization, and system-scoped documents included in AI context
+      - Cohort results: Generate comprehensive summaries, top ideas, key themes, and insights for entire workspace
+      - Personalized results: Individual participant analysis with alignment scores, top contributions, and recommendations
+      - Facilitator workspace Results tab: Generate and view cohort summaries with regenerate capability
+      - Participant results page (/o/:org/s/:space/results): View personalized insights
+      - Graceful handling for non-participants (facilitators/admins directed to cohort results)
+      - Full RBAC: Facilitators/admins for cohort, participants for personalized
+      - API endpoints: POST/GET for both cohort and personalized results generation
 - **In Progress**: None
 - **Pending**: 
-    - Facilitator dashboard for assigned workspaces
-    - Results view (cohort/personalized summaries)
-    - AI integration with knowledge base documents for enhanced categorization and personalized results
+    - Facilitator dashboard for assigned workspaces (homepage showing all spaces user can manage)
 
 ### System Design Choices
 - **Frontend**: React, Wouter (routing), TanStack Query, Tailwind CSS, Shadcn UI.
