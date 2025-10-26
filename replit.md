@@ -39,6 +39,14 @@ Aurora is built as a multi-tenant web application with a clear separation of con
   - Automatic participant-to-account linking (guests who later register/login have their participation history preserved)
   - Support for anonymous participation with random name generation (e.g., "Powerful Andromeda")
 - **Facilitator Controls**: Provides a comprehensive workspace for facilitators to manage notes (preload, add, edit, delete, merge, bulk select), control session states, and trigger AI categorization.
+- **Knowledge Base System**: Three-tiered document management system for grounding AI categorization and personalized results:
+  - **System Scope**: Global admins can upload documents available across all organizations and workspaces
+  - **Organization Scope**: Company admins can upload documents for their organization's workspaces
+  - **Workspace Scope**: Facilitators can upload workspace-specific documents
+  - Local file storage with secure upload handling (10MB limit, PDF/TXT/DOC/DOCX/XLS/XLSX support)
+  - Comprehensive RBAC with scope-based access control
+  - Reusable KnowledgeBaseManager component integrated into AdminPanel and FacilitatorWorkspace
+  - Document metadata including title, description, tags, file size, and upload timestamps
 
 ### Feature Specifications
 - **Completed Features**:
@@ -65,8 +73,18 @@ Aurora is built as a multi-tenant web application with a clear separation of con
       - Facilitator workspace Ranking tab showing completion metrics and results
       - Navigation integration in participant footer
       - Direct join route (`/join/:code`) for workspace access
-- **In Progress**: Facilitator dashboard for assigned workspaces.
-- **Pending**: Results view (cohort/personalized summaries).
+    - **Knowledge Base System**: Three-tiered document storage and management:
+      - Database schema with scope (system/organization/workspace), metadata, and file paths
+      - File upload service with local storage handling, unique filename generation
+      - API endpoints with comprehensive RBAC checks for upload, list, and delete operations
+      - KnowledgeBaseManager component with file upload dialog and document list
+      - Integration in AdminPanel (global/company admins) and FacilitatorWorkspace (facilitators)
+      - Support for PDF, TXT, DOC, DOCX, XLS, XLSX files (max 10MB)
+- **In Progress**: None
+- **Pending**: 
+    - Facilitator dashboard for assigned workspaces
+    - Results view (cohort/personalized summaries)
+    - AI integration with knowledge base documents for enhanced categorization and personalized results
 
 ### System Design Choices
 - **Frontend**: React, Wouter (routing), TanStack Query, Tailwind CSS, Shadcn UI.
@@ -79,6 +97,7 @@ Aurora is built as a multi-tenant web application with a clear separation of con
 - **AI Services**: OpenAI API (for GPT-5 categorization and summaries)
 - **Authentication**: `bcrypt` (for password hashing), `passport.js` (local strategy), `express-session`
 - **Email Service**: SendGrid (for access request notifications and transactional emails)
+- **File Upload**: `multer` (for multipart/form-data file uploads)
 - **Routing**: Wouter
 - **State Management/Data Fetching**: TanStack Query
 - **Styling**: Tailwind CSS, Shadcn UI
