@@ -108,6 +108,11 @@ export const insertSpaceSchema = createInsertSchema(spaces).omit({
   updatedAt: true,
 });
 
+// API schema for creating spaces (code is optional, auto-generated if not provided)
+export const createSpaceApiSchema = insertSpaceSchema.extend({
+  code: z.string().length(4).regex(/^\d{4}$/).optional(),
+});
+
 export const insertParticipantSchema = createInsertSchema(participants).omit({
   id: true,
   joinedAt: true,

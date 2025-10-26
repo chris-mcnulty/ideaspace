@@ -1,13 +1,163 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
+import passport from "passport";
 import { storage } from "./storage";
-import { insertOrganizationSchema, insertSpaceSchema, insertParticipantSchema, insertNoteSchema, insertVoteSchema, insertRankingSchema } from "@shared/schema";
+import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, type User } from "@shared/schema";
 import { z } from "zod";
 import { categorizeNotes } from "./services/openai";
 import { getNextPair, calculateProgress } from "./services/pairwise";
+import { hashPassword, requireAuth, requireRole, requireGlobalAdmin, requireCompanyAdmin, requireFacilitator } from "./auth";
+import { generateWorkspaceCode, isValidWorkspaceCode } from "./services/workspace-code";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Workspace code lookup (public endpoint for entry flow)
+  app.get("/api/spaces/lookup/:code", async (req, res) => {
+    try {
+      const code = req.params.code;
+      
+      if (!isValidWorkspaceCode(code)) {
+        return res.status(400).json({ error: "Invalid workspace code format" });
+      }
+      
+      const space = await storage.getSpaceByCode(code);
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      
+      // Get organization details
+      const org = await storage.getOrganization(space.organizationId);
+      
+      res.json({
+        space,
+        organization: org,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to lookup workspace" });
+    }
+  });
+
+  // Authentication endpoints
+  // Public registration - always creates standard users
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      // Only accept email, username, password, displayName from public registration
+      const publicSchema = z.object({
+        email: z.string().email(),
+        username: z.string().min(3),
+        password: z.string().min(8),
+        displayName: z.string().optional(),
+      });
+      
+      const data = publicSchema.parse(req.body);
+      
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(data.email);
+      if (existingUser) {
+        return res.status(400).json({ error: "User with this email already exists" });
+      }
+      
+      // Hash password before storing
+      const hashedPassword = await hashPassword(data.password);
+      
+      // Always create as standard user (no role elevation via public endpoint)
+      const user = await storage.createUser({
+        ...data,
+        password: hashedPassword,
+        role: "user", // Force standard user role
+        organizationId: null,
+      });
+      
+      // Remove password from response
+      const { password, ...userWithoutPassword } = user;
+      res.status(201).json(userWithoutPassword);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Failed to register user" });
+    }
+  });
+
+  // Protected: Admin endpoint for creating users with elevated roles
+  app.post("/api/admin/users", requireCompanyAdmin, async (req, res) => {
+    try {
+      const data = insertUserSchema.parse(req.body);
+      const currentUser = req.user as User;
+      
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(data.email);
+      if (existingUser) {
+        return res.status(400).json({ error: "User with this email already exists" });
+      }
+      
+      // Authorization checks based on current user role
+      if (currentUser.role === "company_admin") {
+        // Company admins can only create users/facilitators within their organization
+        if (data.role === "global_admin" || data.role === "company_admin") {
+          return res.status(403).json({ error: "Company admins cannot create admin users" });
+        }
+        if (data.organizationId !== currentUser.organizationId) {
+          return res.status(403).json({ error: "Company admins can only create users in their own organization" });
+        }
+      }
+      // Global admins can create any user type (no restrictions)
+      
+      // Hash password before storing
+      const hashedPassword = await hashPassword(data.password);
+      const user = await storage.createUser({
+        ...data,
+        password: hashedPassword,
+      });
+      
+      // Remove password from response
+      const { password, ...userWithoutPassword } = user;
+      res.status(201).json(userWithoutPassword);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create user" });
+    }
+  });
+
+  app.post("/api/auth/login", (req, res, next) => {
+    passport.authenticate("local", (err: any, user: User | false, info: any) => {
+      if (err) {
+        return res.status(500).json({ error: "Authentication error" });
+      }
+      if (!user) {
+        return res.status(401).json({ error: info?.message || "Invalid credentials" });
+      }
+      req.logIn(user, (err) => {
+        if (err) {
+          return res.status(500).json({ error: "Login failed" });
+        }
+        // Remove password from response
+        const { password, ...userWithoutPassword } = user;
+        res.json(userWithoutPassword);
+      });
+    })(req, res, next);
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    req.logout((err) => {
+      if (err) {
+        return res.status(500).json({ error: "Logout failed" });
+      }
+      res.json({ message: "Logged out successfully" });
+    });
+  });
+
+  app.get("/api/auth/me", (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+    const user = req.user as User;
+    const { password, ...userWithoutPassword } = user;
+    res.json(userWithoutPassword);
+  });
+
   // Organizations
   app.get("/api/organizations/:slug", async (req, res) => {
     try {
@@ -21,7 +171,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/organizations", async (req, res) => {
+  // Protected: Only global admins can create organizations
+  app.post("/api/organizations", requireGlobalAdmin, async (req, res) => {
     try {
       const data = insertOrganizationSchema.parse(req.body);
       const org = await storage.createOrganization(data);
@@ -56,10 +207,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/spaces", async (req, res) => {
+  // Protected: Require facilitator or above to create spaces
+  app.post("/api/spaces", requireFacilitator, async (req, res) => {
     try {
-      const data = insertSpaceSchema.parse(req.body);
-      const space = await storage.createSpace(data);
+      const data = createSpaceApiSchema.parse(req.body);
+      
+      // Auto-generate code if not provided
+      const code = data.code || await generateWorkspaceCode();
+      
+      const space = await storage.createSpace({
+        ...data,
+        code,
+      });
       res.status(201).json(space);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -69,7 +228,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/spaces/:id", async (req, res) => {
+  // Protected: Require facilitator or above to update spaces
+  app.patch("/api/spaces/:id", requireFacilitator, async (req, res) => {
     try {
       const data = insertSpaceSchema.partial().parse(req.body);
       const space = await storage.updateSpace(req.params.id, data);
@@ -85,7 +245,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/spaces/:id", async (req, res) => {
+  // Protected: Require company admin or above to delete spaces
+  app.delete("/api/spaces/:id", requireCompanyAdmin, async (req, res) => {
     try {
       const deleted = await storage.deleteSpace(req.params.id);
       if (!deleted) {
@@ -206,7 +367,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/notes/bulk-delete", async (req, res) => {
+  // Protected: Facilitators can bulk delete notes
+  app.post("/api/notes/bulk-delete", requireFacilitator, async (req, res) => {
     try {
       const { ids } = req.body as { ids: string[] };
       if (!Array.isArray(ids) || ids.length === 0) {
@@ -227,7 +389,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/spaces/:spaceId/categorize", async (req, res) => {
+  // Protected: Facilitators can trigger AI categorization
+  app.post("/api/spaces/:spaceId/categorize", requireFacilitator, async (req, res) => {
     try {
       const { spaceId } = req.params;
       

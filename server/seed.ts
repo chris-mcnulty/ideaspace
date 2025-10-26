@@ -1,4 +1,5 @@
 import { storage } from "./storage";
+import { hashPassword } from "./auth";
 
 async function seed() {
   console.log("🌱 Seeding database...");
@@ -12,11 +13,13 @@ async function seed() {
   });
   console.log("✓ Created organization:", org.name);
 
-  // Create users with different roles (password: "password123" for all - will be hashed later)
+  // Create users with different roles (password: "password123" for all, hashed)
+  const hashedPassword = await hashPassword("password123");
+  
   const globalAdmin = await storage.createUser({
     email: "admin@synozur.com",
     username: "globaladmin",
-    password: "password123", // TODO: Hash passwords when auth is implemented
+    password: hashedPassword,
     role: "global_admin",
     displayName: "Global Administrator",
     organizationId: null,
@@ -25,7 +28,7 @@ async function seed() {
   const companyAdmin = await storage.createUser({
     email: "admin@acme.com",
     username: "acmeadmin",
-    password: "password123",
+    password: hashedPassword,
     role: "company_admin",
     displayName: "Acme Administrator",
     organizationId: org.id,
@@ -34,7 +37,7 @@ async function seed() {
   const facilitator = await storage.createUser({
     email: "facilitator@acme.com",
     username: "facilitator1",
-    password: "password123",
+    password: hashedPassword,
     role: "facilitator",
     displayName: "Jane Facilitator",
     organizationId: org.id,
@@ -43,13 +46,13 @@ async function seed() {
   const regularUser = await storage.createUser({
     email: "user@acme.com",
     username: "user1",
-    password: "password123",
+    password: hashedPassword,
     role: "user",
     displayName: "John User",
     organizationId: org.id,
   });
   
-  console.log("✓ Created 4 users with different roles");
+  console.log("✓ Created 4 users with different roles (password: password123)");
 
   // Assign company admin to Acme organization
   await storage.createCompanyAdmin({
