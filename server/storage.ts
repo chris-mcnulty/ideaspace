@@ -18,6 +18,8 @@ import {
   type InsertCompanyAdmin,
   type SpaceFacilitator,
   type InsertSpaceFacilitator,
+  type AccessRequest,
+  type InsertAccessRequest,
   organizations,
   users,
   spaces,
@@ -27,6 +29,7 @@ import {
   rankings,
   companyAdmins,
   spaceFacilitators,
+  accessRequests,
 } from "@shared/schema";
 import { eq, and, desc } from "drizzle-orm";
 
@@ -94,6 +97,14 @@ export interface IStorage {
   getRankingsByParticipant(participantId: string): Promise<Ranking[]>;
   createRanking(ranking: InsertRanking): Promise<Ranking>;
   deleteRankingsByParticipant(participantId: string, spaceId: string): Promise<boolean>;
+
+  // Access Requests
+  getAccessRequest(id: string): Promise<AccessRequest | undefined>;
+  getAccessRequestsBySpace(spaceId: string): Promise<AccessRequest[]>;
+  getPendingAccessRequestsBySpace(spaceId: string): Promise<AccessRequest[]>;
+  createAccessRequest(request: InsertAccessRequest): Promise<AccessRequest>;
+  updateAccessRequest(id: string, request: Partial<InsertAccessRequest>): Promise<AccessRequest | undefined>;
+  checkExistingAccessRequest(spaceId: string, email: string): Promise<AccessRequest | undefined>;
 }
 
 export class DbStorage implements IStorage {
@@ -325,6 +336,39 @@ export class DbStorage implements IStorage {
   async deleteSpaceFacilitator(id: string): Promise<boolean> {
     const result = await db.delete(spaceFacilitators).where(eq(spaceFacilitators.id, id));
     return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Access Requests
+  async getAccessRequest(id: string): Promise<AccessRequest | undefined> {
+    const [request] = await db.select().from(accessRequests).where(eq(accessRequests.id, id)).limit(1);
+    return request;
+  }
+
+  async getAccessRequestsBySpace(spaceId: string): Promise<AccessRequest[]> {
+    return db.select().from(accessRequests).where(eq(accessRequests.spaceId, spaceId)).orderBy(desc(accessRequests.requestedAt));
+  }
+
+  async getPendingAccessRequestsBySpace(spaceId: string): Promise<AccessRequest[]> {
+    return db.select().from(accessRequests).where(
+      and(eq(accessRequests.spaceId, spaceId), eq(accessRequests.status, "pending"))
+    ).orderBy(desc(accessRequests.requestedAt));
+  }
+
+  async createAccessRequest(request: InsertAccessRequest): Promise<AccessRequest> {
+    const [created] = await db.insert(accessRequests).values(request).returning();
+    return created;
+  }
+
+  async updateAccessRequest(id: string, request: Partial<InsertAccessRequest>): Promise<AccessRequest | undefined> {
+    const [updated] = await db.update(accessRequests).set(request).where(eq(accessRequests.id, id)).returning();
+    return updated;
+  }
+
+  async checkExistingAccessRequest(spaceId: string, email: string): Promise<AccessRequest | undefined> {
+    const [existing] = await db.select().from(accessRequests).where(
+      and(eq(accessRequests.spaceId, spaceId), eq(accessRequests.email, email), eq(accessRequests.status, "pending"))
+    ).limit(1);
+    return existing;
   }
 }
 

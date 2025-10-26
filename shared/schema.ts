@@ -91,6 +91,20 @@ export const spaceFacilitators = pgTable("space_facilitators", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Access requests: users/guests requesting access to workspaces where guest_allowed=false
+export const accessRequests = pgTable("access_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  spaceId: varchar("space_id").notNull().references(() => spaces.id),
+  userId: varchar("user_id").references(() => users.id), // null if guest requesting before account creation
+  email: text("email").notNull(), // Email for notification and identification
+  displayName: text("display_name").notNull(), // Name of person requesting
+  message: text("message"), // Optional message from requester
+  status: text("status").notNull().default("pending"), // pending, approved, denied
+  requestedAt: timestamp("requested_at").defaultNow().notNull(),
+  resolvedAt: timestamp("resolved_at"),
+  resolvedBy: varchar("resolved_by").references(() => users.id), // Admin/facilitator who approved/denied
+});
+
 // Insert schemas
 export const insertOrganizationSchema = createInsertSchema(organizations).omit({
   id: true,
@@ -143,6 +157,12 @@ export const insertSpaceFacilitatorSchema = createInsertSchema(spaceFacilitators
   createdAt: true,
 });
 
+export const insertAccessRequestSchema = createInsertSchema(accessRequests).omit({
+  id: true,
+  requestedAt: true,
+  resolvedAt: true,
+});
+
 // Types
 export type Organization = typeof organizations.$inferSelect;
 export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
@@ -170,3 +190,6 @@ export type InsertCompanyAdmin = z.infer<typeof insertCompanyAdminSchema>;
 
 export type SpaceFacilitator = typeof spaceFacilitators.$inferSelect;
 export type InsertSpaceFacilitator = z.infer<typeof insertSpaceFacilitatorSchema>;
+
+export type AccessRequest = typeof accessRequests.$inferSelect;
+export type InsertAccessRequest = z.infer<typeof insertAccessRequestSchema>;
