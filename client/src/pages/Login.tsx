@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft, LogIn } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -65,14 +66,17 @@ export default function Login() {
               Aurora
             </span>
           </div>
-          <Button 
-            variant="ghost" 
-            data-testid="button-back-home"
-            onClick={() => setLocation("/")}
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Home
-          </Button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Button 
+              variant="ghost" 
+              data-testid="button-back-home"
+              onClick={() => setLocation("/")}
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Home
+            </Button>
+          </div>
         </div>
       </header>
 

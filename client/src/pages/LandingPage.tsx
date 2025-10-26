@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { ArrowRight, Users, Sparkles, TrendingUp, Hash } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function LandingPage() {
   const [workspaceCode, setWorkspaceCode] = useState("");
@@ -68,13 +69,16 @@ export default function LandingPage() {
               Aurora
             </span>
           </div>
-          <Button 
-            variant="outline" 
-            data-testid="button-admin-login"
-            onClick={() => setLocation("/login")}
-          >
-            Admin Login
-          </Button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Button 
+              variant="outline" 
+              data-testid="button-admin-login"
+              onClick={() => setLocation("/login")}
+            >
+              Admin Login
+            </Button>
+          </div>
         </div>
       </header>
 

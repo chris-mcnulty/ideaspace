@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useState } from "react";
 import { KnowledgeBaseManager } from "@/components/KnowledgeBaseManager";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function AdminPanel() {
   const [, setLocation] = useLocation();
@@ -96,6 +97,7 @@ export default function AdminPanel() {
               <p className="font-medium">{currentUser.displayName || currentUser.username}</p>
               <p className="text-xs text-muted-foreground capitalize">{currentUser.role.replace("_", " ")}</p>
             </div>
+            <ThemeToggle />
             <Button 
               variant="outline" 
               size="sm"
