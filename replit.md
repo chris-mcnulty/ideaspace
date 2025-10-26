@@ -30,6 +30,7 @@ Aurora is built as a multi-tenant web application with a clear separation of con
 - **Role-Based Access Control (RBAC)**: Defines four roles: Global Admin, Company Admin, Facilitator, and User, each with specific permissions and access scopes, managed through a robust authentication and authorization system using `bcrypt`, `passport.js`, and `express-session`.
 - **AI Integration**: Leverages OpenAI API (GPT-5) via Replit AI Integrations for note categorization, including production-ready service with Zod validation, retry logic, and real-time WebSocket broadcasts for category updates.
 - **Pairwise Voting**: Employs a round-robin algorithm for deterministic pair generation, tracking progress, and displaying results in a leaderboard.
+- **Stack Ranking (Borda Count)**: Complete implementation with drag-and-drop interface for participants to rank ideas, Borda count algorithm for scoring (top rank gets N points, descending to 1 point), real-time leaderboard display, and facilitator progress tracking. Includes validation ensuring all notes are ranked with sequential positions.
 - **Guest Access Control System**: Comprehensive workspace access management with configurable guest permissions (default: disabled). Features include:
   - Per-workspace guest access toggle (`guestAllowed` field, default: false)
   - Access request workflow for restricted workspaces (guest submits request → admin/facilitator approves)
@@ -54,8 +55,18 @@ Aurora is built as a multi-tenant web application with a clear separation of con
     - Pairwise Voting Module with DuelCard component and progress tracking.
     - Role-Based Access Control (RBAC) system with 8-digit workspace codes (nnnn-nnnn format) and admin panel.
     - **Guest Access Control System** with access requests, admin approval workflow, SendGrid email notifications, and automatic participant-to-account linking.
+    - **Stack Ranking Module (Borda Count)**: Complete implementation with:
+      - Backend service implementing Borda count algorithm and validation
+      - Bulk ranking submission API with sequential rank validation
+      - Leaderboard API returning aggregated Borda scores
+      - Ranking progress tracking endpoint
+      - StackRanking page with @dnd-kit drag-and-drop sortable interface
+      - Leaderboard component displaying scores with trophy icons for top 3
+      - Facilitator workspace Ranking tab showing completion metrics and results
+      - Navigation integration in participant footer
+      - Direct join route (`/join/:code`) for workspace access
 - **In Progress**: Facilitator dashboard for assigned workspaces.
-- **Pending**: Stack ranking module (Borda count) and results view (cohort/personalized summaries).
+- **Pending**: Results view (cohort/personalized summaries).
 
 ### System Design Choices
 - **Frontend**: React, Wouter (routing), TanStack Query, Tailwind CSS, Shadcn UI.
