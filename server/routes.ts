@@ -9,6 +9,7 @@ import { z } from "zod";
 import { categorizeNotes, rewriteCard } from "./services/openai";
 import { getNextPair, calculateProgress } from "./services/pairwise";
 import { validateRanking, calculateBordaScores, calculateRankingProgress, hasParticipantCompleted } from "./services/stack-ranking";
+import { validateAllocation, calculateMarketplaceScores, calculateAllocationProgress, hasParticipantCompleted as hasParticipantCompletedAllocation, getParticipantRemainingBudget, DEFAULT_COIN_BUDGET } from "./services/marketplace";
 import { hashPassword, requireAuth, requireRole, requireGlobalAdmin, requireCompanyAdmin, requireFacilitator } from "./auth";
 import { generateWorkspaceCode, isValidWorkspaceCode } from "./services/workspace-code";
 import { sendAccessRequestEmail } from "./services/email";
@@ -1662,6 +1663,186 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Failed to fetch ranking status:", error);
       res.status(500).json({ error: "Failed to fetch ranking status" });
+    }
+  });
+
+  // Marketplace Allocations
+  // Submit bulk marketplace allocations
+  app.post("/api/marketplace-allocations/bulk", async (req, res) => {
+    try {
+      const { spaceId, allocations: allocationData } = req.body as {
+        spaceId: string;
+        allocations: Array<{ noteId: string; coins: number }>;
+      };
+
+      // SECURITY: Use session-verified participantId to prevent impersonation
+      const participantId = req.session?.participantId;
+      if (!participantId) {
+        return res.status(401).json({ error: "No participant session found. Please rejoin the workspace." });
+      }
+
+      // Verify participant belongs to this space
+      const participant = await storage.getParticipant(participantId);
+      if (!participant || participant.spaceId !== spaceId) {
+        return res.status(403).json({ error: "Participant does not belong to this workspace" });
+      }
+
+      // SECURITY: Use server-side budget only - never trust client-supplied budget
+      const budget = DEFAULT_COIN_BUDGET;
+      
+      // Validate the allocation
+      const validation = validateAllocation(allocationData, budget);
+      if (!validation.valid) {
+        return res.status(400).json({ error: validation.error });
+      }
+
+      // Delete existing allocations for this participant in this space
+      await storage.deleteMarketplaceAllocationsByParticipant(participantId, spaceId);
+
+      // Create new allocations (only for non-zero amounts)
+      const allocations = await Promise.all(
+        allocationData
+          .filter(a => a.coins > 0)
+          .map(a =>
+            storage.createMarketplaceAllocation({
+              participantId,
+              spaceId,
+              noteId: a.noteId,
+              coinsAllocated: a.coins,
+            })
+          )
+      );
+      
+      // Broadcast allocation update to all connected clients
+      broadcast({
+        type: "marketplace_allocation_submitted",
+        data: {
+          spaceId,
+          participantId,
+        }
+      });
+
+      res.status(201).json(allocations);
+    } catch (error) {
+      console.error("Failed to create marketplace allocations:", error);
+      res.status(500).json({ error: "Failed to create marketplace allocations" });
+    }
+  });
+  
+  // Get participant's current allocations
+  app.get("/api/spaces/:spaceId/participants/:participantId/marketplace-allocations", async (req, res) => {
+    try {
+      const { participantId: requestedParticipantId, spaceId } = req.params;
+      
+      // SECURITY: Verify session participant matches requested participant to prevent IDOR
+      const sessionParticipantId = req.session?.participantId;
+      if (!sessionParticipantId) {
+        return res.status(401).json({ error: "No participant session found. Please rejoin the workspace." });
+      }
+      
+      if (sessionParticipantId !== requestedParticipantId) {
+        return res.status(403).json({ error: "Cannot access another participant's allocations" });
+      }
+      
+      const allocations = await storage.getMarketplaceAllocationsByParticipant(sessionParticipantId);
+      res.json(allocations);
+    } catch (error) {
+      console.error("Failed to fetch marketplace allocations:", error);
+      res.status(500).json({ error: "Failed to fetch marketplace allocations" });
+    }
+  });
+
+  // Get marketplace leaderboard
+  app.get("/api/spaces/:spaceId/marketplace-leaderboard", async (req, res) => {
+    try {
+      const { spaceId } = req.params;
+      
+      const notes = await storage.getNotesBySpace(spaceId);
+      const allocations = await storage.getMarketplaceAllocationsBySpace(spaceId);
+      
+      const leaderboard = calculateMarketplaceScores(notes, allocations);
+      
+      res.json(leaderboard);
+    } catch (error) {
+      console.error("Failed to fetch marketplace leaderboard:", error);
+      res.status(500).json({ error: "Failed to fetch marketplace leaderboard" });
+    }
+  });
+
+  // Get marketplace allocation progress
+  app.get("/api/spaces/:spaceId/marketplace-progress", async (req, res) => {
+    try {
+      const { spaceId } = req.params;
+      const { coinBudget } = req.query;
+      
+      const participants = await storage.getParticipantsBySpace(spaceId);
+      const allocations = await storage.getMarketplaceAllocationsBySpace(spaceId);
+      
+      const participantIds = participants.map(p => p.id);
+      const budget = coinBudget ? parseInt(coinBudget as string) : DEFAULT_COIN_BUDGET;
+      const progress = calculateAllocationProgress(participantIds, allocations, budget);
+      
+      res.json(progress);
+    } catch (error) {
+      console.error("Failed to fetch marketplace progress:", error);
+      res.status(500).json({ error: "Failed to fetch marketplace progress" });
+    }
+  });
+  
+  // Check if participant has completed allocation
+  app.get("/api/spaces/:spaceId/participants/:participantId/marketplace-status", async (req, res) => {
+    try {
+      const { participantId: requestedParticipantId } = req.params;
+      
+      // SECURITY: Verify session participant matches requested participant to prevent IDOR
+      const sessionParticipantId = req.session?.participantId;
+      if (!sessionParticipantId) {
+        return res.status(401).json({ error: "No participant session found. Please rejoin the workspace." });
+      }
+      
+      if (sessionParticipantId !== requestedParticipantId) {
+        return res.status(403).json({ error: "Cannot access another participant's status" });
+      }
+      
+      const allocations = await storage.getMarketplaceAllocationsByParticipant(sessionParticipantId);
+      const isComplete = hasParticipantCompletedAllocation(sessionParticipantId, allocations);
+      
+      res.json({ isComplete });
+    } catch (error) {
+      console.error("Failed to fetch marketplace status:", error);
+      res.status(500).json({ error: "Failed to fetch marketplace status" });
+    }
+  });
+
+  // Get participant's remaining budget
+  app.get("/api/spaces/:spaceId/participants/:participantId/marketplace-budget", async (req, res) => {
+    try {
+      const { participantId: requestedParticipantId } = req.params;
+      
+      // SECURITY: Verify session participant matches requested participant to prevent IDOR
+      const sessionParticipantId = req.session?.participantId;
+      if (!sessionParticipantId) {
+        return res.status(401).json({ error: "No participant session found. Please rejoin the workspace." });
+      }
+      
+      if (sessionParticipantId !== requestedParticipantId) {
+        return res.status(403).json({ error: "Cannot access another participant's budget" });
+      }
+      
+      // SECURITY: Use server-side budget only
+      const budget = DEFAULT_COIN_BUDGET;
+      
+      const allocations = await storage.getMarketplaceAllocationsByParticipant(sessionParticipantId);
+      const remainingBudget = getParticipantRemainingBudget(sessionParticipantId, allocations, budget);
+      
+      res.json({ 
+        totalBudget: budget,
+        remainingBudget,
+        allocatedBudget: budget - remainingBudget
+      });
+    } catch (error) {
+      console.error("Failed to fetch marketplace budget:", error);
+      res.status(500).json({ error: "Failed to fetch marketplace budget" });
     }
   });
 

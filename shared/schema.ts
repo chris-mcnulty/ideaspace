@@ -84,6 +84,16 @@ export const rankings = pgTable("rankings", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Marketplace allocations: participants distribute coins among notes
+export const marketplaceAllocations = pgTable("marketplace_allocations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  spaceId: varchar("space_id").notNull().references(() => spaces.id),
+  participantId: varchar("participant_id").notNull().references(() => participants.id),
+  noteId: varchar("note_id").notNull().references(() => notes.id),
+  coinsAllocated: integer("coins_allocated").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Association table: company admins can manage specific organizations
 export const companyAdmins = pgTable("company_admins", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -227,6 +237,11 @@ export const insertRankingSchema = createInsertSchema(rankings).omit({
   createdAt: true,
 });
 
+export const insertMarketplaceAllocationSchema = createInsertSchema(marketplaceAllocations).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertCompanyAdminSchema = createInsertSchema(companyAdmins).omit({
   id: true,
   createdAt: true,
@@ -291,6 +306,9 @@ export type InsertVote = z.infer<typeof insertVoteSchema>;
 
 export type Ranking = typeof rankings.$inferSelect;
 export type InsertRanking = z.infer<typeof insertRankingSchema>;
+
+export type MarketplaceAllocation = typeof marketplaceAllocations.$inferSelect;
+export type InsertMarketplaceAllocation = z.infer<typeof insertMarketplaceAllocationSchema>;
 
 export type CompanyAdmin = typeof companyAdmins.$inferSelect;
 export type InsertCompanyAdmin = z.infer<typeof insertCompanyAdminSchema>;

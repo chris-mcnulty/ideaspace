@@ -90,6 +90,21 @@ Aurora is built as a multi-tenant web application with a clear separation of con
       - KnowledgeBaseManager component with file upload dialog and document list
       - Integration in AdminPanel (global/company admins) and FacilitatorWorkspace (facilitators)
       - Support for PDF, TXT, DOC, DOCX, XLS, XLSX files (max 10MB)
+    - **Marketplace Allocation Module**: Coin-based voting system where participants distribute a finite budget among ideas:
+      - Database schema (marketplace_allocations table) with participant-note-coin relationships
+      - Backend service implementing coin allocation logic, validation, and scoring
+      - DEFAULT_COIN_BUDGET of 100 coins per participant (server-enforced)
+      - Secure bulk allocation submission API with:
+        * Session-based participant authentication (prevents impersonation)
+        * Server-side budget validation (prevents budget bypass)
+        * Workspace membership verification (403 if participant doesn't belong to space)
+      - Marketplace leaderboard API aggregating total coins per note
+      - Allocation progress tracking endpoint
+      - Secure GET endpoints with IDOR protection (session validation on all participant-specific queries)
+      - Marketplace page with input controls and quick-add buttons (+5, +10, -5)
+      - Real-time budget display showing remaining coins and allocation percentage
+      - Navigation integration in participant footer
+      - WebSocket broadcasts for allocation updates
 - **In Progress**: None
 - **Pending**: 
     - Facilitator dashboard for assigned workspaces

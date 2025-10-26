@@ -15,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Users, Clock, Vote, ListOrdered } from "lucide-react";
+import { Plus, Users, Clock, Vote, ListOrdered, Coins } from "lucide-react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -313,6 +313,16 @@ export default function ParticipantView() {
             >
               <ListOrdered className="h-4 w-4" />
               Stack Ranking
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(`/o/${params.org}/s/${params.space}/marketplace`)}
+              className="gap-2"
+              data-testid="button-go-to-marketplace"
+            >
+              <Coins className="h-4 w-4" />
+              Marketplace
             </Button>
           </div>
         </div>

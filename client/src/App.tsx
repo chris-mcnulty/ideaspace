@@ -15,6 +15,7 @@ import ParticipantView from "@/pages/ParticipantView";
 import FacilitatorWorkspace from "@/pages/FacilitatorWorkspace";
 import PairwiseVoting from "@/pages/PairwiseVoting";
 import StackRanking from "@/pages/StackRanking";
+import Marketplace from "@/pages/Marketplace";
 import JoinPage from "@/pages/JoinPage";
 
 import LandingPageExample from "@/components/examples/LandingPage";
@@ -47,6 +48,7 @@ function Router() {
       <Route path="/o/:org/s/:space/participate" component={ParticipantView} />
       <Route path="/o/:org/s/:space/vote" component={PairwiseVoting} />
       <Route path="/o/:org/s/:space/rank" component={StackRanking} />
+      <Route path="/o/:org/s/:space/marketplace" component={Marketplace} />
       <Route path="/o/:org/s/:space/facilitate" component={FacilitatorWorkspace} />
       
       <Route path="/showcase" component={ComponentShowcase} />

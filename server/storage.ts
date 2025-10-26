@@ -14,6 +14,8 @@ import {
   type InsertVote,
   type Ranking,
   type InsertRanking,
+  type MarketplaceAllocation,
+  type InsertMarketplaceAllocation,
   type CompanyAdmin,
   type InsertCompanyAdmin,
   type SpaceFacilitator,
@@ -36,6 +38,7 @@ import {
   notes,
   votes,
   rankings,
+  marketplaceAllocations,
   companyAdmins,
   spaceFacilitators,
   accessRequests,
@@ -113,6 +116,12 @@ export interface IStorage {
   getRankingsByParticipant(participantId: string): Promise<Ranking[]>;
   createRanking(ranking: InsertRanking): Promise<Ranking>;
   deleteRankingsByParticipant(participantId: string, spaceId: string): Promise<boolean>;
+
+  // Marketplace Allocations
+  getMarketplaceAllocationsBySpace(spaceId: string): Promise<MarketplaceAllocation[]>;
+  getMarketplaceAllocationsByParticipant(participantId: string): Promise<MarketplaceAllocation[]>;
+  createMarketplaceAllocation(allocation: InsertMarketplaceAllocation): Promise<MarketplaceAllocation>;
+  deleteMarketplaceAllocationsByParticipant(participantId: string, spaceId: string): Promise<boolean>;
 
   // Access Requests
   getAccessRequest(id: string): Promise<AccessRequest | undefined>;
@@ -350,6 +359,27 @@ export class DbStorage implements IStorage {
   async deleteRankingsByParticipant(participantId: string, spaceId: string): Promise<boolean> {
     const result = await db.delete(rankings).where(
       and(eq(rankings.participantId, participantId), eq(rankings.spaceId, spaceId))
+    );
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Marketplace Allocations
+  async getMarketplaceAllocationsBySpace(spaceId: string): Promise<MarketplaceAllocation[]> {
+    return db.select().from(marketplaceAllocations).where(eq(marketplaceAllocations.spaceId, spaceId));
+  }
+
+  async getMarketplaceAllocationsByParticipant(participantId: string): Promise<MarketplaceAllocation[]> {
+    return db.select().from(marketplaceAllocations).where(eq(marketplaceAllocations.participantId, participantId));
+  }
+
+  async createMarketplaceAllocation(allocation: InsertMarketplaceAllocation): Promise<MarketplaceAllocation> {
+    const [created] = await db.insert(marketplaceAllocations).values(allocation).returning();
+    return created;
+  }
+
+  async deleteMarketplaceAllocationsByParticipant(participantId: string, spaceId: string): Promise<boolean> {
+    const result = await db.delete(marketplaceAllocations).where(
+      and(eq(marketplaceAllocations.participantId, participantId), eq(marketplaceAllocations.spaceId, spaceId))
     );
     return result.rowCount ? result.rowCount > 0 : false;
   }
