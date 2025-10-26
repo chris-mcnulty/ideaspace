@@ -25,7 +25,8 @@ Aurora is a sophisticated web application that enables facilitators to guide coh
   - Synozur logos (horizontal, vertical, mark - color & white versions)
   - Favicon using Synozur mark
   - All assets stored in `client/public/` for production deployment
-  - Logos integrated in landing page, org home, and headers
+  - **Aurora app name** displayed in all headers with purple gradient styling
+  - Synozur logo | Aurora separator pattern throughout platform
 - ✅ **Facilitator Workspace** (/o/:org/s/:space/facilitate) with:
   - Note preloading, add, edit, delete operations
   - Bulk selection and deletion
@@ -41,6 +42,14 @@ Aurora is a sophisticated web application that enables facilitators to guide coh
   - WebSocket connection status indicator
   - Seamless integration with waiting room join flow (participantId in sessionStorage)
   - Colorful sticky notes (yellow/blue/green/pink) on white workspace
+
+- ✅ **Landing Page** enhanced with Synozur Maturity Modeler design:
+  - AI network background image with dark overlay
+  - Gradient text hero heading (blue → purple → pink)
+  - Beta version disclaimer messaging
+  - Purple gradient treatments on feature cards with hover effects
+  - Call-to-action section with dual CTAs
+  - Comprehensive footer with navigation and copyright
 
 ### In Progress
 - None
