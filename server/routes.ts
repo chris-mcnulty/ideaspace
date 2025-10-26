@@ -13,7 +13,8 @@ import { validateAllocation, calculateMarketplaceScores, calculateAllocationProg
 import { generatePairwiseExport, generateStackRankingExport, generateMarketplaceExport } from "./services/export";
 import { hashPassword, requireAuth, requireRole, requireGlobalAdmin, requireCompanyAdmin, requireFacilitator } from "./auth";
 import { generateWorkspaceCode, isValidWorkspaceCode } from "./services/workspace-code";
-import { sendAccessRequestEmail } from "./services/email";
+import { sendAccessRequestEmail, sendEmailVerification, sendPasswordReset } from "./services/email";
+import { randomBytes } from "crypto";
 import { fileUploadService } from "./services/file-upload";
 
 // Extend express-session types to include participantId
@@ -104,7 +105,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         password: hashedPassword,
         role: "user", // Force standard user role
         organizationId: null,
+        emailVerified: false, // Start as unverified
       });
+      
+      // Generate email verification token
+      const verificationToken = randomBytes(32).toString('hex');
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 24); // Token expires in 24 hours
+      
+      await storage.createEmailVerificationToken({
+        userId: user.id,
+        token: verificationToken,
+        expiresAt,
+      });
+      
+      // Send verification email
+      try {
+        const baseUrl = req.get('origin') || 'http://localhost:5000';
+        const verificationUrl = `${baseUrl}/verify-email?token=${verificationToken}`;
+        
+        await sendEmailVerification(user.email, {
+          username: user.displayName || user.username,
+          verificationUrl,
+        });
+      } catch (emailError) {
+        console.error("Failed to send verification email:", emailError);
+        // Don't fail registration if email fails
+      }
       
       // Link any orphaned guest participants with this email
       try {
@@ -119,7 +146,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Remove password from response
       const { password, ...userWithoutPassword } = user;
-      res.status(201).json(userWithoutPassword);
+      res.status(201).json({ 
+        ...userWithoutPassword,
+        message: "Registration successful! Please check your email to verify your account."
+      });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: error.errors });
@@ -178,6 +208,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) {
         return res.status(401).json({ error: info?.message || "Invalid credentials" });
       }
+      
+      // Check if email is verified (only for standard users, admins bypass this check)
+      if (user.role === "user" && !user.emailVerified) {
+        return res.status(403).json({ 
+          error: "Email not verified",
+          message: "Please verify your email address before logging in. Check your inbox for the verification link.",
+          emailVerified: false
+        });
+      }
+      
       req.logIn(user, async (err) => {
         if (err) {
           return res.status(500).json({ error: "Login failed" });
@@ -195,7 +235,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         // Remove password from response
-        const { password, ...userWithoutPassword } = user;
+        const { password, ...userWithoutPassword} = user;
         res.json(userWithoutPassword);
       });
     })(req, res, next);
@@ -217,6 +257,199 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const user = req.user as User;
     const { password, ...userWithoutPassword } = user;
     res.json(userWithoutPassword);
+  });
+
+  // Email Verification Endpoints
+  app.post("/api/auth/verify-email", async (req, res) => {
+    try {
+      const { token } = z.object({ token: z.string() }).parse(req.body);
+      
+      // Find the verification token
+      const verificationToken = await storage.getEmailVerificationToken(token);
+      if (!verificationToken) {
+        return res.status(400).json({ error: "Invalid or expired verification token" });
+      }
+      
+      // Check if token is expired
+      if (new Date() > verificationToken.expiresAt) {
+        await storage.deleteEmailVerificationToken(token);
+        return res.status(400).json({ error: "Verification token has expired. Please request a new one." });
+      }
+      
+      // Update user to verified
+      await storage.updateUser(verificationToken.userId, { emailVerified: true });
+      
+      // Delete the used token
+      await storage.deleteEmailVerificationToken(token);
+      
+      res.json({ message: "Email verified successfully! You can now log in." });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid request data" });
+      }
+      console.error("Email verification error:", error);
+      res.status(500).json({ error: "Failed to verify email" });
+    }
+  });
+
+  app.post("/api/auth/resend-verification", async (req, res) => {
+    try {
+      const { email } = z.object({ email: z.string().email() }).parse(req.body);
+      
+      // Find user by email
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        // Don't reveal if email exists or not
+        return res.json({ message: "If that email is registered, a verification link has been sent." });
+      }
+      
+      // Check if already verified
+      if (user.emailVerified) {
+        return res.status(400).json({ error: "Email is already verified" });
+      }
+      
+      // Generate new verification token
+      const verificationToken = randomBytes(32).toString('hex');
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 24);
+      
+      await storage.createEmailVerificationToken({
+        userId: user.id,
+        token: verificationToken,
+        expiresAt,
+      });
+      
+      // Send verification email
+      try {
+        const baseUrl = req.get('origin') || 'http://localhost:5000';
+        const verificationUrl = `${baseUrl}/verify-email?token=${verificationToken}`;
+        
+        await sendEmailVerification(user.email, {
+          username: user.displayName || user.username,
+          verificationUrl,
+        });
+      } catch (emailError) {
+        console.error("Failed to send verification email:", emailError);
+        return res.status(500).json({ error: "Failed to send verification email" });
+      }
+      
+      res.json({ message: "Verification email sent. Please check your inbox." });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid email address" });
+      }
+      console.error("Resend verification error:", error);
+      res.status(500).json({ error: "Failed to resend verification email" });
+    }
+  });
+
+  // Password Reset Endpoints
+  app.post("/api/auth/request-password-reset", async (req, res) => {
+    try {
+      const { email } = z.object({ email: z.string().email() }).parse(req.body);
+      
+      // Find user by email
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        // Don't reveal if email exists or not (security best practice)
+        return res.json({ message: "If that email is registered, a password reset link has been sent." });
+      }
+      
+      // Generate password reset token
+      const resetToken = randomBytes(32).toString('hex');
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 1); // Token expires in 1 hour
+      
+      await storage.createPasswordResetToken({
+        userId: user.id,
+        token: resetToken,
+        expiresAt,
+        used: false,
+      });
+      
+      // Send password reset email
+      try {
+        const baseUrl = req.get('origin') || 'http://localhost:5000';
+        const resetUrl = `${baseUrl}/reset-password?token=${resetToken}`;
+        
+        await sendPasswordReset(user.email, {
+          username: user.displayName || user.username,
+          resetUrl,
+        });
+      } catch (emailError) {
+        console.error("Failed to send password reset email:", emailError);
+        return res.status(500).json({ error: "Failed to send password reset email" });
+      }
+      
+      res.json({ message: "Password reset link sent. Please check your email." });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid email address" });
+      }
+      console.error("Password reset request error:", error);
+      res.status(500).json({ error: "Failed to process password reset request" });
+    }
+  });
+
+  app.post("/api/auth/verify-reset-token", async (req, res) => {
+    try {
+      const { token } = z.object({ token: z.string() }).parse(req.body);
+      
+      // Find the reset token
+      const resetToken = await storage.getPasswordResetToken(token);
+      if (!resetToken || resetToken.used) {
+        return res.status(400).json({ error: "Invalid or already used reset token" });
+      }
+      
+      // Check if token is expired
+      if (new Date() > resetToken.expiresAt) {
+        return res.status(400).json({ error: "Reset token has expired. Please request a new one." });
+      }
+      
+      res.json({ valid: true, message: "Token is valid" });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid request data" });
+      }
+      res.status(500).json({ error: "Failed to verify reset token" });
+    }
+  });
+
+  app.post("/api/auth/reset-password", async (req, res) => {
+    try {
+      const { token, newPassword } = z.object({ 
+        token: z.string(),
+        newPassword: z.string().min(8),
+      }).parse(req.body);
+      
+      // Find the reset token
+      const resetToken = await storage.getPasswordResetToken(token);
+      if (!resetToken || resetToken.used) {
+        return res.status(400).json({ error: "Invalid or already used reset token" });
+      }
+      
+      // Check if token is expired
+      if (new Date() > resetToken.expiresAt) {
+        return res.status(400).json({ error: "Reset token has expired. Please request a new one." });
+      }
+      
+      // Hash the new password
+      const hashedPassword = await hashPassword(newPassword);
+      
+      // Update user's password
+      await storage.updateUser(resetToken.userId, { password: hashedPassword });
+      
+      // Mark token as used
+      await storage.markPasswordResetTokenAsUsed(token);
+      
+      res.json({ message: "Password reset successful! You can now log in with your new password." });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid request data. Password must be at least 8 characters." });
+      }
+      console.error("Password reset error:", error);
+      res.status(500).json({ error: "Failed to reset password" });
+    }
   });
 
   // Admin Panel APIs

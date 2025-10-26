@@ -22,6 +22,10 @@ import {
   type InsertSpaceFacilitator,
   type AccessRequest,
   type InsertAccessRequest,
+  type EmailVerificationToken,
+  type InsertEmailVerificationToken,
+  type PasswordResetToken,
+  type InsertPasswordResetToken,
   type KnowledgeBaseDocument,
   type InsertKnowledgeBaseDocument,
   type WorkspaceTemplate,
@@ -42,6 +46,8 @@ import {
   companyAdmins,
   spaceFacilitators,
   accessRequests,
+  emailVerificationTokens,
+  passwordResetTokens,
   knowledgeBaseDocuments,
   workspaceTemplates,
   workspaceTemplateNotes,
@@ -155,6 +161,19 @@ export interface IStorage {
     startDate?: Date;
     endDate?: Date;
   }): Promise<AiUsageLog[]>;
+
+  // Email Verification Tokens
+  createEmailVerificationToken(token: InsertEmailVerificationToken): Promise<EmailVerificationToken>;
+  getEmailVerificationToken(token: string): Promise<EmailVerificationToken | undefined>;
+  deleteEmailVerificationToken(token: string): Promise<boolean>;
+  deleteExpiredEmailVerificationTokens(): Promise<boolean>;
+
+  // Password Reset Tokens
+  createPasswordResetToken(token: InsertPasswordResetToken): Promise<PasswordResetToken>;
+  getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined>;
+  markPasswordResetTokenAsUsed(token: string): Promise<boolean>;
+  deletePasswordResetToken(token: string): Promise<boolean>;
+  deleteExpiredPasswordResetTokens(): Promise<boolean>;
 }
 
 export class DbStorage implements IStorage {
@@ -632,6 +651,57 @@ export class DbStorage implements IStorage {
     }
 
     return query.orderBy(desc(aiUsageLog.createdAt));
+  }
+
+  // Email Verification Tokens
+  async createEmailVerificationToken(token: InsertEmailVerificationToken): Promise<EmailVerificationToken> {
+    const [newToken] = await db.insert(emailVerificationTokens).values(token).returning();
+    return newToken;
+  }
+
+  async getEmailVerificationToken(token: string): Promise<EmailVerificationToken | undefined> {
+    const [found] = await db.select().from(emailVerificationTokens).where(eq(emailVerificationTokens.token, token)).limit(1);
+    return found;
+  }
+
+  async deleteEmailVerificationToken(token: string): Promise<boolean> {
+    const result = await db.delete(emailVerificationTokens).where(eq(emailVerificationTokens.token, token));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async deleteExpiredEmailVerificationTokens(): Promise<boolean> {
+    const now = new Date();
+    const result = await db.delete(emailVerificationTokens).where(lte(emailVerificationTokens.expiresAt, now));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Password Reset Tokens
+  async createPasswordResetToken(token: InsertPasswordResetToken): Promise<PasswordResetToken> {
+    const [newToken] = await db.insert(passwordResetTokens).values(token).returning();
+    return newToken;
+  }
+
+  async getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined> {
+    const [found] = await db.select().from(passwordResetTokens).where(eq(passwordResetTokens.token, token)).limit(1);
+    return found;
+  }
+
+  async markPasswordResetTokenAsUsed(token: string): Promise<boolean> {
+    const result = await db.update(passwordResetTokens)
+      .set({ used: true })
+      .where(eq(passwordResetTokens.token, token));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async deletePasswordResetToken(token: string): Promise<boolean> {
+    const result = await db.delete(passwordResetTokens).where(eq(passwordResetTokens.token, token));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async deleteExpiredPasswordResetTokens(): Promise<boolean> {
+    const now = new Date();
+    const result = await db.delete(passwordResetTokens).where(lte(passwordResetTokens.expiresAt, now));
+    return result.rowCount ? result.rowCount > 0 : false;
   }
 }
 
