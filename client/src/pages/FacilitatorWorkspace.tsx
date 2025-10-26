@@ -204,19 +204,21 @@ export default function FacilitatorWorkspace() {
   const categorizeMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest("POST", `/api/spaces/${params.space}/categorize`, {});
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.details || errorData.error || "Categorization failed");
+      }
       return await response.json();
     },
     onSuccess: (data) => {
+      // Note: WebSocket handler will show the completion toast when categories_updated arrives
+      // This ensures UI only updates after server successfully broadcasts the results
       queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/notes`] });
-      toast({
-        title: "AI Categorization Started",
-        description: `Processing ${notes.length} notes...`,
-      });
     },
     onError: (error: Error) => {
       toast({
         variant: "destructive",
-        title: "Categorization Failed",
+        title: "AI Categorization Failed",
         description: error.message,
       });
     },

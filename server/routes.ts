@@ -237,14 +237,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Call GPT-5 to categorize notes
-      const result = await categorizeNotes(notes.map(n => ({ id: n.id, content: n.content })));
+      let result;
+      try {
+        result = await categorizeNotes(notes.map(n => ({ id: n.id, content: n.content })));
+      } catch (categorizationError) {
+        const errorMessage = categorizationError instanceof Error 
+          ? categorizationError.message 
+          : 'Unknown error during categorization';
+        console.error("AI categorization failed:", errorMessage);
+        return res.status(500).json({ 
+          error: "AI categorization failed", 
+          details: errorMessage 
+        });
+      }
+      
+      // Verify all notes were categorized
+      const noteIds = new Set(notes.map(n => n.id));
+      const categorizedIds = new Set(result.categories.map(c => c.noteId));
+      
+      if (categorizedIds.size !== noteIds.size) {
+        console.warn(`Warning: ${noteIds.size} notes but only ${categorizedIds.size} categorized`);
+      }
       
       // Update notes with AI-generated categories
-      const updatePromises = result.categories.map(({ noteId, category }) => 
-        storage.updateNote(noteId, { category, isAiCategory: true })
+      const updateResults = await Promise.allSettled(
+        result.categories.map(({ noteId, category }) => 
+          storage.updateNote(noteId, { category, isAiCategory: true })
+        )
       );
       
-      await Promise.all(updatePromises);
+      const failedUpdates = updateResults.filter(r => r.status === 'rejected');
+      if (failedUpdates.length > 0) {
+        console.error(`${failedUpdates.length} note updates failed`);
+      }
       
       // Broadcast category updates to all connected clients
       broadcast({ 
@@ -252,18 +277,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         data: { 
           spaceId, 
           categories: result.categories,
-          summary: result.summary 
+          summary: result.summary,
+          totalNotes: notes.length,
+          categorizedNotes: result.categories.length
         } 
       });
       
       res.json({ 
         success: true, 
         categoriesApplied: result.categories.length,
+        totalNotes: notes.length,
         summary: result.summary 
       });
     } catch (error) {
-      console.error("Categorization error:", error);
-      res.status(500).json({ error: "Failed to categorize notes" });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error("Categorization endpoint error:", errorMessage);
+      res.status(500).json({ 
+        error: "Failed to categorize notes",
+        details: errorMessage
+      });
     }
   });
 
