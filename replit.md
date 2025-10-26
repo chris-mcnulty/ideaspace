@@ -63,11 +63,24 @@ Aurora is a sophisticated web application that enables facilitators to guide coh
   - Promise.allSettled for graceful partial failure handling
   - Successfully tested: 7 notes categorized into 5 themes
 
+- ✅ **Pairwise Voting Module**:
+  - Round-robin algorithm for deterministic pair generation (all unique combinations)
+  - GET `/api/spaces/:spaceId/participants/:participantId/next-pair` endpoint
+  - POST `/api/votes` with WebSocket broadcasts for real-time updates
+  - DuelCard component with side-by-side note comparison
+  - Participant voting page (/vote) with keyboard shortcuts (press 1 or 2)
+  - Progress tracking (completedPairs / totalPairs with percentage)
+  - Completion screen with checkmark when all pairs voted
+  - Facilitator workspace voting tab with:
+    - Statistics cards (total votes, possible pairs, active voters)
+    - Per-participant progress bars with completion badges
+    - Leaderboard of most preferred ideas by win count
+  - Successfully tested: 21/21 votes on 7 notes (21 unique pairs)
+
 ### In Progress
 - None
 
 ### Pending
-- Pairwise voting module
 - Stack ranking module with Borda count
 - Results view with cohort and personalized summaries
 
@@ -156,6 +169,11 @@ Aurora is a sophisticated web application that enables facilitators to guide coh
 - `POST /api/notes/bulk-delete` - Delete multiple notes
 - `POST /api/spaces/:spaceId/categorize` - AI categorize all notes using GPT-5
 
+### Voting
+- `GET /api/spaces/:spaceId/votes` - List all votes
+- `POST /api/votes` - Record pairwise vote (broadcasts via WebSocket)
+- `GET /api/spaces/:spaceId/participants/:participantId/next-pair` - Get next pair to vote on
+
 ### Votes & Rankings
 - `GET /api/spaces/:spaceId/votes` - List votes
 - `POST /api/votes` - Record vote
@@ -197,8 +215,8 @@ Located in `client/src/components/`:
 - ResultsTabs, ReadoutViewer
 
 ## Next Steps
-1. Implement pairwise voting module for participant prioritization
-2. Build stack ranking with Borda count for final prioritization
-3. Create results view with AI-generated cohort summaries
-4. Add personalized results generation for participants
-5. Implement drag-and-drop note repositioning (optional enhancement)
+1. Build stack ranking with Borda count for final prioritization
+2. Create results view with AI-generated cohort summaries
+3. Add personalized results generation for participants
+4. Implement drag-and-drop note repositioning (optional enhancement)
+5. Performance optimization for large note sets (pagination, caching)
