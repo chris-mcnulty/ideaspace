@@ -7,16 +7,28 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Plus, Users, Clock, Vote, ListOrdered } from "lucide-react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import type { Organization, Space, Note, Participant } from "@shared/schema";
 
 export default function ParticipantView() {
   const params = useParams() as { org: string; space: string };
   const [, navigate] = useLocation();
+  const { toast } = useToast();
   const [noteContent, setNoteContent] = useState("");
   const [showNoteForm, setShowNoteForm] = useState(false);
+  const [editingNote, setEditingNote] = useState<Note | null>(null);
+  const [editContent, setEditContent] = useState("");
   
   // Get participant ID from session storage (set by waiting room)
   const participantId = sessionStorage.getItem("participantId");
@@ -75,9 +87,69 @@ export default function ParticipantView() {
     },
   });
 
+  // Edit note mutation
+  const editNoteMutation = useMutation({
+    mutationFn: async ({ noteId, content }: { noteId: string; content: string }) => {
+      return await apiRequest("PATCH", `/api/notes/${noteId}`, { content });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/notes`] });
+      setEditingNote(null);
+      setEditContent("");
+      toast({
+        title: "Note updated",
+        description: "Your note has been updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to update note",
+        description: error.message,
+      });
+    },
+  });
+
+  // Delete note mutation
+  const deleteNoteMutation = useMutation({
+    mutationFn: async (noteId: string) => {
+      return await apiRequest("DELETE", `/api/notes/${noteId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/notes`] });
+      toast({
+        title: "Note deleted",
+        description: "Your note has been removed",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to delete note",
+        description: error.message,
+      });
+    },
+  });
+
   const handleCreateNote = () => {
     if (!noteContent.trim()) return;
     createNoteMutation.mutate(noteContent);
+  };
+
+  const handleEditNote = (note: Note) => {
+    setEditingNote(note);
+    setEditContent(note.content);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingNote || !editContent.trim()) return;
+    editNoteMutation.mutate({ noteId: editingNote.id, content: editContent });
+  };
+
+  const handleDeleteNote = (noteId: string) => {
+    if (confirm("Are you sure you want to delete this note?")) {
+      deleteNoteMutation.mutate(noteId);
+    }
   };
 
   const onlineCount = participants.filter(p => p.isOnline).length;
@@ -178,17 +250,28 @@ export default function ParticipantView() {
             )}
 
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {notes.map((note) => (
-                <StickyNote
-                  key={note.id}
-                  id={note.id}
-                  content={note.content}
-                  author={participants.find(p => p.id === note.participantId)?.displayName}
-                  timestamp={new Date(note.createdAt)}
-                  category={note.category || undefined}
-                  isAiCategory={note.isAiCategory}
-                />
-              ))}
+              {notes.map((note) => {
+                // Check if participant can edit/delete this note
+                const isOwner = note.participantId === participantId;
+                const canEdit = isOwner && space?.status === "open";
+                const canDelete = isOwner && space?.status === "open";
+
+                return (
+                  <StickyNote
+                    key={note.id}
+                    id={note.id}
+                    content={note.content}
+                    author={participants.find(p => p.id === note.participantId)?.displayName}
+                    timestamp={new Date(note.createdAt)}
+                    category={note.category || undefined}
+                    isAiCategory={note.isAiCategory}
+                    canEdit={canEdit}
+                    canDelete={canDelete}
+                    onEdit={() => handleEditNote(note)}
+                    onDelete={() => handleDeleteNote(note.id)}
+                  />
+                );
+              })}
             </div>
           </div>
         </div>
@@ -232,6 +315,51 @@ export default function ParticipantView() {
           </div>
         </div>
       </footer>
+
+      {/* Edit Note Dialog */}
+      <Dialog open={editingNote !== null} onOpenChange={(open) => !open && setEditingNote(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Note</DialogTitle>
+            <DialogDescription>
+              Make changes to your note. The same category will be preserved.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <Textarea
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+            rows={4}
+            placeholder="Enter your updated note content..."
+            data-testid="input-edit-note-content"
+            className="resize-none"
+          />
+
+          {editingNote?.category && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Category:</span>
+              <Badge variant="secondary">{editingNote.category}</Badge>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditingNote(null)}
+              data-testid="button-cancel-edit"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveEdit}
+              disabled={!editContent.trim() || editNoteMutation.isPending}
+              data-testid="button-save-edit"
+            >
+              {editNoteMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
