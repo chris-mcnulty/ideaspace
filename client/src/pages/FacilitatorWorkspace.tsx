@@ -227,6 +227,40 @@ export default function FacilitatorWorkspace() {
     note.content.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Group notes by category for better organization
+  const groupedNotes = filteredNotes.reduce((acc, note) => {
+    const category = note.category || "Uncategorized";
+    if (!acc[category]) {
+      acc[category] = [];
+    }
+    acc[category].push(note);
+    return acc;
+  }, {} as Record<string, Note[]>);
+
+  const categories = Object.keys(groupedNotes).sort((a, b) => {
+    // Sort: Uncategorized last, others alphabetically
+    if (a === "Uncategorized") return 1;
+    if (b === "Uncategorized") return -1;
+    return a.localeCompare(b);
+  });
+
+  // Generate consistent colors for categories
+  const getCategoryColor = (category: string): string => {
+    const colors = [
+      "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+      "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
+      "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+      "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
+      "bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300",
+      "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
+    ];
+    if (category === "Uncategorized") {
+      return "bg-muted text-muted-foreground";
+    }
+    const index = category.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    return colors[index % colors.length];
+  };
+
   // Toggle note selection
   const toggleNoteSelection = (noteId: string) => {
     const newSelected = new Set(selectedNotes);
@@ -551,7 +585,7 @@ export default function FacilitatorWorkspace() {
               </div>
             </div>
 
-            {/* Notes List */}
+            {/* Notes List - Grouped by Category */}
             {notesLoading ? (
               <div className="flex min-h-[400px] items-center justify-center">
                 <p className="text-muted-foreground">Loading notes...</p>
@@ -571,53 +605,74 @@ export default function FacilitatorWorkspace() {
                 </div>
               </div>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {filteredNotes.map((note) => (
-                  <Card
-                    key={note.id}
-                    className={`cursor-pointer transition-all hover-elevate ${
-                      selectedNotes.has(note.id) ? "ring-2 ring-primary" : ""
-                    }`}
-                    onClick={() => toggleNoteSelection(note.id)}
-                    data-testid={`note-card-${note.id}`}
-                  >
-                    <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-3">
-                      <CardTitle className="text-sm font-medium line-clamp-2">
-                        {note.content}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      {note.category && (
-                        <Badge variant="secondary" className="text-xs">
-                          {note.category}
-                        </Badge>
-                      )}
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toast({ title: "Edit feature", description: "Coming soon..." });
-                          }}
-                          data-testid={`button-edit-note-${note.id}`}
+              <div className="space-y-8">
+                {categories.map((category) => (
+                  <div key={category} className="space-y-3">
+                    {/* Category Header */}
+                    <div className="flex items-center gap-3">
+                      <Badge className={`px-3 py-1 text-sm font-medium ${getCategoryColor(category)}`} data-testid={`badge-category-${category}`}>
+                        {category === "Uncategorized" && !notes.some(n => n.isAiCategory) ? (
+                          category
+                        ) : (
+                          <>
+                            {category}
+                            {groupedNotes[category].some(n => n.isAiCategory) && (
+                              <Sparkles className="ml-1 h-3 w-3 inline" />
+                            )}
+                          </>
+                        )}
+                      </Badge>
+                      <span className="text-sm text-muted-foreground">
+                        {groupedNotes[category].length} {groupedNotes[category].length === 1 ? "note" : "notes"}
+                      </span>
+                    </div>
+
+                    {/* Notes Grid */}
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {groupedNotes[category].map((note) => (
+                        <Card
+                          key={note.id}
+                          className={`cursor-pointer transition-all hover-elevate ${
+                            selectedNotes.has(note.id) ? "ring-2 ring-primary" : ""
+                          }`}
+                          onClick={() => toggleNoteSelection(note.id)}
+                          data-testid={`note-card-${note.id}`}
                         >
-                          <Edit2 className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteNoteMutation.mutate(note.id);
-                          }}
-                          data-testid={`button-delete-note-${note.id}`}
-                        >
-                          <Trash2 className="h-3 w-3 text-destructive" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                          <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-3">
+                            <CardTitle className="text-sm font-medium line-clamp-2">
+                              {note.content}
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-2">
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toast({ title: "Edit feature", description: "Coming soon..." });
+                                }}
+                                data-testid={`button-edit-note-${note.id}`}
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteNoteMutation.mutate(note.id);
+                                }}
+                                data-testid={`button-delete-note-${note.id}`}
+                              >
+                                <Trash2 className="h-3 w-3 text-destructive" />
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
