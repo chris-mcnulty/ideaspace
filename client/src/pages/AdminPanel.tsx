@@ -3,8 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Building2, Plus, LogOut, Loader2, Mail, Clock, Check, X, BookOpen } from "lucide-react";
-import type { Organization, Space, User, AccessRequest } from "@shared/schema";
+import { Building2, Plus, LogOut, Loader2, Mail, Clock, Check, X, BookOpen, FileStack } from "lucide-react";
+import type { Organization, Space, User, AccessRequest, WorkspaceTemplate } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -131,6 +131,10 @@ export default function AdminPanel() {
               <BookOpen className="h-4 w-4 mr-2" />
               Knowledge Base
             </TabsTrigger>
+            <TabsTrigger value="templates" data-testid="tab-templates">
+              <FileStack className="h-4 w-4 mr-2" />
+              Templates
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="workspaces" className="space-y-6">
@@ -192,6 +196,13 @@ export default function AdminPanel() {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+
+          <TabsContent value="templates">
+            <TemplatesTab 
+              currentUser={currentUser}
+              organizations={displayOrgs}
+            />
           </TabsContent>
         </Tabs>
       </main>
@@ -548,6 +559,242 @@ function AccessRequestsTab({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function TemplatesTab({ 
+  currentUser, 
+  organizations 
+}: { 
+  currentUser: User;
+  organizations: Organization[];
+}) {
+  const { toast } = useToast();
+  const [expandedTemplateId, setExpandedTemplateId] = useState<string | null>(null);
+
+  // Fetch templates based on user role
+  const organizationId = currentUser.role === "company_admin" ? currentUser.organizationId : undefined;
+  
+  const { data: templates = [], isLoading } = useQuery<WorkspaceTemplate[]>({
+    queryKey: ["/api/templates", { organizationId }],
+  });
+
+  // Delete template mutation
+  const deleteTemplateMutation = useMutation({
+    mutationFn: async (templateId: string) => {
+      const response = await fetch(`/api/templates/${templateId}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to delete template");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      toast({
+        title: "Template deleted",
+        description: "The workspace template has been deleted successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to delete template",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleDelete = (templateId: string) => {
+    if (confirm("Are you sure you want to delete this template? This action cannot be undone.")) {
+      deleteTemplateMutation.mutate(templateId);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (templates.length === 0) {
+    return (
+      <Card>
+        <CardContent className="pt-12 pb-12 text-center text-muted-foreground">
+          <FileStack className="h-16 w-16 mx-auto mb-4 opacity-50" />
+          <h3 className="text-lg font-medium mb-2">No templates yet</h3>
+          <p className="text-sm max-w-md mx-auto">
+            Workspace templates allow you to create pre-configured workspaces with seeded notes and knowledge base documents.
+            Create a template from an existing workspace in the Facilitator Workspace.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold">Workspace Templates</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Manage reusable workspace configurations with pre-seeded content
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-4">
+        {templates.map((template) => {
+          const org = organizations.find(o => o.id === template.organizationId);
+          const isExpanded = expandedTemplateId === template.id;
+
+          return (
+            <Card key={template.id} data-testid={`card-template-${template.id}`}>
+              <CardHeader>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <CardTitle className="text-lg">{template.name}</CardTitle>
+                      <Badge variant="secondary" data-testid={`badge-type-${template.id}`}>
+                        {template.type}
+                      </Badge>
+                      {template.organizationId && org && (
+                        <Badge variant="outline" data-testid={`badge-org-${template.id}`}>
+                          {org.name}
+                        </Badge>
+                      )}
+                      {!template.organizationId && (
+                        <Badge variant="default" data-testid={`badge-scope-${template.id}`}>
+                          System
+                        </Badge>
+                      )}
+                    </div>
+                    {template.description && (
+                      <p className="text-sm text-muted-foreground">{template.description}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Created {new Date(template.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setExpandedTemplateId(isExpanded ? null : template.id)}
+                      data-testid={`button-view-details-${template.id}`}
+                    >
+                      {isExpanded ? "Hide Details" : "View Details"}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDelete(template.id)}
+                      disabled={deleteTemplateMutation.isPending}
+                      data-testid={`button-delete-${template.id}`}
+                    >
+                      {deleteTemplateMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <X className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+
+              {isExpanded && (
+                <CardContent>
+                  <TemplateDetails templateId={template.id} />
+                </CardContent>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function TemplateDetails({ templateId }: { templateId: string }) {
+  const { data: templateDetails, isLoading } = useQuery<{
+    notes: any[];
+    documents: any[];
+  }>({
+    queryKey: ["/api/templates", templateId],
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!templateDetails) {
+    return <p className="text-sm text-muted-foreground">Failed to load template details</p>;
+  }
+
+  const { notes = [], documents = [] } = templateDetails;
+
+  return (
+    <div className="space-y-4 border-t pt-4">
+      <div>
+        <h4 className="font-medium mb-2">Seeded Notes ({notes.length})</h4>
+        {notes.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No notes in this template</p>
+        ) : (
+          <div className="grid gap-2">
+            {notes.slice(0, 5).map((note: any) => (
+              <div key={note.id} className="p-3 rounded-md bg-muted/30 text-sm">
+                <p className="line-clamp-2">{note.content}</p>
+                {note.category && (
+                  <Badge variant="outline" className="mt-2 text-xs">
+                    {note.category}
+                  </Badge>
+                )}
+              </div>
+            ))}
+            {notes.length > 5 && (
+              <p className="text-xs text-muted-foreground">
+                ...and {notes.length - 5} more notes
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <h4 className="font-medium mb-2">Knowledge Base Documents ({documents.length})</h4>
+        {documents.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No documents in this template</p>
+        ) : (
+          <div className="grid gap-2">
+            {documents.map((doc: any) => (
+              <div key={doc.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/30">
+                <BookOpen className="h-4 w-4 text-muted-foreground" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{doc.title}</p>
+                  {doc.description && (
+                    <p className="text-xs text-muted-foreground truncate">{doc.description}</p>
+                  )}
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {(doc.fileSize / 1024).toFixed(1)} KB
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
