@@ -106,6 +106,24 @@ export const accessRequests = pgTable("access_requests", {
   resolvedBy: varchar("resolved_by").references(() => users.id), // Admin/facilitator who approved/denied
 });
 
+// Knowledge Base: Documents for grounding AI in categorization and results
+export const knowledgeBaseDocuments = pgTable("knowledge_base_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  description: text("description"),
+  filename: text("filename").notNull(), // Original filename
+  filePath: text("file_path").notNull(), // Path in local storage
+  fileSize: integer("file_size").notNull(), // Size in bytes
+  mimeType: text("mime_type").notNull(), // e.g., application/pdf, text/plain
+  scope: text("scope").notNull(), // 'system', 'organization', 'workspace'
+  organizationId: varchar("organization_id").references(() => organizations.id), // null for system scope
+  spaceId: varchar("space_id").references(() => spaces.id), // null for system/organization scope
+  tags: text("tags").array(), // Tags for categorization and filtering
+  uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // Insert schemas
 export const insertOrganizationSchema = createInsertSchema(organizations).omit({
   id: true,
@@ -164,6 +182,12 @@ export const insertAccessRequestSchema = createInsertSchema(accessRequests).omit
   resolvedAt: true,
 });
 
+export const insertKnowledgeBaseDocumentSchema = createInsertSchema(knowledgeBaseDocuments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type Organization = typeof organizations.$inferSelect;
 export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
@@ -194,3 +218,6 @@ export type InsertSpaceFacilitator = z.infer<typeof insertSpaceFacilitatorSchema
 
 export type AccessRequest = typeof accessRequests.$inferSelect;
 export type InsertAccessRequest = z.infer<typeof insertAccessRequestSchema>;
+
+export type KnowledgeBaseDocument = typeof knowledgeBaseDocuments.$inferSelect;
+export type InsertKnowledgeBaseDocument = z.infer<typeof insertKnowledgeBaseDocumentSchema>;
