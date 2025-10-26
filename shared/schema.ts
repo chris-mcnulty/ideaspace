@@ -213,6 +213,36 @@ export const aiUsageLog = pgTable("ai_usage_log", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Cohort Results: AI-generated summaries of the collective envisioning session
+export const cohortResults = pgTable("cohort_results", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  spaceId: varchar("space_id").notNull().references(() => spaces.id),
+  generatedBy: varchar("generated_by").notNull().references(() => users.id), // Facilitator who triggered generation
+  summary: text("summary").notNull(), // High-level cohort summary
+  keyThemes: text("key_themes").array(), // Top emerging themes
+  topIdeas: jsonb("top_ideas"), // Top-ranked ideas with scores from all voting methods
+  insights: text("insights").notNull(), // AI-generated insights from the data
+  recommendations: text("recommendations"), // Actionable recommendations for the cohort
+  metadata: jsonb("metadata"), // Additional data: voting stats, participation stats, etc.
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Personalized Results: AI-generated insights tailored to individual participants
+export const personalizedResults = pgTable("personalized_results", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  spaceId: varchar("space_id").notNull().references(() => spaces.id),
+  participantId: varchar("participant_id").notNull().references(() => participants.id),
+  cohortResultId: varchar("cohort_result_id").references(() => cohortResults.id), // Link to cohort summary
+  personalSummary: text("personal_summary").notNull(), // Personalized overview based on their contributions
+  alignmentScore: integer("alignment_score"), // How aligned they are with cohort (0-100)
+  topContributions: jsonb("top_contributions"), // Their most impactful ideas
+  insights: text("insights").notNull(), // Personalized insights
+  recommendations: text("recommendations"), // Personalized next steps
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // Insert schemas
 export const insertOrganizationSchema = createInsertSchema(organizations).omit({
   id: true,
@@ -313,6 +343,18 @@ export const insertPasswordResetTokenSchema = createInsertSchema(passwordResetTo
   createdAt: true,
 });
 
+export const insertCohortResultSchema = createInsertSchema(cohortResults).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPersonalizedResultSchema = createInsertSchema(personalizedResults).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type Organization = typeof organizations.$inferSelect;
 export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
@@ -367,3 +409,9 @@ export type InsertEmailVerificationToken = z.infer<typeof insertEmailVerificatio
 
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type InsertPasswordResetToken = z.infer<typeof insertPasswordResetTokenSchema>;
+
+export type CohortResult = typeof cohortResults.$inferSelect;
+export type InsertCohortResult = z.infer<typeof insertCohortResultSchema>;
+
+export type PersonalizedResult = typeof personalizedResults.$inferSelect;
+export type InsertPersonalizedResult = z.infer<typeof insertPersonalizedResultSchema>;

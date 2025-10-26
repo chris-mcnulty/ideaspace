@@ -11,6 +11,7 @@ import { getNextPair, calculateProgress } from "./services/pairwise";
 import { validateRanking, calculateBordaScores, calculateRankingProgress, hasParticipantCompleted } from "./services/stack-ranking";
 import { validateAllocation, calculateMarketplaceScores, calculateAllocationProgress, hasParticipantCompleted as hasParticipantCompletedAllocation, getParticipantRemainingBudget, DEFAULT_COIN_BUDGET } from "./services/marketplace";
 import { generatePairwiseExport, generateStackRankingExport, generateMarketplaceExport } from "./services/export";
+import { generateCohortResults, generatePersonalizedResults, generateAllPersonalizedResults } from "./services/results";
 import { hashPassword, requireAuth, requireRole, requireGlobalAdmin, requireCompanyAdmin, requireFacilitator } from "./auth";
 import { generateWorkspaceCode, isValidWorkspaceCode } from "./services/workspace-code";
 import { sendAccessRequestEmail, sendEmailVerification, sendPasswordReset } from "./services/email";
@@ -2425,6 +2426,162 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Failed to fetch workspace AI usage:", error);
       res.status(500).json({ error: "Failed to fetch AI usage statistics" });
+    }
+  });
+
+  // Results Endpoints
+  // Generate cohort results (Facilitator/Admin only)
+  app.post("/api/spaces/:spaceId/results/cohort", requireAuth, async (req, res) => {
+    try {
+      const { spaceId } = req.params;
+      const currentUser = req.user as User;
+
+      // Check if user is facilitator or admin for this space
+      const space = await storage.getSpace(spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      // Verify permissions
+      let hasPermission = false;
+      if (currentUser.role === 'global_admin') {
+        hasPermission = true;
+      } else if (currentUser.role === 'company_admin' && currentUser.organizationId === space.organizationId) {
+        hasPermission = true;
+      } else {
+        const facilitators = await storage.getSpaceFacilitatorsBySpace(spaceId);
+        hasPermission = facilitators.some(f => f.userId === currentUser.id);
+      }
+
+      if (!hasPermission) {
+        return res.status(403).json({ error: "Insufficient permissions. Facilitator or admin access required." });
+      }
+
+      // Generate cohort results
+      const cohortResult = await generateCohortResults(spaceId, currentUser.id);
+
+      res.json(cohortResult);
+    } catch (error: any) {
+      console.error("Failed to generate cohort results:", error);
+      res.status(500).json({ error: error.message || "Failed to generate cohort results" });
+    }
+  });
+
+  // Get cohort results for a workspace
+  app.get("/api/spaces/:spaceId/results/cohort", requireAuth, async (req, res) => {
+    try {
+      const { spaceId } = req.params;
+
+      const cohortResults = await storage.getCohortResultsBySpace(spaceId);
+
+      // Return the most recent cohort result
+      if (cohortResults.length > 0) {
+        res.json(cohortResults[0]);
+      } else {
+        res.status(404).json({ error: "No cohort results found for this workspace" });
+      }
+    } catch (error) {
+      console.error("Failed to fetch cohort results:", error);
+      res.status(500).json({ error: "Failed to fetch cohort results" });
+    }
+  });
+
+  // Generate personalized results for a participant
+  app.post("/api/spaces/:spaceId/results/personalized", async (req, res) => {
+    try {
+      const { spaceId } = req.params;
+      const sessionParticipantId = req.session?.participantId;
+
+      if (!sessionParticipantId) {
+        return res.status(401).json({ error: "No participant session found. Please rejoin the workspace." });
+      }
+
+      // Get the most recent cohort result
+      const cohortResults = await storage.getCohortResultsBySpace(spaceId);
+      const cohortResultId = cohortResults.length > 0 ? cohortResults[0].id : undefined;
+
+      // Generate personalized results
+      const personalResult = await generatePersonalizedResults(
+        spaceId,
+        sessionParticipantId,
+        cohortResultId
+      );
+
+      res.json(personalResult);
+    } catch (error: any) {
+      console.error("Failed to generate personalized results:", error);
+      res.status(500).json({ error: error.message || "Failed to generate personalized results" });
+    }
+  });
+
+  // Get personalized results for a participant
+  app.get("/api/spaces/:spaceId/results/personalized", async (req, res) => {
+    try {
+      const { spaceId } = req.params;
+      const sessionParticipantId = req.session?.participantId;
+
+      if (!sessionParticipantId) {
+        return res.status(401).json({ error: "No participant session found. Please rejoin the workspace." });
+      }
+
+      const personalResults = await storage.getPersonalizedResultsByParticipant(sessionParticipantId);
+
+      // Return the most recent personalized result for this workspace
+      const workspaceResults = personalResults.filter(r => r.spaceId === spaceId);
+      if (workspaceResults.length > 0) {
+        res.json(workspaceResults[0]);
+      } else {
+        res.status(404).json({ error: "No personalized results found" });
+      }
+    } catch (error) {
+      console.error("Failed to fetch personalized results:", error);
+      res.status(500).json({ error: "Failed to fetch personalized results" });
+    }
+  });
+
+  // Generate personalized results for all participants (Facilitator/Admin only)
+  app.post("/api/spaces/:spaceId/results/generate-all", requireAuth, async (req, res) => {
+    try {
+      const { spaceId } = req.params;
+      const currentUser = req.user as User;
+
+      // Check if user is facilitator or admin for this space
+      const space = await storage.getSpace(spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      // Verify permissions
+      let hasPermission = false;
+      if (currentUser.role === 'global_admin') {
+        hasPermission = true;
+      } else if (currentUser.role === 'company_admin' && currentUser.organizationId === space.organizationId) {
+        hasPermission = true;
+      } else {
+        const facilitators = await storage.getSpaceFacilitatorsBySpace(spaceId);
+        hasPermission = facilitators.some(f => f.userId === currentUser.id);
+      }
+
+      if (!hasPermission) {
+        return res.status(403).json({ error: "Insufficient permissions. Facilitator or admin access required." });
+      }
+
+      // Get the most recent cohort result
+      const cohortResults = await storage.getCohortResultsBySpace(spaceId);
+      if (cohortResults.length === 0) {
+        return res.status(400).json({ error: "Please generate cohort results first" });
+      }
+
+      // Generate personalized results for all participants
+      const results = await generateAllPersonalizedResults(spaceId, cohortResults[0].id);
+
+      res.json({ 
+        generated: results.length,
+        results 
+      });
+    } catch (error: any) {
+      console.error("Failed to generate all personalized results:", error);
+      res.status(500).json({ error: error.message || "Failed to generate personalized results" });
     }
   });
 

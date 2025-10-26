@@ -35,6 +35,10 @@ import {
   type WorkspaceTemplateDocument,
   type InsertWorkspaceTemplateDocument,
   type AiUsageLog,
+  type CohortResult,
+  type InsertCohortResult,
+  type PersonalizedResult,
+  type InsertPersonalizedResult,
   organizations,
   users,
   spaces,
@@ -53,6 +57,8 @@ import {
   workspaceTemplateNotes,
   workspaceTemplateDocuments,
   aiUsageLog,
+  cohortResults,
+  personalizedResults,
 } from "@shared/schema";
 import { eq, and, desc, or, isNull, gte, lte } from "drizzle-orm";
 
@@ -174,6 +180,21 @@ export interface IStorage {
   markPasswordResetTokenAsUsed(token: string): Promise<boolean>;
   deletePasswordResetToken(token: string): Promise<boolean>;
   deleteExpiredPasswordResetTokens(): Promise<boolean>;
+
+  // Cohort Results
+  getCohortResult(id: string): Promise<CohortResult | undefined>;
+  getCohortResultsBySpace(spaceId: string): Promise<CohortResult[]>;
+  createCohortResult(result: InsertCohortResult): Promise<CohortResult>;
+  updateCohortResult(id: string, result: Partial<InsertCohortResult>): Promise<CohortResult | undefined>;
+  deleteCohortResult(id: string): Promise<boolean>;
+
+  // Personalized Results
+  getPersonalizedResult(id: string): Promise<PersonalizedResult | undefined>;
+  getPersonalizedResultsBySpace(spaceId: string): Promise<PersonalizedResult[]>;
+  getPersonalizedResultsByParticipant(participantId: string): Promise<PersonalizedResult[]>;
+  createPersonalizedResult(result: InsertPersonalizedResult): Promise<PersonalizedResult>;
+  updatePersonalizedResult(id: string, result: Partial<InsertPersonalizedResult>): Promise<PersonalizedResult | undefined>;
+  deletePersonalizedResult(id: string): Promise<boolean>;
 }
 
 export class DbStorage implements IStorage {
@@ -701,6 +722,60 @@ export class DbStorage implements IStorage {
   async deleteExpiredPasswordResetTokens(): Promise<boolean> {
     const now = new Date();
     const result = await db.delete(passwordResetTokens).where(lte(passwordResetTokens.expiresAt, now));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Cohort Results
+  async getCohortResult(id: string): Promise<CohortResult | undefined> {
+    const [result] = await db.select().from(cohortResults).where(eq(cohortResults.id, id)).limit(1);
+    return result;
+  }
+
+  async getCohortResultsBySpace(spaceId: string): Promise<CohortResult[]> {
+    return db.select().from(cohortResults).where(eq(cohortResults.spaceId, spaceId)).orderBy(desc(cohortResults.createdAt));
+  }
+
+  async createCohortResult(result: InsertCohortResult): Promise<CohortResult> {
+    const [created] = await db.insert(cohortResults).values(result).returning();
+    return created;
+  }
+
+  async updateCohortResult(id: string, result: Partial<InsertCohortResult>): Promise<CohortResult | undefined> {
+    const [updated] = await db.update(cohortResults).set(result).where(eq(cohortResults.id, id)).returning();
+    return updated;
+  }
+
+  async deleteCohortResult(id: string): Promise<boolean> {
+    const result = await db.delete(cohortResults).where(eq(cohortResults.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Personalized Results
+  async getPersonalizedResult(id: string): Promise<PersonalizedResult | undefined> {
+    const [result] = await db.select().from(personalizedResults).where(eq(personalizedResults.id, id)).limit(1);
+    return result;
+  }
+
+  async getPersonalizedResultsBySpace(spaceId: string): Promise<PersonalizedResult[]> {
+    return db.select().from(personalizedResults).where(eq(personalizedResults.spaceId, spaceId)).orderBy(desc(personalizedResults.createdAt));
+  }
+
+  async getPersonalizedResultsByParticipant(participantId: string): Promise<PersonalizedResult[]> {
+    return db.select().from(personalizedResults).where(eq(personalizedResults.participantId, participantId)).orderBy(desc(personalizedResults.createdAt));
+  }
+
+  async createPersonalizedResult(result: InsertPersonalizedResult): Promise<PersonalizedResult> {
+    const [created] = await db.insert(personalizedResults).values(result).returning();
+    return created;
+  }
+
+  async updatePersonalizedResult(id: string, result: Partial<InsertPersonalizedResult>): Promise<PersonalizedResult | undefined> {
+    const [updated] = await db.update(personalizedResults).set(result).where(eq(personalizedResults.id, id)).returning();
+    return updated;
+  }
+
+  async deletePersonalizedResult(id: string): Promise<boolean> {
+    const result = await db.delete(personalizedResults).where(eq(personalizedResults.id, id));
     return result.rowCount ? result.rowCount > 0 : false;
   }
 }
