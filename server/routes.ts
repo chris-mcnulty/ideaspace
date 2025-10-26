@@ -398,7 +398,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/spaces/:id", async (req, res) => {
     try {
-      const space = await storage.getSpace(req.params.id);
+      const identifier = req.params.id;
+      // Check if identifier looks like a workspace code (nnnn-nnnn format: 9 chars, single hyphen at position 4)
+      // vs a UUID (36 chars with hyphens) or serial integer
+      let space;
+      const isWorkspaceCode = /^\d{4}-\d{4}$/.test(identifier);
+      
+      if (isWorkspaceCode) {
+        // Lookup by code (e.g., "1234-6133")
+        space = await storage.getSpaceByCode(identifier);
+      } else {
+        // Lookup by ID (UUID or serial integer)
+        space = await storage.getSpace(identifier);
+      }
+      
       if (!space) {
         return res.status(404).json({ error: "Space not found" });
       }
@@ -929,7 +942,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         description: z.string().trim().optional(),
       }).parse(req.body);
 
-      const space = await storage.getSpace(data.spaceId);
+      // Handle both workspace codes (nnnn-nnnn) and UUIDs/IDs
+      const isWorkspaceCode = /^\d{4}-\d{4}$/.test(data.spaceId);
+      const space = isWorkspaceCode 
+        ? await storage.getSpaceByCode(data.spaceId)
+        : await storage.getSpace(data.spaceId);
+      
       if (!space) {
         return res.status(404).json({ error: "Workspace not found" });
       }
