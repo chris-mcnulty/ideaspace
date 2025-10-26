@@ -21,7 +21,7 @@ export default function AdminPanel() {
   });
 
   // For company admins, fetch their organization by ID
-  const { data: companyOrg } = useQuery<Organization>({
+  const { data: companyOrg, isLoading: companyOrgLoading } = useQuery<Organization>({
     queryKey: [`/api/organizations/${currentUser?.organizationId}`],
     queryFn: async () => {
       if (!currentUser?.organizationId) throw new Error("No organization ID");
@@ -41,7 +41,7 @@ export default function AdminPanel() {
     }
   };
 
-  if (userLoading || orgsLoading) {
+  if (userLoading || orgsLoading || companyOrgLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex items-center gap-2 text-muted-foreground">
