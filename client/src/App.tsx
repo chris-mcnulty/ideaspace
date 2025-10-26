@@ -15,6 +15,7 @@ import ParticipantView from "@/pages/ParticipantView";
 import FacilitatorWorkspace from "@/pages/FacilitatorWorkspace";
 import PairwiseVoting from "@/pages/PairwiseVoting";
 import StackRanking from "@/pages/StackRanking";
+import JoinPage from "@/pages/JoinPage";
 
 import LandingPageExample from "@/components/examples/LandingPage";
 import OrganizationHomeExample from "@/components/examples/OrganizationHome";
@@ -38,6 +39,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={LandingPage} />
+      <Route path="/join/:code" component={JoinPage} />
       <Route path="/login" component={Login} />
       <Route path="/admin" component={AdminPanel} />
       <Route path="/o/:org" component={OrganizationHome} />

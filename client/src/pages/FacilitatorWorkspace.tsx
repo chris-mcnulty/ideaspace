@@ -119,7 +119,7 @@ export default function FacilitatorWorkspace() {
   const leaderboard = leaderboardData?.leaderboard || [];
 
   // Fetch ranking progress
-  const { data: rankingProgress } = useQuery<{ totalParticipants: number; completedCount: number; completionPercentage: number }>({
+  const { data: rankingProgress } = useQuery<{ totalParticipants: number; participantsCompleted: number; percentComplete: number; isComplete: boolean }>({
     queryKey: [`/api/spaces/${params.space}/ranking-progress`],
     enabled: !!params.space,
   });
@@ -945,7 +945,7 @@ export default function FacilitatorWorkspace() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold">
-                    {rankingProgress?.completedCount || 0}
+                    {rankingProgress?.participantsCompleted || 0}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     Of {rankingProgress?.totalParticipants || participants.length} participants
@@ -959,10 +959,10 @@ export default function FacilitatorWorkspace() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold">
-                    {rankingProgress?.completionPercentage?.toFixed(0) || 0}%
+                    {rankingProgress?.percentComplete || 0}%
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {rankingProgress?.completedCount || 0} / {rankingProgress?.totalParticipants || participants.length} completed
+                    {rankingProgress?.participantsCompleted || 0} / {rankingProgress?.totalParticipants || participants.length} completed
                   </p>
                 </CardContent>
               </Card>
