@@ -115,7 +115,7 @@ export default function LandingPage() {
                 prioritize initiatives, and generate actionable insights powered by AI.
               </p>
 
-              <div className="mt-8 text-sm text-gray-300 italic">
+              <div className="mt-8 text-sm text-white italic">
                 This is our beta version; signup to learn more when we release the full version with enhanced features, benchmarks, and comprehensive analytics.
               </div>
 
