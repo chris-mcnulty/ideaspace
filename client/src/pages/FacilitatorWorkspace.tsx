@@ -272,7 +272,7 @@ export default function FacilitatorWorkspace() {
   const rewriteNoteMutation = useMutation({
     mutationFn: async ({ noteId, count }: { noteId: string; count: number }) => {
       const response = await apiRequest("POST", `/api/notes/${noteId}/rewrite`, { count });
-      return response as { 
+      return await response.json() as { 
         original: { id: string; content: string; category: string | null }; 
         variations: Array<{ version: number; content: string }> 
       };
