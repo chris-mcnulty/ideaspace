@@ -29,7 +29,7 @@ The design system features a dark mode with a primary purple accent, dark blue-b
 - **Pairwise Voting**: Implements a round-robin algorithm for deterministic pair generation and leaderboard display.
 - **Stack Ranking (Borda Count)**: Features a drag-and-drop interface for ranking, Borda count algorithm for scoring, real-time leaderboard, and facilitator progress tracking.
 - **Guest Access Control System**: Manages workspace access with configurable guest permissions, access request workflow, SendGrid email notifications, and automatic participant-to-account linking.
-- **Facilitator Controls**: Provides tools for managing notes (preload, add, edit with dialog, delete, merge, bulk select, AI rewrites), controlling session states, and triggering AI categorization.
+- **Facilitator Controls**: Provides tools for managing notes (preload, add, edit with dialog, delete, merge, bulk select, AI-powered rewrites), controlling session states, and triggering AI categorization.
 - **Participant Editing Permissions**: Allows participants to edit and delete their own cards when the workspace is "open".
 - **Knowledge Base System**: A three-tiered document management system (System, Organization, Workspace scopes) for grounding AI categorization, supporting PDF/TXT/DOC/DOCX/XLS/XLSX files with secure local storage and RBAC.
 - **Marketplace Allocation Module**: A coin-based voting system where participants distribute a finite budget among ideas, with real-time budget display, secure submission API, and export functionality.
