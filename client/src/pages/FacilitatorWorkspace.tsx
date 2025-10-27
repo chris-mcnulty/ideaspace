@@ -63,6 +63,8 @@ export default function FacilitatorWorkspace() {
   const [templateDescription, setTemplateDescription] = useState("");
   const [rewriteDialogNote, setRewriteDialogNote] = useState<Note | null>(null);
   const [rewriteVariations, setRewriteVariations] = useState<Array<{ version: number; content: string }>>([]);
+  const [editDialogNote, setEditDialogNote] = useState<Note | null>(null);
+  const [editNoteContent, setEditNoteContent] = useState("");
 
   // WebSocket connection for real-time updates
   const handleWebSocketMessage = useCallback((message: { type: string; data: any }) => {
@@ -237,6 +239,30 @@ export default function FacilitatorWorkspace() {
       toast({
         variant: "destructive",
         title: "Failed to delete note",
+        description: error.message,
+      });
+    },
+  });
+
+  // Edit note mutation
+  const editNoteMutation = useMutation({
+    mutationFn: async ({ noteId, content }: { noteId: string; content: string }) => {
+      const response = await apiRequest("PATCH", `/api/notes/${noteId}`, { content });
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/notes`] });
+      setEditDialogNote(null);
+      setEditNoteContent("");
+      toast({
+        title: "Note updated",
+        description: "Your changes have been saved",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to update note",
         description: error.message,
       });
     },
@@ -935,7 +961,8 @@ export default function FacilitatorWorkspace() {
                                 size="sm"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  toast({ title: "Edit feature", description: "Coming soon..." });
+                                  setEditDialogNote(note);
+                                  setEditNoteContent(note.content);
                                 }}
                                 data-testid={`button-edit-note-${note.id}`}
                               >
@@ -1458,6 +1485,60 @@ export default function FacilitatorWorkspace() {
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* Edit Note Dialog */}
+      <Dialog open={editDialogNote !== null} onOpenChange={(open) => !open && setEditDialogNote(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Note</DialogTitle>
+            <DialogDescription>
+              Make changes to the note content below.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Textarea
+              value={editNoteContent}
+              onChange={(e) => setEditNoteContent(e.target.value)}
+              rows={4}
+              placeholder="Enter note content..."
+              data-testid="input-edit-note-content"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditDialogNote(null);
+                setEditNoteContent("");
+              }}
+              data-testid="button-cancel-edit-note"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (editDialogNote && editNoteContent.trim()) {
+                  editNoteMutation.mutate({
+                    noteId: editDialogNote.id,
+                    content: editNoteContent.trim(),
+                  });
+                }
+              }}
+              disabled={editNoteMutation.isPending || !editNoteContent.trim()}
+              data-testid="button-save-edit-note"
+            >
+              {editNoteMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* AI Rewrite Dialog */}
       <Dialog open={rewriteDialogNote !== null} onOpenChange={(open) => !open && setRewriteDialogNote(null)}>
