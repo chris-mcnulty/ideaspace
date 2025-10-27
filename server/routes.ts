@@ -4,8 +4,10 @@ import { WebSocketServer, WebSocket } from "ws";
 import passport from "passport";
 import multer from "multer";
 import { storage } from "./storage";
-import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User } from "@shared/schema";
+import { db } from "./db";
+import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, organizations } from "@shared/schema";
 import { z } from "zod";
+import { eq } from "drizzle-orm";
 import { categorizeNotes, rewriteCard } from "./services/openai";
 import { getNextPair, calculateProgress } from "./services/pairwise";
 import { validateRanking, calculateBordaScores, calculateRankingProgress, hasParticipantCompleted } from "./services/stack-ranking";
@@ -626,6 +628,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: error.errors });
       }
       res.status(500).json({ error: "Failed to create organization" });
+    }
+  });
+
+  // Protected: Only global admins can update organizations
+  app.patch("/api/organizations/:id", requireGlobalAdmin, async (req, res) => {
+    try {
+      const data = insertOrganizationSchema.partial().parse(req.body);
+      const org = await storage.updateOrganization(req.params.id, data);
+      if (!org) {
+        return res.status(404).json({ error: "Organization not found" });
+      }
+      res.json(org);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Failed to update organization" });
+    }
+  });
+
+  // Protected: Only global admins can delete organizations
+  app.delete("/api/organizations/:id", requireGlobalAdmin, async (req, res) => {
+    try {
+      // Check if organization has any workspaces
+      const spaces = await storage.getSpacesByOrganization(req.params.id);
+      if (spaces.length > 0) {
+        return res.status(400).json({ 
+          error: "Cannot delete organization with existing workspaces. Please delete all workspaces first." 
+        });
+      }
+      
+      // Delete organization (this will also cascade to company_admins table)
+      const org = await storage.getOrganization(req.params.id);
+      if (!org) {
+        return res.status(404).json({ error: "Organization not found" });
+      }
+      
+      // For now, we'll just mark it as deleted by updating a field if needed
+      // Or implement actual deletion - let's do actual deletion since storage has the method
+      await db.delete(organizations).where(eq(organizations.id, req.params.id));
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error("Failed to delete organization:", error);
+      res.status(500).json({ error: "Failed to delete organization" });
     }
   });
 

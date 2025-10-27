@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Building2, Plus, LogOut, Loader2, Mail, Clock, Check, X, BookOpen, FileStack, Activity, Users, Edit } from "lucide-react";
+import { Building2, Plus, LogOut, Loader2, Mail, Clock, Check, X, BookOpen, FileStack, Activity, Users, Edit, Trash2 } from "lucide-react";
 import type { Organization, Space, User, AccessRequest, WorkspaceTemplate } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
@@ -236,29 +236,99 @@ function OrganizationCard({
   organization: Organization;
   currentUserRole: string;
 }) {
+  const { toast } = useToast();
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  
   // Fetch workspaces for this organization
   const { data: spaces = [], isLoading } = useQuery<Space[]>({
     queryKey: ["/api/admin/organizations", organization.id, "spaces"],
   });
 
+  const deleteOrgMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("DELETE", `/api/organizations/${organization.id}`);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to delete organization");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/organizations"] });
+      toast({
+        title: "Organization deleted",
+        description: "The organization has been deleted successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to delete organization",
+        description: error.message || "Please try again",
+      });
+    },
+  });
+
+  const handleDelete = () => {
+    if (spaces.length > 0) {
+      toast({
+        variant: "destructive",
+        title: "Cannot delete organization",
+        description: "Please delete all workspaces first before deleting the organization.",
+      });
+      return;
+    }
+    
+    if (confirm(`Are you sure you want to delete "${organization.name}"? This action cannot be undone.`)) {
+      deleteOrgMutation.mutate();
+    }
+  };
+
   return (
-    <Card>
-      <CardHeader className="bg-gradient-to-br from-card to-purple-950/10">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Building2 className="h-5 w-5 text-primary" />
+    <>
+      <Card>
+        <CardHeader className="bg-gradient-to-br from-card to-purple-950/10">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Building2 className="h-5 w-5 text-primary" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <CardTitle className="truncate">{organization.name}</CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {spaces.length} workspace{spaces.length !== 1 ? 's' : ''}
+                </p>
+              </div>
             </div>
-            <div>
-              <CardTitle>{organization.name}</CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
-                {spaces.length} workspace{spaces.length !== 1 ? 's' : ''}
-              </p>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {currentUserRole === "global_admin" && (
+                <>
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    onClick={() => setEditDialogOpen(true)}
+                    data-testid={`button-edit-org-${organization.id}`}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    onClick={handleDelete}
+                    disabled={deleteOrgMutation.isPending}
+                    data-testid={`button-delete-org-${organization.id}`}
+                  >
+                    {deleteOrgMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    )}
+                  </Button>
+                </>
+              )}
+              <NewWorkspaceDialog organizationId={organization.id} organizationSlug={organization.slug} />
             </div>
           </div>
-          <NewWorkspaceDialog organizationId={organization.id} organizationSlug={organization.slug} />
-        </div>
-      </CardHeader>
+        </CardHeader>
       <CardContent className="pt-4">
         {isLoading ? (
           <div className="flex items-center justify-center py-8 text-muted-foreground">
@@ -284,6 +354,13 @@ function OrganizationCard({
         )}
       </CardContent>
     </Card>
+    
+    <EditOrganizationDialog
+      organization={organization}
+      open={editDialogOpen}
+      onOpenChange={setEditDialogOpen}
+    />
+    </>
   );
 }
 
@@ -297,64 +374,107 @@ function WorkspaceRow({
   currentUserRole: string;
 }) {
   const [, setLocation] = useLocation();
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const { toast } = useToast();
+
+  const toggleHiddenMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("PATCH", `/api/spaces/${space.id}`, {
+        hidden: !space.hidden
+      });
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/organizations", space.organizationId, "spaces"] });
+      toast({
+        title: space.hidden ? "Workspace unarchived" : "Workspace archived",
+        description: space.hidden 
+          ? "The workspace is now visible." 
+          : "The workspace has been archived and is now hidden.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to update workspace",
+        description: error.message || "Please try again",
+      });
+    },
+  });
 
   return (
-    <div 
-      className="flex items-center justify-between p-4 rounded-lg border bg-card hover-elevate transition-all"
-      data-testid={`workspace-row-${space.id}`}
-    >
-      <div className="flex-1">
-        <div className="flex items-center gap-3">
-          <div>
-            <h3 className="font-medium">{space.name}</h3>
-            <div className="flex items-center gap-2 mt-1">
-              <Badge variant="outline" className="text-xs font-mono">
-                {space.code}
-              </Badge>
-              <Badge variant={space.status === "open" ? "default" : "secondary"} className="text-xs capitalize">
-                {space.status}
-              </Badge>
-              {space.hidden && (
-                <Badge variant="secondary" className="text-xs">
-                  Hidden
+    <>
+      <div 
+        className="flex items-center justify-between p-4 rounded-lg border bg-card hover-elevate transition-all"
+        data-testid={`workspace-row-${space.id}`}
+      >
+        <div className="flex-1">
+          <div className="flex items-center gap-3">
+            <div>
+              <h3 className="font-medium">{space.name}</h3>
+              <div className="flex items-center gap-2 mt-1">
+                <Badge variant="outline" className="text-xs font-mono">
+                  {space.code}
                 </Badge>
-              )}
-              {!space.guestAllowed && (
-                <Badge variant="secondary" className="text-xs">
-                  No Guests
+                <Badge variant={space.status === "open" ? "default" : "secondary"} className="text-xs capitalize">
+                  {space.status}
                 </Badge>
-              )}
+                {space.hidden && (
+                  <Badge variant="secondary" className="text-xs">
+                    Hidden
+                  </Badge>
+                )}
+                {!space.guestAllowed && (
+                  <Badge variant="secondary" className="text-xs">
+                    No Guests
+                  </Badge>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      <div className="flex items-center gap-2">
-        <Button 
-          variant="outline" 
-          size="sm"
-          onClick={() => setLocation(`/o/${organizationSlug}/s/${space.id}/facilitate`)}
-          data-testid={`button-open-${space.id}`}
-        >
-          Open
-        </Button>
-        <Button 
-          variant="outline" 
-          size="sm"
-          data-testid={`button-edit-${space.id}`}
-        >
-          Edit
-        </Button>
-        {currentUserRole === "company_admin" && (
+        <div className="flex items-center gap-2">
           <Button 
             variant="outline" 
             size="sm"
-            data-testid={`button-archive-${space.id}`}
+            onClick={() => setLocation(`/o/${organizationSlug}/s/${space.id}/facilitate`)}
+            data-testid={`button-open-${space.id}`}
           >
-            Archive
+            Open
           </Button>
-        )}
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setEditDialogOpen(true)}
+            data-testid={`button-edit-${space.id}`}
+          >
+            Edit
+          </Button>
+          {currentUserRole === "company_admin" && (
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => toggleHiddenMutation.mutate()}
+              disabled={toggleHiddenMutation.isPending}
+              data-testid={`button-archive-${space.id}`}
+            >
+              {toggleHiddenMutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                space.hidden ? "Unarchive" : "Archive"
+              )}
+            </Button>
+          )}
+        </div>
       </div>
-    </div>
+      
+      <EditWorkspaceDialog
+        space={space}
+        organizationId={space.organizationId}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+      />
+    </>
   );
 }
 
@@ -1339,6 +1459,283 @@ function NewWorkspaceDialog({
                   </>
                 ) : (
                   "Create Workspace"
+                )}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditWorkspaceDialog({ 
+  space,
+  organizationId,
+  open,
+  onOpenChange
+}: { 
+  space: Space;
+  organizationId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { toast } = useToast();
+  
+  const form = useForm<{ name: string; purpose: string }>({
+    resolver: zodResolver(z.object({
+      name: z.string().min(1, "Name is required"),
+      purpose: z.string().min(1, "Purpose is required"),
+    })),
+    defaultValues: {
+      name: space.name,
+      purpose: space.purpose || "",
+    },
+  });
+
+  const updateSpaceMutation = useMutation({
+    mutationFn: async (data: { name: string; purpose: string }) => {
+      const response = await apiRequest("PATCH", `/api/spaces/${space.id}`, data);
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/organizations", organizationId, "spaces"] });
+      toast({
+        title: "Workspace updated",
+        description: "The workspace has been updated successfully.",
+      });
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to update workspace",
+        description: error.message || "Please try again",
+      });
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle>Edit Workspace</DialogTitle>
+          <DialogDescription>
+            Update the workspace details.
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit((data) => updateSpaceMutation.mutate(data))} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Workspace Name</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="e.g., Q1 Strategy Session" 
+                      {...field} 
+                      data-testid="input-edit-workspace-name"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="purpose"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Purpose / Description</FormLabel>
+                  <FormControl>
+                    <Textarea 
+                      placeholder="Describe the goal of this workspace..." 
+                      {...field} 
+                      data-testid="input-edit-workspace-purpose"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="flex justify-end gap-2 pt-4">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => onOpenChange(false)}
+                data-testid="button-cancel-edit-workspace"
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={updateSpaceMutation.isPending}
+                data-testid="button-submit-edit-workspace"
+              >
+                {updateSpaceMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save Changes"
+                )}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditOrganizationDialog({ 
+  organization,
+  open,
+  onOpenChange
+}: { 
+  organization: Organization;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { toast } = useToast();
+  
+  const form = useForm<z.infer<typeof insertOrganizationSchema>>({
+    resolver: zodResolver(insertOrganizationSchema),
+    defaultValues: {
+      name: organization.name,
+      slug: organization.slug,
+      logoUrl: organization.logoUrl || "",
+      primaryColor: organization.primaryColor || "",
+    },
+  });
+
+  const updateOrgMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof insertOrganizationSchema>) => {
+      const response = await apiRequest("PATCH", `/api/organizations/${organization.id}`, data);
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/organizations"] });
+      toast({
+        title: "Organization updated",
+        description: "The organization has been updated successfully.",
+      });
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to update organization",
+        description: error.message || "Please try again",
+      });
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle>Edit Organization</DialogTitle>
+          <DialogDescription>
+            Update the organization details.
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit((data) => updateOrgMutation.mutate(data))} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Organization Name</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="e.g., Acme Corporation" 
+                      {...field} 
+                      data-testid="input-edit-org-name"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="slug"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Slug (URL identifier)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="e.g., acme" 
+                      {...field} 
+                      data-testid="input-edit-org-slug"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="logoUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Logo URL (optional)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="https://example.com/logo.png" 
+                      {...field} 
+                      value={field.value || ""}
+                      data-testid="input-edit-org-logo"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="primaryColor"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Primary Color (optional)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="#8B5CF6" 
+                      {...field} 
+                      value={field.value || ""}
+                      data-testid="input-edit-org-color"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="flex justify-end gap-2 pt-4">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => onOpenChange(false)}
+                data-testid="button-cancel-edit-org"
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={updateOrgMutation.isPending}
+                data-testid="button-submit-edit-org"
+              >
+                {updateOrgMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save Changes"
                 )}
               </Button>
             </div>
