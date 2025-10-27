@@ -39,7 +39,7 @@ The design system features a dark mode with a primary purple accent, dark blue-b
 - **Admin Panel UI**: Complete admin interface with full CRUD operations:
   - Create organizations and workspaces via dialog forms
   - Edit organizations (name, slug, logo, color) and workspaces (name, purpose)
-  - Delete organizations (with workspace validation)
+  - Delete organizations (with workspace validation) and workspaces
   - Archive/unarchive workspaces (toggle hidden status)
   - Users tab for global admins to view all platform users with role badges and verification status
 
