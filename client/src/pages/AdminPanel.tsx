@@ -480,7 +480,7 @@ function WorkspaceRow({
           >
             Edit
           </Button>
-          {currentUserRole === "company_admin" && (
+          {(currentUserRole === "company_admin" || currentUserRole === "global_admin") && (
             <>
               <Button 
                 variant="outline" 
