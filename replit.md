@@ -36,7 +36,12 @@ The design system features a dark mode with a primary purple accent, dark blue-b
 - **Export System**: Facilitators and admins can export categorized snapshots of all voting modules (Pairwise, Stack Ranking, Marketplace Allocation) into text files optimized for GenAI analytics.
 - **Results Generation System**: An AI-powered system using GPT-4o and knowledge base integration to generate cohort summaries and personalized participant results with alignment scores and recommendations.
 - **Facilitator Dashboard**: A central dashboard displaying all accessible workspaces with quick actions and RBAC for viewing permissions.
-- **Admin Panel UI**: Complete admin interface with functional create dialogs for organizations and workspaces, Users tab for global admins to view all platform users with role badges and verification status.
+- **Admin Panel UI**: Complete admin interface with full CRUD operations:
+  - Create organizations and workspaces via dialog forms
+  - Edit organizations (name, slug, logo, color) and workspaces (name, purpose)
+  - Delete organizations (with workspace validation)
+  - Archive/unarchive workspaces (toggle hidden status)
+  - Users tab for global admins to view all platform users with role badges and verification status
 
 ### System Design Choices
 - **Frontend**: React, Wouter, TanStack Query, Tailwind CSS, Shadcn UI.
