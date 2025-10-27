@@ -402,6 +402,36 @@ function WorkspaceRow({
     },
   });
 
+  const deleteWorkspaceMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("DELETE", `/api/spaces/${space.id}`);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to delete workspace");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/organizations", space.organizationId, "spaces"] });
+      toast({
+        title: "Workspace deleted",
+        description: "The workspace has been deleted successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to delete workspace",
+        description: error.message || "Please try again",
+      });
+    },
+  });
+
+  const handleDelete = () => {
+    if (confirm(`Are you sure you want to delete "${space.name}"? This action cannot be undone and will delete all data associated with this workspace.`)) {
+      deleteWorkspaceMutation.mutate();
+    }
+  };
+
   return (
     <>
       <div 
@@ -451,19 +481,34 @@ function WorkspaceRow({
             Edit
           </Button>
           {currentUserRole === "company_admin" && (
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => toggleHiddenMutation.mutate()}
-              disabled={toggleHiddenMutation.isPending}
-              data-testid={`button-archive-${space.id}`}
-            >
-              {toggleHiddenMutation.isPending ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                space.hidden ? "Unarchive" : "Archive"
-              )}
-            </Button>
+            <>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => toggleHiddenMutation.mutate()}
+                disabled={toggleHiddenMutation.isPending}
+                data-testid={`button-archive-${space.id}`}
+              >
+                {toggleHiddenMutation.isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  space.hidden ? "Unarchive" : "Archive"
+                )}
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={handleDelete}
+                disabled={deleteWorkspaceMutation.isPending}
+                data-testid={`button-delete-${space.id}`}
+              >
+                {deleteWorkspaceMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                )}
+              </Button>
+            </>
           )}
         </div>
       </div>
