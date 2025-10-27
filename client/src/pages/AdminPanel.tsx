@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Building2, Plus, LogOut, Loader2, Mail, Clock, Check, X, BookOpen, FileStack, Activity } from "lucide-react";
+import { Building2, Plus, LogOut, Loader2, Mail, Clock, Check, X, BookOpen, FileStack, Activity, Users, Edit } from "lucide-react";
 import type { Organization, Space, User, AccessRequest, WorkspaceTemplate } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
@@ -12,6 +12,14 @@ import { useState } from "react";
 import { KnowledgeBaseManager } from "@/components/KnowledgeBaseManager";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { insertOrganizationSchema, createSpaceApiSchema } from "@shared/schema";
+import { z } from "zod";
 
 export default function AdminPanel() {
   const [, setLocation] = useLocation();
@@ -114,6 +122,12 @@ export default function AdminPanel() {
               <Building2 className="h-4 w-4 mr-2" />
               Workspaces
             </TabsTrigger>
+            {currentUser.role === "global_admin" && (
+              <TabsTrigger value="users" data-testid="tab-users">
+                <Users className="h-4 w-4 mr-2" />
+                Users
+              </TabsTrigger>
+            )}
             <TabsTrigger value="access-requests" data-testid="tab-access-requests">
               <Mail className="h-4 w-4 mr-2" />
               Access Requests
@@ -135,10 +149,7 @@ export default function AdminPanel() {
           <TabsContent value="workspaces" className="space-y-6">
             <div className="flex items-center justify-end">
               {currentUser.role === "global_admin" && (
-                <Button data-testid="button-create-organization">
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Organization
-                </Button>
+                <NewOrganizationDialog />
               )}
             </div>
 
@@ -159,6 +170,12 @@ export default function AdminPanel() {
                   />
                 ))}
               </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="users">
+            {currentUser.role === "global_admin" && (
+              <UsersTab />
             )}
           </TabsContent>
 
@@ -239,10 +256,7 @@ function OrganizationCard({
               </p>
             </div>
           </div>
-          <Button size="sm" data-testid={`button-create-workspace-${organization.slug}`}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Workspace
-          </Button>
+          <NewWorkspaceDialog organizationId={organization.id} organizationSlug={organization.slug} />
         </div>
       </CardHeader>
       <CardContent className="pt-4">
@@ -1038,6 +1052,383 @@ function AiUsageTab({
           )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function NewOrganizationDialog() {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  
+  const form = useForm<z.infer<typeof insertOrganizationSchema>>({
+    resolver: zodResolver(insertOrganizationSchema),
+    defaultValues: {
+      name: "",
+      slug: "",
+      logoUrl: undefined,
+      primaryColor: undefined,
+    },
+  });
+
+  const createOrgMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof insertOrganizationSchema>) => {
+      const response = await apiRequest("POST", "/api/organizations", data);
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/organizations"] });
+      toast({
+        title: "Organization created",
+        description: "The new organization has been created successfully.",
+      });
+      setOpen(false);
+      form.reset();
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to create organization",
+        description: error.message || "Please try again",
+      });
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button data-testid="button-create-organization">
+          <Plus className="h-4 w-4 mr-2" />
+          New Organization
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle>Create New Organization</DialogTitle>
+          <DialogDescription>
+            Add a new organization to the platform.
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit((data) => createOrgMutation.mutate(data))} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Organization Name</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="e.g., Acme Corporation" 
+                      {...field} 
+                      data-testid="input-org-name"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="slug"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Slug (URL identifier)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="e.g., acme" 
+                      {...field} 
+                      data-testid="input-org-slug"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="logoUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Logo URL (optional)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="https://example.com/logo.png" 
+                      {...field} 
+                      value={field.value || ""}
+                      data-testid="input-org-logo"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="primaryColor"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Primary Color (optional)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="#8B5CF6" 
+                      {...field} 
+                      value={field.value || ""}
+                      data-testid="input-org-color"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="flex justify-end gap-2 pt-4">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setOpen(false)}
+                data-testid="button-cancel-org"
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={createOrgMutation.isPending}
+                data-testid="button-submit-org"
+              >
+                {createOrgMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  "Create Organization"
+                )}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function NewWorkspaceDialog({ 
+  organizationId, 
+  organizationSlug 
+}: { 
+  organizationId: string;
+  organizationSlug: string;
+}) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  
+  const form = useForm<z.infer<typeof createSpaceApiSchema>>({
+    resolver: zodResolver(createSpaceApiSchema),
+    defaultValues: {
+      organizationId,
+      name: "",
+      purpose: "",
+      guestAllowed: false,
+      hidden: false,
+      status: "draft",
+      sessionMode: "live",
+      icon: "brain",
+    },
+  });
+
+  const createSpaceMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof createSpaceApiSchema>) => {
+      const response = await apiRequest("POST", "/api/spaces", data);
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/organizations", organizationId, "spaces"] });
+      toast({
+        title: "Workspace created",
+        description: "The new workspace has been created successfully.",
+      });
+      setOpen(false);
+      form.reset({
+        organizationId,
+        name: "",
+        purpose: "",
+        guestAllowed: false,
+        hidden: false,
+        status: "draft",
+        sessionMode: "live",
+        icon: "brain",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to create workspace",
+        description: error.message || "Please try again",
+      });
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" data-testid={`button-create-workspace-${organizationSlug}`}>
+          <Plus className="h-4 w-4 mr-2" />
+          New Workspace
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle>Create New Workspace</DialogTitle>
+          <DialogDescription>
+            Add a new collaborative workspace for this organization.
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit((data) => createSpaceMutation.mutate(data))} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Workspace Name</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="e.g., Q1 Strategy Session" 
+                      {...field} 
+                      data-testid="input-workspace-name"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="purpose"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Purpose / Description</FormLabel>
+                  <FormControl>
+                    <Textarea 
+                      placeholder="Describe the goal of this workspace..." 
+                      {...field} 
+                      data-testid="input-workspace-purpose"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="flex justify-end gap-2 pt-4">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setOpen(false)}
+                data-testid="button-cancel-workspace"
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={createSpaceMutation.isPending}
+                data-testid="button-submit-workspace"
+              >
+                {createSpaceMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  "Create Workspace"
+                )}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function UsersTab() {
+  const { data: users = [], isLoading } = useQuery<User[]>({
+    queryKey: ["/api/admin/users"],
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-semibold">All Users</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            {users.length} user{users.length !== 1 ? 's' : ''} registered on the platform
+          </p>
+        </div>
+      </div>
+
+      {users.length === 0 ? (
+        <Card>
+          <CardContent className="pt-6 text-center text-muted-foreground">
+            <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>No users found</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="space-y-3">
+              {users.map((user) => (
+                <div 
+                  key={user.id} 
+                  className="flex items-center justify-between p-4 rounded-lg border bg-card"
+                  data-testid={`user-row-${user.id}`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium truncate" data-testid={`user-name-${user.id}`}>
+                          {user.displayName || user.username}
+                        </h3>
+                        <p className="text-sm text-muted-foreground truncate" data-testid={`user-email-${user.id}`}>
+                          {user.email}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge 
+                      variant={user.role === "global_admin" ? "default" : user.role === "company_admin" ? "secondary" : "outline"}
+                      data-testid={`user-role-${user.id}`}
+                    >
+                      {user.role === "global_admin" ? "Global Admin" : 
+                       user.role === "company_admin" ? "Company Admin" : 
+                       user.role === "facilitator" ? "Facilitator" : "User"}
+                    </Badge>
+                    {user.emailVerified ? (
+                      <Badge variant="outline" className="text-green-600">
+                        <Check className="h-3 w-3 mr-1" />
+                        Verified
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-amber-600">
+                        <Clock className="h-3 w-3 mr-1" />
+                        Pending
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
