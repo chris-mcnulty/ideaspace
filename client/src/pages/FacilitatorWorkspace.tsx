@@ -89,6 +89,8 @@ export default function FacilitatorWorkspace() {
         // Invalidate notes query to refetch latest data
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/notes`] });
         if (message.type === 'categories_updated') {
+          // Also invalidate categories query since AI may have created new categories
+          queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/categories`] });
           toast({
             title: "AI Categorization Complete",
             description: message.data?.summary || "Notes have been organized into categories",
