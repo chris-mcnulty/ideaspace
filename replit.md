@@ -38,9 +38,10 @@ The design system features a dark mode with a primary purple accent, dark blue-b
 - **Facilitator Dashboard**: A central dashboard displaying all accessible workspaces with quick actions and RBAC for viewing permissions.
 - **Admin Panel UI**: Complete admin interface with full CRUD operations:
   - Create organizations and workspaces via dialog forms
-  - Edit organizations (name, slug, logo, color) and workspaces (name, purpose)
+  - Edit organizations (name, slug, logo, color) and workspaces (name, purpose, guest access)
   - Delete organizations (with workspace validation) and workspaces
   - Archive/unarchive workspaces (toggle hidden status)
+  - Configure guest access via checkbox in create/edit workspace dialogs
   - Users tab for global admins to view all platform users with role badges and verification status
 
 ### System Design Choices
