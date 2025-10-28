@@ -91,6 +91,14 @@ export interface IStorage {
   createSpace(space: InsertSpace): Promise<Space>;
   updateSpace(id: string, space: Partial<InsertSpace>): Promise<Space | undefined>;
   deleteSpace(id: string): Promise<boolean>;
+  getSpaceDependencies(id: string): Promise<{
+    notesCount: number;
+    votesCount: number;
+    rankingsCount: number;
+    marketplaceAllocationsCount: number;
+    participantsCount: number;
+    accessRequestsCount: number;
+  }>;
 
   // Company Admins (association)
   getCompanyAdminsByOrganization(organizationId: string): Promise<CompanyAdmin[]>;
@@ -305,6 +313,33 @@ export class DbStorage implements IStorage {
   async deleteSpace(id: string): Promise<boolean> {
     const result = await db.delete(spaces).where(eq(spaces.id, id));
     return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async getSpaceDependencies(id: string): Promise<{
+    notesCount: number;
+    votesCount: number;
+    rankingsCount: number;
+    marketplaceAllocationsCount: number;
+    participantsCount: number;
+    accessRequestsCount: number;
+  }> {
+    const [notesResult, votesResult, rankingsResult, marketplaceResult, participantsResult, accessRequestsResult] = await Promise.all([
+      db.select().from(notes).where(eq(notes.spaceId, id)),
+      db.select().from(votes).where(eq(votes.spaceId, id)),
+      db.select().from(rankings).where(eq(rankings.spaceId, id)),
+      db.select().from(marketplaceAllocations).where(eq(marketplaceAllocations.spaceId, id)),
+      db.select().from(participants).where(eq(participants.spaceId, id)),
+      db.select().from(accessRequests).where(eq(accessRequests.spaceId, id)),
+    ]);
+
+    return {
+      notesCount: notesResult.length,
+      votesCount: votesResult.length,
+      rankingsCount: rankingsResult.length,
+      marketplaceAllocationsCount: marketplaceResult.length,
+      participantsCount: participantsResult.length,
+      accessRequestsCount: accessRequestsResult.length,
+    };
   }
 
   // Participants

@@ -805,6 +805,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Protected: Get workspace dependencies (for delete confirmation)
+  app.get("/api/spaces/:id/dependencies", requireCompanyAdmin, async (req, res) => {
+    try {
+      const dependencies = await storage.getSpaceDependencies(req.params.id);
+      res.json(dependencies);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch workspace dependencies" });
+    }
+  });
+
   // Protected: Require company admin or above to delete spaces
   app.delete("/api/spaces/:id", requireCompanyAdmin, async (req, res) => {
     try {
@@ -813,7 +823,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Space not found" });
       }
       res.status(204).send();
-    } catch (error) {
+    } catch (error: any) {
+      // Check if it's a foreign key constraint error
+      if (error.code === '23503' || error.message?.includes('foreign key')) {
+        return res.status(400).json({ 
+          error: "Cannot delete workspace with existing data. Please archive it instead or delete all associated data first." 
+        });
+      }
       res.status(500).json({ error: "Failed to delete space" });
     }
   });
