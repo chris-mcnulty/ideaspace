@@ -14,6 +14,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -43,7 +50,7 @@ import {
   Download,
   Trophy,
 } from "lucide-react";
-import type { Organization, Space, Note, Participant } from "@shared/schema";
+import type { Organization, Space, Note, Participant, Category } from "@shared/schema";
 import { Leaderboard } from "@/components/Leaderboard";
 import { KnowledgeBaseManager } from "@/components/KnowledgeBaseManager";
 
@@ -65,6 +72,9 @@ export default function FacilitatorWorkspace() {
   const [rewriteVariations, setRewriteVariations] = useState<Array<{ version: number; content: string }>>([]);
   const [editDialogNote, setEditDialogNote] = useState<Note | null>(null);
   const [editNoteContent, setEditNoteContent] = useState("");
+  const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
+  const [categoryName, setCategoryName] = useState("");
+  const [categoryColor, setCategoryColor] = useState("#8B5CF6");
 
   // WebSocket connection for real-time updates
   const handleWebSocketMessage = useCallback((message: { type: string; data: any }) => {
@@ -84,6 +94,12 @@ export default function FacilitatorWorkspace() {
             description: message.data?.summary || "Notes have been organized into categories",
           });
         }
+        break;
+      case 'category_created':
+      case 'category_updated':
+      case 'category_deleted':
+        // Invalidate categories query to refetch latest data
+        queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/categories`] });
         break;
       case 'participant_joined':
       case 'participant_left':
@@ -120,6 +136,12 @@ export default function FacilitatorWorkspace() {
   // Fetch participants
   const { data: participants = [] } = useQuery<Participant[]>({
     queryKey: [`/api/spaces/${params.space}/participants`],
+    enabled: !!params.space,
+  });
+
+  // Fetch manual categories
+  const { data: manualCategories = [] } = useQuery<Category[]>({
+    queryKey: [`/api/spaces/${params.space}/categories`],
     enabled: !!params.space,
   });
 
@@ -337,6 +359,60 @@ export default function FacilitatorWorkspace() {
       toast({
         variant: "destructive",
         title: "AI Categorization Failed",
+        description: error.message,
+      });
+    },
+  });
+
+  // Create category mutation
+  const createCategoryMutation = useMutation({
+    mutationFn: async ({ name, color }: { name: string; color: string }) => {
+      const response = await apiRequest("POST", `/api/spaces/${params.space}/categories`, {
+        name,
+        color,
+      });
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/categories`] });
+      setIsCategoryDialogOpen(false);
+      setCategoryName("");
+      setCategoryColor("#8B5CF6");
+      toast({
+        title: "Category created",
+        description: "The category has been added successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to create category",
+        description: error.message,
+      });
+    },
+  });
+
+  // Update note category mutation
+  const updateNoteCategoryMutation = useMutation({
+    mutationFn: async ({ noteId, categoryId }: { noteId: string; categoryId: string | null }) => {
+      // Find the category to get its name
+      const category = categoryId ? manualCategories.find(c => c.id === categoryId) : null;
+      const response = await apiRequest("PATCH", `/api/notes/${noteId}`, {
+        category: category?.name || null,
+      });
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/notes`] });
+      toast({
+        title: "Category updated",
+        description: "Note category has been changed",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to update category",
         description: error.message,
       });
     },
@@ -714,6 +790,58 @@ export default function FacilitatorWorkspace() {
                   <Sparkles className="mr-2 h-4 w-4" />
                   {categorizeMutation.isPending ? "Categorizing..." : "AI Categorize"}
                 </Button>
+                <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" data-testid="button-create-category">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create Category
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Create Category</DialogTitle>
+                      <DialogDescription>
+                        Create a new category for organizing notes manually
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="category-name">Category Name</Label>
+                        <Input
+                          id="category-name"
+                          value={categoryName}
+                          onChange={(e) => setCategoryName(e.target.value)}
+                          placeholder="Enter category name"
+                          data-testid="input-category-name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="category-color">Color</Label>
+                        <Input
+                          id="category-color"
+                          type="color"
+                          value={categoryColor}
+                          onChange={(e) => setCategoryColor(e.target.value)}
+                          data-testid="input-category-color"
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        onClick={() =>
+                          createCategoryMutation.mutate({
+                            name: categoryName,
+                            color: categoryColor,
+                          })
+                        }
+                        disabled={!categoryName.trim() || createCategoryMutation.isPending}
+                        data-testid="button-submit-category"
+                      >
+                        {createCategoryMutation.isPending ? "Creating..." : "Create"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
                 <Dialog open={isAddNoteDialogOpen} onOpenChange={setIsAddNoteDialogOpen}>
                   <DialogTrigger asChild>
                     <Button data-testid="button-add-note">
@@ -994,6 +1122,42 @@ export default function FacilitatorWorkspace() {
                                 <Trash2 className="h-3 w-3 text-destructive" />
                               </Button>
                             </div>
+                            {manualCategories.length > 0 && (
+                              <div onClick={(e) => e.stopPropagation()}>
+                                <Select
+                                  value={
+                                    manualCategories.find(c => c.name === note.category)?.id || "none"
+                                  }
+                                  onValueChange={(value) => {
+                                    updateNoteCategoryMutation.mutate({
+                                      noteId: note.id,
+                                      categoryId: value === "none" ? null : value,
+                                    });
+                                  }}
+                                >
+                                  <SelectTrigger
+                                    className="h-8 text-xs"
+                                    data-testid={`select-category-${note.id}`}
+                                  >
+                                    <SelectValue placeholder="Assign category" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">No Category</SelectItem>
+                                    {manualCategories.map((cat) => (
+                                      <SelectItem key={cat.id} value={cat.id}>
+                                        <div className="flex items-center gap-2">
+                                          <div
+                                            className="h-3 w-3 rounded-full"
+                                            style={{ backgroundColor: cat.color }}
+                                          />
+                                          {cat.name}
+                                        </div>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
                           </CardContent>
                         </Card>
                       ))}
