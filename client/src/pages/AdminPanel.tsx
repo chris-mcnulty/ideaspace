@@ -376,6 +376,7 @@ function WorkspaceRow({
 }) {
   const [, setLocation] = useLocation();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const { toast } = useToast();
 
   const toggleHiddenMutation = useMutation({
@@ -402,36 +403,6 @@ function WorkspaceRow({
       });
     },
   });
-
-  const deleteWorkspaceMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest("DELETE", `/api/spaces/${space.id}`);
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to delete workspace");
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/organizations", space.organizationId, "spaces"] });
-      toast({
-        title: "Workspace deleted",
-        description: "The workspace has been deleted successfully.",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        variant: "destructive",
-        title: "Failed to delete workspace",
-        description: error.message || "Please try again",
-      });
-    },
-  });
-
-  const handleDelete = () => {
-    if (confirm(`Are you sure you want to delete "${space.name}"? This action cannot be undone and will delete all data associated with this workspace.`)) {
-      deleteWorkspaceMutation.mutate();
-    }
-  };
 
   return (
     <>
@@ -499,15 +470,10 @@ function WorkspaceRow({
               <Button 
                 variant="ghost" 
                 size="icon"
-                onClick={handleDelete}
-                disabled={deleteWorkspaceMutation.isPending}
+                onClick={() => setDeleteDialogOpen(true)}
                 data-testid={`button-delete-${space.id}`}
               >
-                {deleteWorkspaceMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                )}
+                <Trash2 className="h-4 w-4 text-destructive" />
               </Button>
             </>
           )}
@@ -519,6 +485,12 @@ function WorkspaceRow({
         organizationId={space.organizationId}
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
+      />
+      
+      <DeleteWorkspaceDialog
+        space={space}
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
       />
     </>
   );
@@ -1680,6 +1652,179 @@ function EditWorkspaceDialog({
             </div>
           </form>
         </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteWorkspaceDialog({
+  space,
+  open,
+  onOpenChange
+}: {
+  space: Space;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { toast } = useToast();
+
+  // Fetch workspace dependencies
+  const { data: dependencies, isLoading: loadingDeps } = useQuery<{
+    notesCount: number;
+    votesCount: number;
+    rankingsCount: number;
+    marketplaceAllocationsCount: number;
+    participantsCount: number;
+    accessRequestsCount: number;
+  }>({
+    queryKey: ["/api/spaces", space.id, "dependencies"],
+    enabled: open,
+  });
+
+  const deleteWorkspaceMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("DELETE", `/api/spaces/${space.id}`);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to delete workspace");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/organizations", space.organizationId, "spaces"] });
+      toast({
+        title: "Workspace deleted",
+        description: "The workspace has been permanently deleted.",
+      });
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to delete workspace",
+        description: error.message || "Please try again",
+      });
+    },
+  });
+
+  const totalDependencies = dependencies 
+    ? dependencies.notesCount + dependencies.votesCount + dependencies.rankingsCount + dependencies.marketplaceAllocationsCount 
+    : 0;
+
+  const hasDependencies = totalDependencies > 0;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Trash2 className="h-5 w-5 text-destructive" />
+            Delete Workspace
+          </DialogTitle>
+          <DialogDescription>
+            {loadingDeps ? (
+              "Checking workspace data..."
+            ) : hasDependencies ? (
+              "This workspace contains data that will be permanently deleted."
+            ) : (
+              "Are you sure you want to delete this workspace?"
+            )}
+          </DialogDescription>
+        </DialogHeader>
+
+        {loadingDeps ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="rounded-lg border bg-muted/50 p-4">
+              <p className="font-medium mb-2">{space.name}</p>
+              <p className="text-sm text-muted-foreground">Code: {space.code}</p>
+            </div>
+
+            {hasDependencies && (
+              <>
+                <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4">
+                  <p className="font-medium text-destructive mb-3">⚠️ Warning: This workspace contains data</p>
+                  <div className="space-y-2 text-sm">
+                    {dependencies.notesCount > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Ideas/Notes:</span>
+                        <span className="font-medium">{dependencies.notesCount}</span>
+                      </div>
+                    )}
+                    {dependencies.votesCount > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Votes:</span>
+                        <span className="font-medium">{dependencies.votesCount}</span>
+                      </div>
+                    )}
+                    {dependencies.rankingsCount > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Rankings:</span>
+                        <span className="font-medium">{dependencies.rankingsCount}</span>
+                      </div>
+                    )}
+                    {dependencies.marketplaceAllocationsCount > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Marketplace Allocations:</span>
+                        <span className="font-medium">{dependencies.marketplaceAllocationsCount}</span>
+                      </div>
+                    )}
+                    {dependencies.participantsCount > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Participants:</span>
+                        <span className="font-medium">{dependencies.participantsCount}</span>
+                      </div>
+                    )}
+                    {dependencies.accessRequestsCount > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Access Requests:</span>
+                        <span className="font-medium">{dependencies.accessRequestsCount}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-lg border bg-primary/5 p-4">
+                  <p className="text-sm font-medium mb-1">💡 Consider archiving instead</p>
+                  <p className="text-sm text-muted-foreground">
+                    Archiving hides the workspace but preserves all data. You can unarchive it later if needed.
+                  </p>
+                </div>
+              </>
+            )}
+
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                data-testid="button-cancel-delete-workspace"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => deleteWorkspaceMutation.mutate()}
+                disabled={deleteWorkspaceMutation.isPending}
+                data-testid="button-confirm-delete-workspace"
+              >
+                {deleteWorkspaceMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Permanently
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
