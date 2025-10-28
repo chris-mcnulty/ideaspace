@@ -87,9 +87,10 @@ export const notes = pgTable("notes", {
   spaceId: varchar("space_id").notNull().references(() => spaces.id),
   participantId: varchar("participant_id").notNull().references(() => participants.id),
   content: text("content").notNull(),
-  category: text("category"), // AI-generated category label
-  isAiCategory: boolean("is_ai_category").notNull().default(false),
-  manualCategoryId: varchar("manual_category_id").references(() => categories.id), // FK to manual categories
+  category: text("category"), // Deprecated: AI-generated category label (use manualCategoryId instead)
+  isAiCategory: boolean("is_ai_category").notNull().default(false), // Deprecated
+  manualCategoryId: varchar("manual_category_id").references(() => categories.id), // FK to categories (used by both AI and manual)
+  isManualOverride: boolean("is_manual_override").notNull().default(false), // True when facilitator manually assigns category
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
