@@ -1799,9 +1799,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Fetch all notes for this space
-      const notes = await storage.getNotesBySpace(spaceId);
-      if (notes.length === 0) {
-        return res.status(400).json({ error: "No notes to categorize" });
+      const allNotes = await storage.getNotesBySpace(spaceId);
+      
+      // Filter to only uncategorized notes (no manual category assigned and not manually overridden)
+      const uncategorizedNotes = allNotes.filter(
+        note => note.manualCategoryId === null && note.isManualOverride === false
+      );
+      
+      if (uncategorizedNotes.length === 0) {
+        return res.status(400).json({ 
+          error: "No uncategorized notes to process",
+          message: "All notes have already been categorized or manually assigned"
+        });
       }
 
       // Call GPT-5 to categorize notes with usage tracking context
@@ -1809,7 +1818,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const user = req.user as User;
         result = await categorizeNotes(
-          notes.map(n => ({ id: n.id, content: n.content })),
+          uncategorizedNotes.map(n => ({ id: n.id, content: n.content })),
           {
             organizationId: space.organizationId,
             spaceId: space.id,
@@ -1827,19 +1836,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Verify all notes were categorized
-      const noteIds = new Set(notes.map(n => n.id));
-      const categorizedIds = new Set(result.categories.map(c => c.noteId));
+      // Get existing categories for this workspace
+      const existingCategories = await storage.getCategoriesBySpace(spaceId);
+      const categoryMap = new Map<string, string>(); // name -> id
+      existingCategories.forEach(cat => {
+        categoryMap.set(cat.name.toLowerCase(), cat.id);
+      });
       
-      if (categorizedIds.size !== noteIds.size) {
-        console.warn(`Warning: ${noteIds.size} notes but only ${categorizedIds.size} categorized`);
+      // Map of unique AI-suggested category names
+      const uniqueAiCategories = new Set(result.categories.map(c => c.category));
+      const newCategoriesToCreate: string[] = [];
+      
+      // Identify which categories need to be created
+      uniqueAiCategories.forEach(categoryName => {
+        if (!categoryMap.has(categoryName.toLowerCase())) {
+          newCategoriesToCreate.push(categoryName);
+        }
+      });
+      
+      // Create new categories
+      const categoryColors = ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#6366F1'];
+      for (let i = 0; i < newCategoriesToCreate.length; i++) {
+        const categoryName = newCategoriesToCreate[i];
+        const color = categoryColors[i % categoryColors.length];
+        
+        const newCategory = await storage.createCategory({
+          spaceId,
+          name: categoryName,
+          color,
+        });
+        
+        categoryMap.set(categoryName.toLowerCase(), newCategory.id);
       }
       
-      // Update notes with AI-generated categories
+      // Update notes with manualCategoryId (FK reference)
       const updateResults = await Promise.allSettled(
-        result.categories.map(({ noteId, category }) => 
-          storage.updateNote(noteId, { category, isAiCategory: true })
-        )
+        result.categories.map(({ noteId, category: categoryName }) => {
+          const categoryId = categoryMap.get(categoryName.toLowerCase());
+          if (!categoryId) {
+            console.error(`Category ID not found for ${categoryName}`);
+            return Promise.reject(new Error(`Category ID not found for ${categoryName}`));
+          }
+          
+          return storage.updateNote(noteId, { 
+            manualCategoryId: categoryId,
+            // Do NOT set isManualOverride - AI categorization doesn't trigger override flag
+          });
+        })
       );
       
       const failedUpdates = updateResults.filter(r => r.status === 'rejected');
@@ -1852,17 +1895,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         type: "categories_updated", 
         data: { 
           spaceId, 
-          categories: result.categories,
           summary: result.summary,
-          totalNotes: notes.length,
-          categorizedNotes: result.categories.length
+          totalNotes: allNotes.length,
+          categorizedNotes: result.categories.length,
+          newCategoriesCreated: newCategoriesToCreate.length
         } 
       });
       
       res.json({ 
         success: true, 
         categoriesApplied: result.categories.length,
-        totalNotes: notes.length,
+        totalNotes: allNotes.length,
+        uncategorizedNotes: uncategorizedNotes.length,
+        newCategoriesCreated: newCategoriesToCreate.length,
         summary: result.summary 
       });
     } catch (error) {
