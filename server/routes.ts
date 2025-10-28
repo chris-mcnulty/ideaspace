@@ -1573,6 +1573,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const data = insertNoteSchema.partial().parse(req.body);
+      
+      // If manualCategoryId is being updated, set isManualOverride flag
+      if ('manualCategoryId' in data) {
+        data.isManualOverride = true;
+      }
+      
       const note = await storage.updateNote(req.params.id, data);
       if (!note) {
         return res.status(404).json({ error: "Note not found" });
