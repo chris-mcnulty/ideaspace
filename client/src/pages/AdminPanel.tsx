@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertOrganizationSchema, createSpaceApiSchema } from "@shared/schema";
@@ -1483,6 +1484,29 @@ function NewWorkspaceDialog({
                 </FormItem>
               )}
             />
+            <FormField
+              control={form.control}
+              name="guestAllowed"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      data-testid="checkbox-guest-allowed"
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>
+                      Allow Guest Access
+                    </FormLabel>
+                    <p className="text-sm text-muted-foreground">
+                      Anonymous users can join this workspace without creating an account
+                    </p>
+                  </div>
+                </FormItem>
+              )}
+            />
             <div className="flex justify-end gap-2 pt-4">
               <Button 
                 type="button" 
@@ -1527,19 +1551,21 @@ function EditWorkspaceDialog({
 }) {
   const { toast } = useToast();
   
-  const form = useForm<{ name: string; purpose: string }>({
+  const form = useForm<{ name: string; purpose: string; guestAllowed: boolean }>({
     resolver: zodResolver(z.object({
       name: z.string().min(1, "Name is required"),
       purpose: z.string().min(1, "Purpose is required"),
+      guestAllowed: z.boolean(),
     })),
     defaultValues: {
       name: space.name,
       purpose: space.purpose || "",
+      guestAllowed: space.guestAllowed ?? false,
     },
   });
 
   const updateSpaceMutation = useMutation({
-    mutationFn: async (data: { name: string; purpose: string }) => {
+    mutationFn: async (data: { name: string; purpose: string; guestAllowed: boolean }) => {
       const response = await apiRequest("PATCH", `/api/spaces/${space.id}`, data);
       return await response.json();
     },
@@ -1602,6 +1628,29 @@ function EditWorkspaceDialog({
                     />
                   </FormControl>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="guestAllowed"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      data-testid="checkbox-edit-guest-allowed"
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>
+                      Allow Guest Access
+                    </FormLabel>
+                    <p className="text-sm text-muted-foreground">
+                      Anonymous users can join this workspace without creating an account
+                    </p>
+                  </div>
                 </FormItem>
               )}
             />
