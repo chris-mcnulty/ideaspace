@@ -74,6 +74,14 @@ export const participants = pgTable("participants", {
   joinedAt: timestamp("joined_at").defaultNow().notNull(),
 });
 
+export const categories = pgTable("categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  spaceId: varchar("space_id").notNull().references(() => spaces.id),
+  name: text("name").notNull(),
+  color: text("color").notNull().default("blue"), // Color identifier for UI
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const notes = pgTable("notes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   spaceId: varchar("space_id").notNull().references(() => spaces.id),
@@ -270,6 +278,11 @@ export const insertParticipantSchema = createInsertSchema(participants).omit({
   joinedAt: true,
 });
 
+export const insertCategorySchema = createInsertSchema(categories).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertNoteSchema = createInsertSchema(notes).omit({
   id: true,
   createdAt: true,
@@ -367,6 +380,9 @@ export type InsertSpace = z.infer<typeof insertSpaceSchema>;
 
 export type Participant = typeof participants.$inferSelect;
 export type InsertParticipant = z.infer<typeof insertParticipantSchema>;
+
+export type Category = typeof categories.$inferSelect;
+export type InsertCategory = z.infer<typeof insertCategorySchema>;
 
 export type Note = typeof notes.$inferSelect;
 export type InsertNote = z.infer<typeof insertNoteSchema>;

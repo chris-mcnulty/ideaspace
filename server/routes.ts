@@ -5,7 +5,7 @@ import passport from "passport";
 import multer from "multer";
 import { storage } from "./storage";
 import { db } from "./db";
-import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, organizations } from "@shared/schema";
+import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, organizations } from "@shared/schema";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { categorizeNotes, rewriteCard } from "./services/openai";
@@ -1652,6 +1652,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete notes" });
+    }
+  });
+
+  // Get all categories for a workspace
+  app.get("/api/spaces/:spaceId/categories", async (req, res) => {
+    try {
+      const categories = await storage.getCategoriesBySpace(req.params.spaceId);
+      res.json(categories);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch categories" });
+    }
+  });
+
+  // Protected: Facilitators can create categories
+  app.post("/api/spaces/:spaceId/categories", requireFacilitator, async (req, res) => {
+    try {
+      const data = insertCategorySchema.parse({
+        ...req.body,
+        spaceId: req.params.spaceId,
+      });
+      const category = await storage.createCategory(data);
+      
+      // Broadcast to WebSocket clients
+      broadcast({ type: "category_created", data: category });
+      
+      res.status(201).json(category);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create category" });
+    }
+  });
+
+  // Protected: Facilitators can update categories
+  app.patch("/api/categories/:id", requireFacilitator, async (req, res) => {
+    try {
+      const data = insertCategorySchema.partial().parse(req.body);
+      const category = await storage.updateCategory(req.params.id, data);
+      if (!category) {
+        return res.status(404).json({ error: "Category not found" });
+      }
+      
+      // Broadcast to WebSocket clients
+      broadcast({ type: "category_updated", data: category });
+      
+      res.json(category);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Failed to update category" });
+    }
+  });
+
+  // Protected: Facilitators can delete categories
+  app.delete("/api/categories/:id", requireFacilitator, async (req, res) => {
+    try {
+      const deleted = await storage.deleteCategory(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Category not found" });
+      }
+      
+      // Broadcast to WebSocket clients
+      broadcast({ type: "category_deleted", data: { id: req.params.id } });
+      
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete category" });
     }
   });
 

@@ -8,6 +8,8 @@ import {
   type InsertSpace,
   type Participant,
   type InsertParticipant,
+  type Category,
+  type InsertCategory,
   type Note,
   type InsertNote,
   type Vote,
@@ -43,6 +45,7 @@ import {
   users,
   spaces,
   participants,
+  categories,
   notes,
   votes,
   rankings,
@@ -118,6 +121,13 @@ export interface IStorage {
   updateNote(id: string, note: Partial<InsertNote>): Promise<Note | undefined>;
   deleteNote(id: string): Promise<boolean>;
   deleteNotes(ids: string[]): Promise<boolean>;
+
+  // Categories
+  getCategory(id: string): Promise<Category | undefined>;
+  getCategoriesBySpace(spaceId: string): Promise<Category[]>;
+  createCategory(category: InsertCategory): Promise<Category>;
+  updateCategory(id: string, category: Partial<InsertCategory>): Promise<Category | undefined>;
+  deleteCategory(id: string): Promise<boolean>;
 
   // Votes
   getVotesBySpace(spaceId: string): Promise<Vote[]>;
@@ -370,6 +380,31 @@ export class DbStorage implements IStorage {
     const result = await db.delete(notes).where(
       ids.map(id => eq(notes.id, id)).reduce((a, b) => and(a, b) as any)
     );
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Categories
+  async getCategory(id: string): Promise<Category | undefined> {
+    const [category] = await db.select().from(categories).where(eq(categories.id, id)).limit(1);
+    return category;
+  }
+
+  async getCategoriesBySpace(spaceId: string): Promise<Category[]> {
+    return db.select().from(categories).where(eq(categories.spaceId, spaceId)).orderBy(desc(categories.createdAt));
+  }
+
+  async createCategory(category: InsertCategory): Promise<Category> {
+    const [created] = await db.insert(categories).values(category).returning();
+    return created;
+  }
+
+  async updateCategory(id: string, category: Partial<InsertCategory>): Promise<Category | undefined> {
+    const [updated] = await db.update(categories).set(category).where(eq(categories.id, id)).returning();
+    return updated;
+  }
+
+  async deleteCategory(id: string): Promise<boolean> {
+    const result = await db.delete(categories).where(eq(categories.id, id));
     return result.rowCount ? result.rowCount > 0 : false;
   }
 
