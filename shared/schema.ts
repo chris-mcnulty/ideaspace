@@ -87,8 +87,9 @@ export const notes = pgTable("notes", {
   spaceId: varchar("space_id").notNull().references(() => spaces.id),
   participantId: varchar("participant_id").notNull().references(() => participants.id),
   content: text("content").notNull(),
-  category: text("category"),
+  category: text("category"), // AI-generated category label
   isAiCategory: boolean("is_ai_category").notNull().default(false),
+  manualCategoryId: varchar("manual_category_id").references(() => categories.id), // FK to manual categories
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

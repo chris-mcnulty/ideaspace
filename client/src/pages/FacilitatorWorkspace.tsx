@@ -395,10 +395,8 @@ export default function FacilitatorWorkspace() {
   // Update note category mutation
   const updateNoteCategoryMutation = useMutation({
     mutationFn: async ({ noteId, categoryId }: { noteId: string; categoryId: string | null }) => {
-      // Find the category to get its name
-      const category = categoryId ? manualCategories.find(c => c.id === categoryId) : null;
       const response = await apiRequest("PATCH", `/api/notes/${noteId}`, {
-        category: category?.name || null,
+        manualCategoryId: categoryId,
       });
       return await response.json();
     },
@@ -1125,9 +1123,7 @@ export default function FacilitatorWorkspace() {
                             {manualCategories.length > 0 && (
                               <div onClick={(e) => e.stopPropagation()}>
                                 <Select
-                                  value={
-                                    manualCategories.find(c => c.name === note.category)?.id || "none"
-                                  }
+                                  value={note.manualCategoryId || "none"}
                                   onValueChange={(value) => {
                                     updateNoteCategoryMutation.mutate({
                                       noteId: note.id,
