@@ -1742,7 +1742,7 @@ function DeleteWorkspaceDialog({
               <p className="text-sm text-muted-foreground">Code: {space.code}</p>
             </div>
 
-            {hasDependencies && (
+            {hasDependencies && dependencies && (
               <>
                 <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4">
                   <p className="font-medium text-destructive mb-3">⚠️ Warning: This workspace contains data</p>

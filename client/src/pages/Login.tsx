@@ -211,6 +211,17 @@ export default function Login() {
                   Forgot your password?
                 </button>
                 <p>
+                  Don't have an account?{" "}
+                  <button 
+                    type="button"
+                    onClick={() => setLocation("/register")}
+                    className="text-primary hover:underline"
+                    data-testid="link-register"
+                  >
+                    Sign up here
+                  </button>
+                </p>
+                <p>
                   Joining a workspace?{" "}
                   <button 
                     type="button"
