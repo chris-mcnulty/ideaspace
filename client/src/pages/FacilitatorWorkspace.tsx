@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -49,6 +49,7 @@ import {
   Loader2,
   Download,
   Trophy,
+  ArrowLeft,
 } from "lucide-react";
 import type { Organization, Space, Note, Participant, Category } from "@shared/schema";
 import { Leaderboard } from "@/components/Leaderboard";
@@ -56,6 +57,7 @@ import { KnowledgeBaseManager } from "@/components/KnowledgeBaseManager";
 
 export default function FacilitatorWorkspace() {
   const params = useParams() as { org: string; space: string };
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
@@ -645,6 +647,14 @@ export default function FacilitatorWorkspace() {
       <header className="sticky top-0 z-50 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-full items-center justify-between px-6">
           <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setLocation("/dashboard")}
+              data-testid="button-back-to-dashboard"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
             {org?.logoUrl ? (
               <img src={org.logoUrl} alt={org.name} className="h-8 w-auto object-contain" />
             ) : (
@@ -674,6 +684,9 @@ export default function FacilitatorWorkspace() {
               <h1 className="text-3xl font-bold tracking-tight">{space.name}</h1>
               <p className="mt-2 text-base text-muted-foreground">{space.purpose}</p>
               <div className="mt-4 flex flex-wrap gap-3">
+                <Badge variant="outline" className="gap-1 font-mono" data-testid="badge-workspace-code">
+                  Code: {space.code}
+                </Badge>
                 <Badge variant="outline" className="gap-1">
                   <Users className="h-3 w-3" />
                   {onlineParticipants.length} online
