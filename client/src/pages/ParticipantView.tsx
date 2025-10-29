@@ -15,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Users, Clock, Vote, ListOrdered, Coins } from "lucide-react";
+import { Plus, Users, User, Clock, Vote, ListOrdered, Coins } from "lucide-react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -159,6 +159,7 @@ export default function ParticipantView() {
   };
 
   const onlineCount = participants.filter(p => p.isOnline).length;
+  const currentParticipant = participants.find(p => p.id === participantId);
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -181,6 +182,12 @@ export default function ParticipantView() {
             </span>
           </div>
           <div className="flex items-center gap-3">
+            {currentParticipant && !isAuthenticated && (
+              <Badge variant="outline" className="gap-1" data-testid="badge-current-participant">
+                <User className="h-3 w-3" />
+                {currentParticipant.displayName}
+              </Badge>
+            )}
             <ThemeToggle />
             {isAuthenticated && <UserProfileMenu />}
           </div>

@@ -54,14 +54,14 @@ export default function StickyNote({
       data-testid={`sticky-note-${content.substring(0, 10)}`}
     >
       <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-1 text-xs text-gray-700 dark:text-gray-300 opacity-80">
+        <div className="flex items-center gap-1 text-xs text-gray-700 opacity-80">
           <User className="h-3 w-3" />
           <span className="truncate">{author || "Anonymous"}</span>
         </div>
-        <GripVertical className="h-4 w-4 text-gray-600 dark:text-gray-400 opacity-50" />
+        <GripVertical className="h-4 w-4 text-gray-600 opacity-50" />
       </div>
 
-      <div className="flex-1 overflow-y-auto text-sm leading-snug text-gray-900 dark:text-gray-100 font-medium">
+      <div className="flex-1 overflow-y-auto text-sm leading-snug text-gray-900 font-medium">
         {content}
       </div>
 
@@ -75,7 +75,7 @@ export default function StickyNote({
       )}
 
       {timestamp && (
-        <div className="mt-1 font-mono text-xs text-gray-600 dark:text-gray-400 opacity-60">
+        <div className="mt-1 font-mono text-xs text-gray-600 opacity-60">
           {timestamp.toLocaleTimeString()}
         </div>
       )}
