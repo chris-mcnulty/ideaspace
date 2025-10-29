@@ -22,7 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
-import type { Organization, Space, Note, Participant } from "@shared/schema";
+import type { Organization, Space, Note, Participant, Category } from "@shared/schema";
 
 export default function ParticipantView() {
   const params = useParams() as { org: string; space: string };
@@ -58,6 +58,12 @@ export default function ParticipantView() {
     enabled: !!params.space,
   });
 
+  // Fetch categories
+  const { data: categories = [] } = useQuery<Category[]>({
+    queryKey: [`/api/spaces/${params.space}/categories`],
+    enabled: !!params.space,
+  });
+
   // WebSocket connection
   const { isConnected } = useWebSocket({
     spaceId: params.space,
@@ -68,6 +74,9 @@ export default function ParticipantView() {
       }
       if (message.type === 'participant:joined' || message.type === 'participant:left') {
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/participants`] });
+      }
+      if (message.type === 'category_created' || message.type === 'category_updated' || message.type === 'category_deleted') {
+        queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/categories`] });
       }
     },
   });
@@ -160,6 +169,48 @@ export default function ParticipantView() {
 
   const onlineCount = participants.filter(p => p.isOnline).length;
   const currentParticipant = participants.find(p => p.id === participantId);
+
+  // Group notes by category
+  const groupedNotes = notes.reduce((acc, note) => {
+    let categoryName = "Uncategorized";
+    
+    if (note.manualCategoryId) {
+      const matchedCategory = categories.find(c => c.id === note.manualCategoryId);
+      if (matchedCategory) {
+        categoryName = matchedCategory.name;
+      }
+    }
+    
+    if (!acc[categoryName]) {
+      acc[categoryName] = [];
+    }
+    acc[categoryName].push(note);
+    return acc;
+  }, {} as Record<string, Note[]>);
+
+  const categoryNames = Object.keys(groupedNotes).sort((a, b) => {
+    // Sort: Uncategorized last, others alphabetically
+    if (a === "Uncategorized") return 1;
+    if (b === "Uncategorized") return -1;
+    return a.localeCompare(b);
+  });
+
+  // Generate consistent colors for category badges
+  const getCategoryColor = (category: string): string => {
+    const colors = [
+      "bg-blue-100 text-blue-800",
+      "bg-purple-100 text-purple-800",
+      "bg-green-100 text-green-800",
+      "bg-orange-100 text-orange-800",
+      "bg-pink-100 text-pink-800",
+      "bg-cyan-100 text-cyan-800",
+    ];
+    if (category === "Uncategorized") {
+      return "bg-gray-100 text-gray-600";
+    }
+    const index = category.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    return colors[index % colors.length];
+  };
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -277,30 +328,51 @@ export default function ParticipantView() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {notes.map((note) => {
-                // Check if participant can edit/delete this note
-                const isOwner = note.participantId === participantId;
-                const canEdit = isOwner && space?.status === "open";
-                const canDelete = isOwner && space?.status === "open";
+            {/* Grouped by Category */}
+            {notes.length > 0 && (
+              <div className="space-y-8">
+                {categoryNames.map((categoryName) => (
+                  <div key={categoryName} className="space-y-4">
+                    {/* Category Header */}
+                    <div className="flex items-center gap-3">
+                      <Badge 
+                        className={`px-3 py-1.5 text-sm font-semibold ${getCategoryColor(categoryName)}`}
+                        data-testid={`badge-category-${categoryName}`}
+                      >
+                        {categoryName}
+                      </Badge>
+                      <span className="text-sm text-gray-500">
+                        {groupedNotes[categoryName].length} {groupedNotes[categoryName].length === 1 ? 'idea' : 'ideas'}
+                      </span>
+                    </div>
 
-                return (
-                  <StickyNote
-                    key={note.id}
-                    id={note.id}
-                    content={note.content}
-                    author={participants.find(p => p.id === note.participantId)?.displayName}
-                    timestamp={new Date(note.createdAt)}
-                    category={note.category || undefined}
-                    isAiCategory={note.isAiCategory}
-                    canEdit={canEdit}
-                    canDelete={canDelete}
-                    onEdit={() => handleEditNote(note)}
-                    onDelete={() => handleDeleteNote(note.id)}
-                  />
-                );
-              })}
-            </div>
+                    {/* Notes in this category */}
+                    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                      {groupedNotes[categoryName].map((note) => {
+                        // Check if participant can edit/delete this note
+                        const isOwner = note.participantId === participantId;
+                        const canEdit = isOwner && space?.status === "open";
+                        const canDelete = isOwner && space?.status === "open";
+
+                        return (
+                          <StickyNote
+                            key={note.id}
+                            id={note.id}
+                            content={note.content}
+                            author={participants.find(p => p.id === note.participantId)?.displayName}
+                            timestamp={new Date(note.createdAt)}
+                            canEdit={canEdit}
+                            canDelete={canDelete}
+                            onEdit={() => handleEditNote(note)}
+                            onDelete={() => handleDeleteNote(note.id)}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </main>
