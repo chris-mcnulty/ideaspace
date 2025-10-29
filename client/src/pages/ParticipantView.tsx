@@ -212,7 +212,7 @@ export default function ParticipantView() {
       </div>
 
       {/* WHITE WHITEBOARD AREA */}
-      <main className="flex-1 overflow-hidden bg-white">
+      <main className="flex-1 overflow-hidden bg-white text-gray-900">
         <div className="h-full overflow-auto p-8">
           <div className="mx-auto max-w-7xl">
             {/* Create Note Button (floating on white) */}
