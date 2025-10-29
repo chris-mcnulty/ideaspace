@@ -425,18 +425,27 @@ export default function FacilitatorWorkspace() {
 
   // Group notes by category for better organization
   const groupedNotes = filteredNotes.reduce((acc, note) => {
-    const category = note.category || "Uncategorized";
-    if (!acc[category]) {
-      acc[category] = [];
+    // Look up category name via manualCategoryId instead of using deprecated category field
+    let categoryName = "No Category";
+    
+    if (note.manualCategoryId) {
+      const matchedCategory = manualCategories.find(c => c.id === note.manualCategoryId);
+      if (matchedCategory) {
+        categoryName = matchedCategory.name;
+      }
     }
-    acc[category].push(note);
+    
+    if (!acc[categoryName]) {
+      acc[categoryName] = [];
+    }
+    acc[categoryName].push(note);
     return acc;
   }, {} as Record<string, Note[]>);
 
   const categories = Object.keys(groupedNotes).sort((a, b) => {
-    // Sort: Uncategorized last, others alphabetically
-    if (a === "Uncategorized") return 1;
-    if (b === "Uncategorized") return -1;
+    // Sort: No Category last, others alphabetically
+    if (a === "No Category") return 1;
+    if (b === "No Category") return -1;
     return a.localeCompare(b);
   });
 
@@ -450,7 +459,7 @@ export default function FacilitatorWorkspace() {
       "bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300",
       "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
     ];
-    if (category === "Uncategorized") {
+    if (category === "No Category") {
       return "bg-muted text-muted-foreground";
     }
     const index = category.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
@@ -1050,7 +1059,7 @@ export default function FacilitatorWorkspace() {
                     {/* Category Header */}
                     <div className="flex items-center gap-3">
                       <Badge className={`px-3 py-1 text-sm font-medium ${getCategoryColor(category)}`} data-testid={`badge-category-${category}`}>
-                        {category === "Uncategorized" && !notes.some(n => n.isAiCategory) ? (
+                        {category === "No Category" ? (
                           category
                         ) : (
                           <>
