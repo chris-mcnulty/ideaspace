@@ -1,0 +1,72 @@
+client:536  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=v7rqtdDPfilR' failed: Error during WebSocket handshake: Unexpected response code: 400
+setupWebSocket @ client:536
+client:536  Uncaught (in promise) SyntaxError: Failed to construct 'WebSocket': The URL 'wss://localhost:undefined/?token=v7rqtdDPfilR' is invalid.
+    at setupWebSocket (client:536:19)
+    at fallback (client:509:16)
+    at WebSocket.<anonymous> (client:555:7)
+react-dom.development.js:29895 Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+/api/participants:1   Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+useWebSocket.ts:91  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/ws?spaceId=c93c6670-1441-4d58-8eb8-17bebd7ff8e0' failed: WebSocket is closed before the connection is established.
+(anonymous) @ useWebSocket.ts:91
+useWebSocket.ts:76  [WebSocket] Error: Event
+(anonymous) @ useWebSocket.ts:76
+useWebSocket.ts:61 [WebSocket] Disconnected
+useWebSocket.ts:67 [WebSocket] Reconnecting... (attempt 1/5)
+useWebSocket.ts:91  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/ws?spaceId=c93c6670-1441-4d58-8eb8-17bebd7ff8e0' failed: WebSocket is closed before the connection is established.
+(anonymous) @ useWebSocket.ts:91
+useWebSocket.ts:76  [WebSocket] Error: Event
+(anonymous) @ useWebSocket.ts:76
+useWebSocket.ts:61 [WebSocket] Disconnected
+useWebSocket.ts:67 [WebSocket] Reconnecting... (attempt 2/5)
+useWebSocket.ts:91  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/ws?spaceId=c93c6670-1441-4d58-8eb8-17bebd7ff8e0' failed: WebSocket is closed before the connection is established.
+(anonymous) @ useWebSocket.ts:91
+useWebSocket.ts:76  [WebSocket] Error: Event
+(anonymous) @ useWebSocket.ts:76
+useWebSocket.ts:61 [WebSocket] Disconnected
+useWebSocket.ts:67 [WebSocket] Reconnecting... (attempt 3/5)
+useWebSocket.ts:46 [WebSocket] Connected
+useWebSocket.ts:46 [WebSocket] Connected
+useWebSocket.ts:61 [WebSocket] Disconnected
+useWebSocket.ts:67 [WebSocket] Reconnecting... (attempt 1/5)
+useWebSocket.ts:61 [WebSocket] Disconnected
+useWebSocket.ts:67 [WebSocket] Reconnecting... (attempt 2/5)
+useWebSocket.ts:42  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/ws?spaceId=c93c6670-1441-4d58-8eb8-17bebd7ff8e0' failed: Error during WebSocket handshake: Unexpected response code: 502
+(anonymous) @ useWebSocket.ts:42
+useWebSocket.ts:76  [WebSocket] Error: Event
+(anonymous) @ useWebSocket.ts:76
+useWebSocket.ts:61 [WebSocket] Disconnected
+useWebSocket.ts:67 [WebSocket] Reconnecting... (attempt 3/5)
+useWebSocket.ts:42  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/ws?spaceId=c93c6670-1441-4d58-8eb8-17bebd7ff8e0' failed: Error during WebSocket handshake: Unexpected response code: 502
+(anonymous) @ useWebSocket.ts:42
+useWebSocket.ts:76  [WebSocket] Error: Event
+(anonymous) @ useWebSocket.ts:76
+useWebSocket.ts:61 [WebSocket] Disconnected
+useWebSocket.ts:67 [WebSocket] Reconnecting... (attempt 4/5)
+useWebSocket.ts:46 [WebSocket] Connected
+useWebSocket.ts:46 [WebSocket] Connected
+useWebSocket.ts:61 [WebSocket] Disconnected
+useWebSocket.ts:67 [WebSocket] Reconnecting... (attempt 1/5)
+useWebSocket.ts:61 [WebSocket] Disconnected
+useWebSocket.ts:67 [WebSocket] Reconnecting... (attempt 2/5)
+useWebSocket.ts:42  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/ws?spaceId=c93c6670-1441-4d58-8eb8-17bebd7ff8e0' failed: Error during WebSocket handshake: Unexpected response code: 502
+(anonymous) @ useWebSocket.ts:42
+useWebSocket.ts:76  [WebSocket] Error: Event
+(anonymous) @ useWebSocket.ts:76
+useWebSocket.ts:61 [WebSocket] Disconnected
+useWebSocket.ts:67 [WebSocket] Reconnecting... (attempt 3/5)
+useWebSocket.ts:42  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/ws?spaceId=c93c6670-1441-4d58-8eb8-17bebd7ff8e0' failed: Error during WebSocket handshake: Unexpected response code: 502
+(anonymous) @ useWebSocket.ts:42
+useWebSocket.ts:76  [WebSocket] Error: Event
+(anonymous) @ useWebSocket.ts:76
+useWebSocket.ts:61 [WebSocket] Disconnected
+useWebSocket.ts:67 [WebSocket] Reconnecting... (attempt 4/5)
+useWebSocket.ts:46 [WebSocket] Connected
+[NEW] Explain Console errors by using Copilot in Edge: click
+         
+         to explain an error. 
+        Learn more
+        Don't show again
+useWebSocket.ts:46 [WebSocket] Connected
