@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Users, StickyNote, ArrowRight, Plus } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { UserProfileMenu } from "@/components/UserProfileMenu";
 
 interface WorkspaceWithStats {
   id: string;
@@ -61,7 +63,29 @@ export default function FacilitatorDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* Navigation Header */}
+      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container mx-auto flex h-16 items-center justify-between px-6">
+          <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity" data-testid="link-home">
+            <img 
+              src="/logos/synozur-horizontal-color.png" 
+              alt="Synozur Alliance" 
+              className="h-8"
+              data-testid="img-logo"
+            />
+            <div className="h-6 w-px bg-border/40" data-testid="divider-separator" />
+            <span className="text-lg font-semibold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent" data-testid="text-app-name">
+              Aurora
+            </span>
+          </Link>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <UserProfileMenu />
+          </div>
+        </div>
+      </header>
+
+      {/* Page Header */}
       <div className="border-b border-border">
         <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="flex items-center justify-between gap-4">

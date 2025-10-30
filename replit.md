@@ -20,6 +20,8 @@ Aurora is a multi-tenant web application with a clear separation of concerns bet
 ### UI/UX Decisions
 The design system features a dark mode with a primary purple accent, dark blue-black backgrounds, and the Avenir Next LT Pro custom font. Branding includes Synozur logos and a favicon. The participant ideation view uses a white canvas with colorful sticky notes, while the landing page incorporates an AI network background and gradient text. General styling uses gradient text effects and automatic elevation on hover states.
 
+**Navigation**: Consistent sticky header across pages with Synozur logo (links to home), Aurora branding, theme toggle, and user profile menu. The UserProfileMenu provides access to Dashboard, Admin Panel (for admins/facilitators), and logout. Direct navigation to `/dashboard` is available from anywhere.
+
 ### Technical Implementations
 - **Multi-Tenancy**: Supports organization isolation and custom branding via `/o/:org/s/:space` URL structure.
 - **Real-time Collaboration**: Utilizes WebSockets for live updates of notes and participant presence.
