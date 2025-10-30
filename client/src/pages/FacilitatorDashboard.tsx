@@ -174,7 +174,7 @@ export default function FacilitatorDashboard() {
                     className="w-full"
                     data-testid={`button-manage-${workspace.id}`}
                   >
-                    <Link href={`/o/${workspace.organization.slug}/s/${workspace.code}/manage`}>
+                    <Link href={`/o/${workspace.organization.slug}/s/${workspace.code}/facilitate`}>
                       Manage Workspace
                       <ArrowRight className="w-4 h-4 ml-2" />
                     </Link>
