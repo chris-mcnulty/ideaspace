@@ -942,12 +942,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!space) {
         return res.status(404).json({ error: "Space not found" });
       }
+      
+      // Broadcast phase change if status was updated
+      if (data.status) {
+        let phase = "ideation"; // default phase
+        
+        // Map status to phase for participant navigation
+        if (data.status === "open") {
+          phase = "ideation"; // Active ideation phase
+        }
+        
+        broadcast({
+          type: "phase_change",
+          data: {
+            spaceId: req.params.id,
+            status: data.status,
+            phase: phase,
+          }
+        });
+      }
+      
       res.json(space);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: error.errors });
       }
       res.status(500).json({ error: "Failed to update space" });
+    }
+  });
+
+  // Protected: Navigate all participants to a specific phase
+  app.post("/api/spaces/:id/navigate-participants", requireFacilitator, async (req, res) => {
+    try {
+      const { phase } = req.body as { phase: "vote" | "rank" | "marketplace" | "ideate" };
+      
+      if (!phase || !["vote", "rank", "marketplace", "ideate"].includes(phase)) {
+        return res.status(400).json({ error: "Invalid phase. Must be one of: vote, rank, marketplace, ideate" });
+      }
+      
+      // Broadcast navigation command to all participants
+      broadcast({
+        type: "navigate_to_phase",
+        data: {
+          spaceId: req.params.id,
+          phase: phase,
+        }
+      });
+      
+      res.json({ success: true, phase });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to navigate participants" });
     }
   });
 
@@ -2120,13 +2164,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { spaceId, participantId } = req.params;
       
+      // Get space to check pairwise scope setting
+      const space = await storage.getSpace(spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Space not found" });
+      }
+      
       // Get all notes and participant's existing votes
       const notes = await storage.getNotesBySpace(spaceId);
       const existingVotes = await storage.getVotesByParticipant(participantId);
       
-      // Calculate next pair and progress
-      const nextPair = getNextPair(notes, existingVotes);
-      const progress = calculateProgress(notes, existingVotes);
+      // Calculate next pair and progress using the workspace's pairwise scope
+      const pairwiseScope = (space.pairwiseScope || "all") as "all" | "within_categories";
+      const nextPair = getNextPair(notes, existingVotes, pairwiseScope);
+      const progress = calculateProgress(notes, existingVotes, pairwiseScope);
       
       if (!nextPair) {
         return res.json({

@@ -78,6 +78,28 @@ export default function ParticipantView() {
       if (message.type === 'category_created' || message.type === 'category_updated' || message.type === 'category_deleted') {
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/categories`] });
       }
+      // Handle phase navigation from facilitator
+      if (message.type === 'navigate_to_phase') {
+        const { phase, spaceId } = message.data;
+        
+        // Only navigate if this message is for our workspace
+        if (spaceId === params.space) {
+          const phaseRoutes = {
+            vote: `/o/${params.org}/s/${params.space}/vote`,
+            rank: `/o/${params.org}/s/${params.space}/rank`,
+            marketplace: `/o/${params.org}/s/${params.space}/marketplace`,
+            ideate: `/o/${params.org}/s/${params.space}/participate`,
+          };
+          
+          if (phaseRoutes[phase as keyof typeof phaseRoutes]) {
+            toast({
+              title: "Phase Change",
+              description: `Navigating to ${phase} phase...`,
+            });
+            navigate(phaseRoutes[phase as keyof typeof phaseRoutes]);
+          }
+        }
+      }
     },
   });
 

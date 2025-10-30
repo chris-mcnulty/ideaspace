@@ -197,6 +197,53 @@ export default function FacilitatorWorkspace() {
     },
   });
 
+  // Update pairwise scope mutation
+  const updatePairwiseScopeMutation = useMutation({
+    mutationFn: async (scope: "all" | "within_categories") => {
+      const response = await apiRequest("PATCH", `/api/spaces/${params.space}`, {
+        pairwiseScope: scope,
+      });
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}`] });
+      toast({
+        title: "Voting Scope Updated",
+        description: "Pairwise voting settings have been saved",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to update settings",
+        description: error.message,
+      });
+    },
+  });
+
+  // Navigate participants mutation
+  const navigateParticipantsMutation = useMutation({
+    mutationFn: async (phase: "vote" | "rank" | "marketplace" | "ideate") => {
+      const response = await apiRequest("POST", `/api/spaces/${params.space}/navigate-participants`, {
+        phase,
+      });
+      return await response.json();
+    },
+    onSuccess: (_, phase) => {
+      toast({
+        title: "Participants Navigated",
+        description: `All participants have been directed to the ${phase} phase`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to navigate participants",
+        description: error.message,
+      });
+    },
+  });
+
   // Add note mutation
   const addNoteMutation = useMutation({
     mutationFn: async (content: string) => {
@@ -1236,6 +1283,14 @@ export default function FacilitatorWorkspace() {
               </div>
               <div className="flex gap-2">
                 <Button
+                  variant="default"
+                  onClick={() => navigateParticipantsMutation.mutate("vote")}
+                  data-testid="button-navigate-to-voting"
+                >
+                  <Users className="mr-2 h-4 w-4" />
+                  Send to Voting
+                </Button>
+                <Button
                   variant="outline"
                   onClick={() => {
                     window.location.href = `/api/spaces/${params.space}/export/pairwise`;
@@ -1246,6 +1301,7 @@ export default function FacilitatorWorkspace() {
                   Export Results
                 </Button>
                 <Button
+                  variant="ghost"
                   onClick={() => window.open(`/o/${params.org}/s/${params.space}/vote`, '_blank')}
                   data-testid="button-test-voting"
                 >
@@ -1253,6 +1309,42 @@ export default function FacilitatorWorkspace() {
                 </Button>
               </div>
             </div>
+
+            {/* Voting Settings */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Voting Configuration</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <Label htmlFor="pairwise-scope">Comparison Scope</Label>
+                  <Select
+                    value={space?.pairwiseScope || "all"}
+                    onValueChange={(value: "all" | "within_categories") => {
+                      updatePairwiseScopeMutation.mutate(value);
+                    }}
+                    data-testid="select-pairwise-scope"
+                  >
+                    <SelectTrigger id="pairwise-scope" className="w-full md:w-[400px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all" data-testid="option-scope-all">
+                        Compare all ideas (cross-category voting)
+                      </SelectItem>
+                      <SelectItem value="within_categories" data-testid="option-scope-within-categories">
+                        Compare within categories only
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-sm text-muted-foreground">
+                    {space?.pairwiseScope === "within_categories"
+                      ? "Participants will only compare ideas within the same category"
+                      : "Participants will compare all ideas regardless of category"}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Voting Statistics */}
             <div className="grid gap-4 md:grid-cols-3">

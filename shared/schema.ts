@@ -52,6 +52,7 @@ export const spaces = pgTable("spaces", {
   guestAllowed: boolean("guest_allowed").notNull().default(false), // Default: guests NOT allowed
   icon: text("icon").notNull().default("brain"), // Workspace icon identifier
   sessionMode: text("session_mode").notNull().default("live"), // 'live' or 'async'
+  pairwiseScope: text("pairwise_scope").notNull().default("all"), // 'all' = compare all ideas, 'within_categories' = compare only within same category
   ideationStartsAt: timestamp("ideation_starts_at"),
   ideationEndsAt: timestamp("ideation_ends_at"),
   votingStartsAt: timestamp("voting_starts_at"),
