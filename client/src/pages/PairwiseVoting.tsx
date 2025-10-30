@@ -12,7 +12,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { CheckCircle2, Loader2 } from "lucide-react";
-import type { Note } from "@shared/schema";
+import type { Note, Organization, Space } from "@shared/schema";
 
 interface NotePair {
   noteA: Note;
@@ -53,6 +53,16 @@ export default function PairwiseVoting() {
     }
     setParticipantId(storedId);
   }, [params.org, params.space, navigate, toast]);
+
+  // Fetch organization data
+  const { data: org } = useQuery<Organization>({
+    queryKey: [`/api/organizations/${params.org}`],
+  });
+
+  // Fetch workspace data
+  const { data: space } = useQuery<Space>({
+    queryKey: [`/api/spaces/${params.space}`],
+  });
 
   // Fetch next pair
   const { data, isLoading, error, refetch } = useQuery<NextPairResponse>({
@@ -201,6 +211,12 @@ export default function PairwiseVoting() {
         </header>
         <div className="flex-1 flex items-center justify-center p-8">
           <Card className="p-12 max-w-2xl text-center space-y-6">
+            {org && space && (
+              <div className="space-y-1 pb-4 border-b">
+                <p className="text-sm text-muted-foreground">{org.name}</p>
+                <h2 className="text-lg font-semibold">{space.name}</h2>
+              </div>
+            )}
             <CheckCircle2 className="h-24 w-24 text-primary mx-auto" />
             <div>
               <h1 className="text-3xl font-bold mb-2">Voting Complete!</h1>
@@ -247,6 +263,19 @@ export default function PairwiseVoting() {
       </header>
       
       <main className="flex-1 p-8 space-y-8">
+        {/* Workspace Info Section */}
+        {org && space && (
+          <div className="max-w-4xl mx-auto text-center space-y-2">
+            <p className="text-sm text-muted-foreground">{org.name}</p>
+            <h2 className="text-xl font-semibold">{space.name}</h2>
+            {space.purpose && (
+              <p className="text-base text-muted-foreground max-w-2xl mx-auto">
+                {space.purpose}
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Progress Section */}
         <div className="max-w-4xl mx-auto space-y-4">
           <div className="flex items-center justify-between">
