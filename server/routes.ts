@@ -5,7 +5,7 @@ import passport from "passport";
 import multer from "multer";
 import { storage } from "./storage";
 import { db } from "./db";
-import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, organizations } from "@shared/schema";
+import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, organizations, users, companyAdmins, knowledgeBaseDocuments, workspaceTemplates, aiUsageLog } from "@shared/schema";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { categorizeNotes, rewriteCard } from "./services/openai";
@@ -659,14 +659,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Delete organization (this will also cascade to company_admins table)
+      // Verify organization exists
       const org = await storage.getOrganization(req.params.id);
       if (!org) {
         return res.status(404).json({ error: "Organization not found" });
       }
       
-      // For now, we'll just mark it as deleted by updating a field if needed
-      // Or implement actual deletion - let's do actual deletion since storage has the method
+      // Delete all associated data first to avoid foreign key constraints
+      await Promise.all([
+        // Nullify organizationId for users in this organization (since it's nullable)
+        db.update(users).set({ organizationId: null }).where(eq(users.organizationId, req.params.id)),
+        // Delete company admin associations
+        db.delete(companyAdmins).where(eq(companyAdmins.organizationId, req.params.id)),
+        // Delete knowledge base documents scoped to this organization
+        db.delete(knowledgeBaseDocuments).where(eq(knowledgeBaseDocuments.organizationId, req.params.id)),
+        // Delete workspace templates scoped to this organization
+        db.delete(workspaceTemplates).where(eq(workspaceTemplates.organizationId, req.params.id)),
+        // Delete AI usage logs for this organization
+        db.delete(aiUsageLog).where(eq(aiUsageLog.organizationId, req.params.id)),
+      ]);
+      
+      // Finally, delete the organization itself
       await db.delete(organizations).where(eq(organizations.id, req.params.id));
       
       res.status(204).send();
