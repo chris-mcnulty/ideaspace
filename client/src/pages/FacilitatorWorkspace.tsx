@@ -1103,6 +1103,15 @@ export default function FacilitatorWorkspace() {
                   </Button>
                 </>
               )}
+              {space.status === "closed" && (
+                <Button
+                  onClick={() => updateSpaceStatusMutation.mutate("open")}
+                  data-testid="button-reopen-session"
+                >
+                  <PlayCircle className="mr-2 h-4 w-4" />
+                  Reopen Session
+                </Button>
+              )}
               <Button
                 variant="secondary"
                 onClick={() => setIsTemplateDialogOpen(true)}
