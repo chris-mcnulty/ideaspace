@@ -51,6 +51,9 @@ import {
   Upload,
   Trophy,
   ArrowLeft,
+  Coins,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import type { Organization, Space, Note, Participant, Category } from "@shared/schema";
 import { Leaderboard } from "@/components/Leaderboard";
@@ -266,17 +269,23 @@ export default function FacilitatorWorkspace() {
 
   // Update workspace settings mutation
   const updateWorkspaceSettings = useMutation({
-    mutationFn: async (settings: { aiResultsEnabled?: boolean }) => {
+    mutationFn: async (settings: { aiResultsEnabled?: boolean; marketplaceCoinBudget?: number }) => {
       const response = await apiRequest("PATCH", `/api/spaces/${params.space}`, settings);
       return await response.json();
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}`] });
+      let description = "";
+      if (variables.aiResultsEnabled !== undefined) {
+        description = variables.aiResultsEnabled 
+          ? "AI personalized results have been enabled for verified participants"
+          : "AI personalized results have been disabled";
+      } else if (variables.marketplaceCoinBudget !== undefined) {
+        description = `Marketplace coin budget updated to ${variables.marketplaceCoinBudget} coins per participant`;
+      }
       toast({
         title: "Settings Updated",
-        description: variables.aiResultsEnabled 
-          ? "AI personalized results have been enabled for verified participants"
-          : "AI personalized results have been disabled",
+        description,
       });
     },
     onError: (error: Error) => {
@@ -356,6 +365,28 @@ export default function FacilitatorWorkspace() {
       toast({
         variant: "destructive",
         title: "Failed to delete note",
+        description: error.message,
+      });
+    },
+  });
+
+  // Update note visibility mutation
+  const updateNoteVisibilityMutation = useMutation({
+    mutationFn: async ({ noteId, updates }: { noteId: string; updates: { visibleInRanking?: boolean; visibleInMarketplace?: boolean } }) => {
+      const response = await apiRequest("PATCH", `/api/notes/${noteId}`, updates);
+      return await response.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/notes`] });
+      toast({
+        title: "Visibility Updated",
+        description: "Note visibility settings have been changed",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to update visibility",
         description: error.message,
       });
     },
@@ -1351,7 +1382,7 @@ export default function FacilitatorWorkspace() {
                             </CardTitle>
                           </CardHeader>
                           <CardContent className="space-y-2">
-                            <div className="flex gap-1">
+                            <div className="flex flex-wrap gap-1">
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1388,6 +1419,44 @@ export default function FacilitatorWorkspace() {
                                 data-testid={`button-delete-note-${note.id}`}
                               >
                                 <Trash2 className="h-3 w-3 text-destructive" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  updateNoteVisibilityMutation.mutate({
+                                    noteId: note.id,
+                                    updates: { visibleInRanking: !note.visibleInRanking }
+                                  });
+                                }}
+                                title={note.visibleInRanking ? "Hide from Ranking" : "Show in Ranking"}
+                                data-testid={`button-toggle-ranking-visibility-${note.id}`}
+                              >
+                                {note.visibleInRanking ? (
+                                  <Eye className="h-3 w-3 text-blue-500" />
+                                ) : (
+                                  <EyeOff className="h-3 w-3 text-muted-foreground" />
+                                )}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  updateNoteVisibilityMutation.mutate({
+                                    noteId: note.id,
+                                    updates: { visibleInMarketplace: !note.visibleInMarketplace }
+                                  });
+                                }}
+                                title={note.visibleInMarketplace ? "Hide from Marketplace" : "Show in Marketplace"}
+                                data-testid={`button-toggle-marketplace-visibility-${note.id}`}
+                              >
+                                {note.visibleInMarketplace ? (
+                                  <Coins className="h-3 w-3 text-green-500" />
+                                ) : (
+                                  <Coins className="h-3 w-3 text-muted-foreground opacity-50" />
+                                )}
                               </Button>
                             </div>
                             {manualCategories.length > 0 && (
@@ -1984,6 +2053,46 @@ export default function FacilitatorWorkspace() {
                             <>{space.aiResultsEnabled ? "Disable" : "Enable"} AI Results</>
                           )}
                         </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  {/* Marketplace Coin Budget Configuration */}
+                  <Card className="bg-muted/30">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <Coins className="h-4 w-4 text-primary" />
+                        Marketplace Coin Budget
+                      </CardTitle>
+                      <CardDescription>
+                        Configure how many coins each participant receives to allocate in the marketplace phase
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center gap-4">
+                        <div className="flex-1">
+                          <label htmlFor="coin-budget" className="text-sm font-medium mb-2 block">
+                            Coins per Participant
+                          </label>
+                          <input
+                            id="coin-budget"
+                            type="number"
+                            min="1"
+                            max="1000"
+                            defaultValue={space.marketplaceCoinBudget}
+                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                            onBlur={(e) => {
+                              const value = parseInt(e.target.value);
+                              if (value && value !== space.marketplaceCoinBudget && value > 0 && value <= 1000) {
+                                updateWorkspaceSettings.mutate({ marketplaceCoinBudget: value });
+                              }
+                            }}
+                            data-testid="input-marketplace-coin-budget"
+                          />
+                        </div>
+                        <div className="text-sm text-muted-foreground mt-6">
+                          Current: <Badge variant="outline">{space.marketplaceCoinBudget} coins</Badge>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>

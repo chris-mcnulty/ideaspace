@@ -54,21 +54,27 @@ export default function Marketplace() {
 
   useEffect(() => {
     if (existingAllocations && notesData) {
+      // Filter to only show notes visible in marketplace (defaults to true)
+      const visibleNotes = notesData.filter(note => note.visibleInMarketplace !== false);
+      
       const allocationMap = new Map<string, number>();
       existingAllocations.forEach(a => {
         allocationMap.set(a.noteId, a.coinsAllocated);
       });
-      // Initialize all notes with 0 if not already allocated
-      notesData.forEach(note => {
+      // Initialize all visible notes with 0 if not already allocated
+      visibleNotes.forEach(note => {
         if (!allocationMap.has(note.id)) {
           allocationMap.set(note.id, 0);
         }
       });
       setAllocations(allocationMap);
     } else if (notesData) {
-      // No existing allocations, initialize all with 0
+      // Filter to only show notes visible in marketplace (defaults to true)
+      const visibleNotes = notesData.filter(note => note.visibleInMarketplace !== false);
+      
+      // No existing allocations, initialize all visible notes with 0
       const allocationMap = new Map<string, number>();
-      notesData.forEach(note => {
+      visibleNotes.forEach(note => {
         allocationMap.set(note.id, 0);
       });
       setAllocations(allocationMap);
@@ -228,7 +234,9 @@ export default function Marketplace() {
         </div>
 
         <div className="space-y-4 mb-8">
-          {notesData.map((note) => {
+          {notesData
+            .filter(note => note.visibleInMarketplace !== false)
+            .map((note) => {
             const coins = allocations.get(note.id) || 0;
             return (
               <Card key={note.id} className="p-4" data-testid={`allocation-item-${note.id}`}>

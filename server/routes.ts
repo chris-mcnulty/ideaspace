@@ -2534,7 +2534,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get participant's remaining budget
   app.get("/api/spaces/:spaceId/participants/:participantId/marketplace-budget", async (req, res) => {
     try {
-      const { participantId: requestedParticipantId } = req.params;
+      const { participantId: requestedParticipantId, spaceId } = req.params;
       
       // SECURITY: Verify session participant matches requested participant to prevent IDOR
       const sessionParticipantId = req.session?.participantId;
@@ -2546,8 +2546,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Cannot access another participant's budget" });
       }
       
-      // SECURITY: Use server-side budget only
-      const budget = DEFAULT_COIN_BUDGET;
+      // Get workspace to fetch configured coin budget
+      const space = await storage.getSpace(spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      
+      // SECURITY: Use server-side budget from workspace configuration
+      const budget = space.marketplaceCoinBudget || DEFAULT_COIN_BUDGET;
       
       const allocations = await storage.getMarketplaceAllocationsByParticipant(sessionParticipantId);
       const remainingBudget = getParticipantRemainingBudget(sessionParticipantId, allocations, budget);

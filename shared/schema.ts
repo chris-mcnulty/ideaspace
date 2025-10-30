@@ -61,6 +61,7 @@ export const spaces = pgTable("spaces", {
   rankingEndsAt: timestamp("ranking_ends_at"),
   marketplaceStartsAt: timestamp("marketplace_starts_at"),
   marketplaceEndsAt: timestamp("marketplace_ends_at"),
+  marketplaceCoinBudget: integer("marketplace_coin_budget").notNull().default(100), // Number of coins each participant gets in marketplace
   aiResultsEnabled: boolean("ai_results_enabled").notNull().default(false), // Facilitator toggle for AI-generated personalized results
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -95,6 +96,8 @@ export const notes = pgTable("notes", {
   isAiCategory: boolean("is_ai_category").notNull().default(false), // Deprecated
   manualCategoryId: varchar("manual_category_id").references(() => categories.id), // FK to categories (used by both AI and manual)
   isManualOverride: boolean("is_manual_override").notNull().default(false), // True when facilitator manually assigns category
+  visibleInRanking: boolean("visible_in_ranking").notNull().default(true), // Facilitator can hide from ranking phase
+  visibleInMarketplace: boolean("visible_in_marketplace").notNull().default(true), // Facilitator can hide from marketplace phase
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

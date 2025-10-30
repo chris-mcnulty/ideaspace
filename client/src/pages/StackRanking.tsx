@@ -98,9 +98,12 @@ export default function StackRanking() {
 
   useEffect(() => {
     if (notesData) {
+      // Filter to only show notes visible in ranking (defaults to true)
+      const visibleNotes = notesData.filter(note => note.visibleInRanking !== false);
+      
       if (existingRankings && existingRankings.length > 0) {
         // Sort notes by existing rank
-        const sorted = [...notesData].sort((a, b) => {
+        const sorted = [...visibleNotes].sort((a, b) => {
           const rankA = existingRankings.find(r => r.noteId === a.id)?.rank || 9999;
           const rankB = existingRankings.find(r => r.noteId === b.id)?.rank || 9999;
           return rankA - rankB;
@@ -108,7 +111,7 @@ export default function StackRanking() {
         setRankedNotes(sorted);
       } else {
         // No existing rankings, use default order
-        setRankedNotes([...notesData]);
+        setRankedNotes([...visibleNotes]);
       }
     }
   }, [notesData, existingRankings]);
