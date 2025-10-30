@@ -244,6 +244,7 @@ export default function WaitingRoomPage() {
         spaceName={space.name}
         spacePurpose={space.purpose}
         status={space.status}
+        workspaceUrl={`/o/${params.org}/s/${params.space}`}
         onJoinAnonymous={(guestName) => {
           joinMutation.mutate({
             displayName: guestName,

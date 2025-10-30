@@ -773,23 +773,13 @@ export default function FacilitatorWorkspace() {
   // Create template mutation
   const createTemplateMutation = useMutation({
     mutationFn: async (data: { name: string; type: string; description?: string }) => {
-      const response = await fetch("/api/templates", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          spaceId: params.space,
-          name: data.name,
-          type: data.type,
-          description: data.description || undefined,
-        }),
+      const response = await apiRequest("POST", "/api/templates", {
+        spaceId: params.space,
+        name: data.name,
+        type: data.type,
+        description: data.description || undefined,
       });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to create template");
-      }
-      return response.json();
+      return await response.json();
     },
     onSuccess: (_, variables) => {
       setIsTemplateDialogOpen(false);

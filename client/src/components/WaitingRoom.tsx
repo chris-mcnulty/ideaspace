@@ -4,10 +4,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, UserCircle, Sparkles } from "lucide-react";
+import { Loader2, UserCircle, Sparkles, LogIn } from "lucide-react";
 import StatusBadge from "./StatusBadge";
 import { generateGuestName } from "@/lib/guestNames";
 import { useState } from "react";
+import { useLocation } from "wouter";
 
 interface WaitingRoomProps {
   orgName: string;
@@ -16,6 +17,7 @@ interface WaitingRoomProps {
   status: "draft" | "open" | "closed";
   onJoinAnonymous?: (guestName: string) => void;
   onRegister?: (data: any) => void;
+  workspaceUrl?: string;
 }
 
 export default function WaitingRoom({
@@ -25,7 +27,9 @@ export default function WaitingRoom({
   status,
   onJoinAnonymous,
   onRegister,
+  workspaceUrl,
 }: WaitingRoomProps) {
+  const [, navigate] = useLocation();
   const [guestName, setGuestName] = useState(generateGuestName());
   
   const regenerateGuestName = () => {
@@ -68,8 +72,9 @@ export default function WaitingRoom({
 
           {status === "open" && (
             <Tabs defaultValue="anonymous" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="anonymous" data-testid="tab-anonymous">Join Anonymously</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="anonymous" data-testid="tab-anonymous">Guest</TabsTrigger>
+                <TabsTrigger value="login" data-testid="tab-login">Login</TabsTrigger>
                 <TabsTrigger value="register" data-testid="tab-register">Register</TabsTrigger>
               </TabsList>
 
@@ -103,6 +108,27 @@ export default function WaitingRoom({
                     data-testid="button-join-anonymous"
                   >
                     Join as {guestName}
+                  </Button>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="login" className="space-y-4 mt-6">
+                <div className="rounded-lg border p-6 text-center">
+                  <LogIn className="mx-auto h-12 w-12 text-muted-foreground" />
+                  <p className="mt-4 text-sm text-muted-foreground">
+                    Already have an account? Sign in to join this workspace
+                  </p>
+                  <Button
+                    className="mt-6"
+                    onClick={() => {
+                      // Store the return URL in session storage
+                      sessionStorage.setItem("loginReturnUrl", workspaceUrl || window.location.pathname);
+                      navigate("/login");
+                    }}
+                    data-testid="button-go-to-login"
+                  >
+                    <LogIn className="mr-2 h-4 w-4" />
+                    Go to Login
                   </Button>
                 </div>
               </TabsContent>
