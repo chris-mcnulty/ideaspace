@@ -1515,6 +1515,14 @@ export default function FacilitatorWorkspace() {
               </div>
               <div className="flex gap-2">
                 <Button
+                  variant="default"
+                  onClick={() => navigateParticipantsMutation.mutate("rank")}
+                  data-testid="button-navigate-to-ranking"
+                >
+                  <ListOrdered className="mr-2 h-4 w-4" />
+                  Send to Ranking
+                </Button>
+                <Button
                   variant="outline"
                   onClick={() => {
                     window.location.href = `/api/spaces/${params.space}/export/ranking`;
@@ -1525,6 +1533,7 @@ export default function FacilitatorWorkspace() {
                   Export Results
                 </Button>
                 <Button
+                  variant="ghost"
                   onClick={() => window.open(`/o/${params.org}/s/${params.space}/rank`, '_blank')}
                   data-testid="button-test-ranking"
                 >
