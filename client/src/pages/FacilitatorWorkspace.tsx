@@ -917,6 +917,10 @@ export default function FacilitatorWorkspace() {
               <ListOrdered className="mr-2 h-4 w-4" />
               Ranking
             </TabsTrigger>
+            <TabsTrigger value="marketplace" data-testid="tab-marketplace">
+              <Coins className="mr-2 h-4 w-4" />
+              Marketplace
+            </TabsTrigger>
             <TabsTrigger value="knowledge-base" data-testid="tab-knowledge-base">
               <BookOpen className="mr-2 h-4 w-4" />
               Knowledge Base
@@ -1831,6 +1835,99 @@ export default function FacilitatorWorkspace() {
             )}
           </TabsContent>
 
+          <TabsContent value="marketplace" className="mt-6 space-y-6">
+            {/* Marketplace Header */}
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">Marketplace Allocation</h2>
+                <p className="text-muted-foreground mt-1">
+                  Configure coin budget and send participants to marketplace voting
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="default"
+                  onClick={() => navigateParticipantsMutation.mutate("marketplace")}
+                  data-testid="button-navigate-to-marketplace"
+                >
+                  <Coins className="mr-2 h-4 w-4" />
+                  Send to Marketplace
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    window.location.href = `/api/spaces/${params.space}/export/marketplace`;
+                  }}
+                  data-testid="button-export-marketplace"
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Export Results
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => window.open(`/o/${params.org}/s/${params.space}/marketplace`, '_blank')}
+                  data-testid="button-test-marketplace"
+                >
+                  Test Marketplace View
+                </Button>
+              </div>
+            </div>
+
+            {/* Marketplace Coin Budget Configuration */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Coins className="h-5 w-5 text-primary" />
+                  Coin Budget Configuration
+                </CardTitle>
+                <CardDescription>
+                  Configure how many coins each participant receives to allocate in the marketplace phase
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <label htmlFor="coin-budget" className="text-sm font-medium mb-2 block">
+                      Coins per Participant
+                    </label>
+                    <input
+                      id="coin-budget"
+                      type="number"
+                      min="1"
+                      max="1000"
+                      defaultValue={space.marketplaceCoinBudget}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                      onBlur={(e) => {
+                        const value = parseInt(e.target.value);
+                        if (value && value !== space.marketplaceCoinBudget && value > 0 && value <= 1000) {
+                          updateWorkspaceSettings.mutate({ marketplaceCoinBudget: value });
+                        }
+                      }}
+                      data-testid="input-marketplace-coin-budget"
+                    />
+                  </div>
+                  <div className="text-sm text-muted-foreground mt-6">
+                    Current: <Badge variant="outline">{space.marketplaceCoinBudget} coins</Badge>
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground mt-3">
+                  Participants will use their coin budget to vote on ideas by allocating coins to their preferred options
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Empty State - Marketplace stats could be added here in the future */}
+            <div className="flex min-h-[400px] items-center justify-center rounded-lg border-2 border-dashed">
+              <div className="text-center">
+                <Coins className="mx-auto h-12 w-12 text-muted-foreground" />
+                <p className="mt-4 text-lg font-medium">Marketplace Allocation</p>
+                <p className="mt-2 text-sm text-muted-foreground max-w-md">
+                  Send participants to the marketplace to allocate their {space.marketplaceCoinBudget} coins across ideas
+                </p>
+              </div>
+            </div>
+          </TabsContent>
+
           <TabsContent value="knowledge-base" className="mt-6">
             <KnowledgeBaseManager
               scope="workspace"
@@ -2004,46 +2101,6 @@ export default function FacilitatorWorkspace() {
                     </CardContent>
                   </Card>
                   
-                  {/* Marketplace Coin Budget Configuration */}
-                  <Card className="bg-muted/30">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <Coins className="h-4 w-4 text-primary" />
-                        Marketplace Coin Budget
-                      </CardTitle>
-                      <CardDescription>
-                        Configure how many coins each participant receives to allocate in the marketplace phase
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-center gap-4">
-                        <div className="flex-1">
-                          <label htmlFor="coin-budget" className="text-sm font-medium mb-2 block">
-                            Coins per Participant
-                          </label>
-                          <input
-                            id="coin-budget"
-                            type="number"
-                            min="1"
-                            max="1000"
-                            defaultValue={space.marketplaceCoinBudget}
-                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                            onBlur={(e) => {
-                              const value = parseInt(e.target.value);
-                              if (value && value !== space.marketplaceCoinBudget && value > 0 && value <= 1000) {
-                                updateWorkspaceSettings.mutate({ marketplaceCoinBudget: value });
-                              }
-                            }}
-                            data-testid="input-marketplace-coin-budget"
-                          />
-                        </div>
-                        <div className="text-sm text-muted-foreground mt-6">
-                          Current: <Badge variant="outline">{space.marketplaceCoinBudget} coins</Badge>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                  
                   <div className="flex gap-3">
                     <Button
                       variant="outline"
@@ -2065,87 +2122,6 @@ export default function FacilitatorWorkspace() {
                     </Button>
                   </div>
                 </div>
-
-                {/* Individual Participant Results */}
-                <Card className="mt-6">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Users className="h-5 w-5 text-primary" />
-                      Individual Participant Results
-                    </CardTitle>
-                    <CardDescription>
-                      View how each participant's ideas performed across all voting modules
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {participants.map((participant) => {
-                        // Get participant's notes
-                        const participantNotes = notes.filter(n => n.participantId === participant.id);
-                        
-                        if (participantNotes.length === 0) return null;
-                        
-                        return (
-                          <div key={participant.id} className="rounded-lg border p-4 space-y-3">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                                  <Users className="h-5 w-5 text-primary" />
-                                </div>
-                                <div>
-                                  <p className="font-medium">{participant.displayName}</p>
-                                  <p className="text-sm text-muted-foreground">
-                                    {participantNotes.length} {participantNotes.length === 1 ? 'idea' : 'ideas'}
-                                    {participant.userId && !participant.isGuest && (
-                                      <Badge variant="outline" className="ml-2">Verified</Badge>
-                                    )}
-                                  </p>
-                                </div>
-                              </div>
-                              {space.aiResultsEnabled && participant.userId && !participant.isGuest && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    // Generate personalized results for this participant
-                                    window.open(`/o/${params.org}/s/${params.space}/results?participantId=${participant.id}`, '_blank');
-                                  }}
-                                  data-testid={`button-view-results-${participant.id}`}
-                                >
-                                  <Sparkles className="h-3 w-3 mr-1" />
-                                  View AI Results
-                                </Button>
-                              )}
-                            </div>
-                            
-                            <div className="space-y-2">
-                              {participantNotes.map((note) => {
-                                // Find this note's performance across all modules
-                                const pairwiseWins = votes.filter(v => v.winnerNoteId === note.id).length;
-                                const bordaItem = leaderboard.find(l => l.noteId === note.id);
-                                // Marketplace leaderboard not yet implemented
-                                const marketplaceItem = null;
-                                
-                                return (
-                                  <div key={note.id} className="rounded border bg-muted/30 p-3 text-sm">
-                                    <p className="font-medium mb-2">{note.content}</p>
-                                    <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                                      {note.category && (
-                                        <span>Category: <Badge variant="secondary" className="text-xs">{note.category}</Badge></span>
-                                      )}
-                                      <span>Pairwise Wins: {pairwiseWins}</span>
-                                      {bordaItem && <span>Borda Score: {bordaItem.totalScore}</span>}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
               </div>
             )}
           </TabsContent>

@@ -4,21 +4,57 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Sparkles, Trophy, Award, Target, TrendingUp } from "lucide-react";
+import { Loader2, Sparkles, Trophy, Award, Target, TrendingUp, Download, Mail } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
 import type { PersonalizedResult } from "@shared/schema";
 
 export default function Results() {
   const { org, space: spaceId } = useParams() as { org: string; space: string };
   const { isAuthenticated } = useAuth();
+  const { toast } = useToast();
 
   // Fetch personalized results for the participant
   const { data: personalizedResults, isLoading, error } = useQuery<PersonalizedResult>({
     queryKey: [`/api/spaces/${spaceId}/results/personalized`],
     retry: false,
     enabled: !!spaceId,
+  });
+
+  // Download results as PDF (via print dialog)
+  const handleDownload = () => {
+    if (!personalizedResults) return;
+    
+    // Trigger browser print dialog which allows saving as PDF
+    window.print();
+
+    toast({
+      title: "Download Results",
+      description: "Use the print dialog to save your results as a PDF",
+    });
+  };
+
+  // Email results mutation
+  const emailResultsMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", `/api/spaces/${spaceId}/results/email`, {});
+      return await response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Email Sent",
+        description: "Your personalized results have been emailed to you",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to send email",
+        description: error.message || "Please try again later",
+      });
+    },
   });
 
   // Mutation to generate personalized results
@@ -207,6 +243,18 @@ export default function Results() {
 
   return (
     <div className="min-h-screen bg-background">
+      <style>
+        {`
+          @media print {
+            header {
+              display: none !important;
+            }
+            .print-hide {
+              display: none !important;
+            }
+          }
+        `}
+      </style>
       <header className="border-b bg-card sticky top-0 z-50 backdrop-blur supports-[backdrop-filter]:bg-card/60">
         <div className="container mx-auto flex h-16 items-center justify-between px-6">
           <div className="flex items-center gap-3">
@@ -347,6 +395,36 @@ export default function Results() {
               </CardContent>
             </Card>
           )}
+
+          {/* Download and Email Actions */}
+          <div className="flex flex-wrap gap-3 pt-4 print-hide">
+            <Button
+              onClick={handleDownload}
+              variant="default"
+              data-testid="button-download-results"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Download PDF
+            </Button>
+            <Button
+              onClick={() => emailResultsMutation.mutate()}
+              variant="outline"
+              disabled={emailResultsMutation.isPending}
+              data-testid="button-email-results"
+            >
+              {emailResultsMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Mail className="mr-2 h-4 w-4" />
+                  Email Me
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </main>
     </div>
