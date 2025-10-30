@@ -176,6 +176,23 @@ export default function FacilitatorWorkspace() {
     queryKey: [`/api/spaces/${params.space}/results/cohort`],
     enabled: !!params.space,
     retry: false,
+    queryFn: async () => {
+      const res = await fetch(`/api/spaces/${params.space}/results/cohort`, {
+        credentials: "include",
+      });
+      
+      // Treat 404 as "no results yet" rather than an error
+      if (res.status === 404) {
+        return null;
+      }
+      
+      if (!res.ok) {
+        const text = (await res.text()) || res.statusText;
+        throw new Error(`${res.status}: ${text}`);
+      }
+      
+      return await res.json();
+    },
   });
 
   // Generate cohort results mutation
@@ -397,9 +414,17 @@ export default function FacilitatorWorkspace() {
   // Update space status mutation
   const updateSpaceStatusMutation = useMutation({
     mutationFn: async (status: string) => {
-      const response = await apiRequest("PATCH", `/api/spaces/${params.space}`, {
-        status,
-      });
+      const updates: any = { status };
+      
+      // When starting a session (status = open), automatically enable ideation phase
+      if (status === "open") {
+        const now = new Date();
+        const farFuture = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000); // 1 year from now
+        updates.ideationStartsAt = now;
+        updates.ideationEndsAt = farFuture;
+      }
+      
+      const response = await apiRequest("PATCH", `/api/spaces/${params.space}`, updates);
       return await response.json();
     },
     onSuccess: () => {
