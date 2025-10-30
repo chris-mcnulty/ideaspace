@@ -2740,8 +2740,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Export ideas as CSV
-  app.get("/api/spaces/:spaceId/export/ideas-csv", requireAuth, async (req, res) => {
+  // Export ideas and categories as combined CSV
+  app.get("/api/spaces/:spaceId/export/data-csv", requireAuth, async (req, res) => {
     try {
       const { spaceId } = req.params;
       
@@ -2780,7 +2780,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const categoryMap = new Map(categories.map(c => [c.id, c.name]));
       const participantMap = new Map(participants.map(p => [p.id, p.displayName]));
 
-      // Generate CSV
+      // Generate CSV with category repeated for each idea
       let csv = 'Idea,Category,Participant,Created At\n';
       
       for (const note of notes) {
@@ -2794,11 +2794,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Set headers for file download
       res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', `attachment; filename="ideas-${spaceId}-${Date.now()}.csv"`);
+      res.setHeader('Content-Disposition', `attachment; filename="workspace-data-${spaceId}-${Date.now()}.csv"`);
       res.send(csv);
     } catch (error) {
-      console.error("Failed to export ideas CSV:", error);
-      res.status(500).json({ error: "Failed to export ideas" });
+      console.error("Failed to export data CSV:", error);
+      res.status(500).json({ error: "Failed to export workspace data" });
     }
   });
 
@@ -2857,8 +2857,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Import ideas from CSV
-  app.post("/api/spaces/:spaceId/import/ideas-csv", requireAuth, upload.single('file'), async (req, res) => {
+  // Import ideas and categories from combined CSV
+  app.post("/api/spaces/:spaceId/import/data-csv", requireAuth, upload.single('file'), async (req, res) => {
     try {
       const { spaceId } = req.params;
       
