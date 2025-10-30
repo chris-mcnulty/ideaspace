@@ -1,6 +1,6 @@
 import type { Space } from "@shared/schema";
 
-export type PhaseType = "ideation" | "voting" | "ranking";
+export type PhaseType = "ideation" | "voting" | "ranking" | "marketplace";
 
 export type PhaseStatus = "not-scheduled" | "upcoming" | "active" | "ended";
 
@@ -36,16 +36,21 @@ export function isPhaseActive(
   space: Space,
   phaseType: PhaseType
 ): boolean {
-  if (space.sessionMode === "live") {
-    // In live mode, check the workspace status
-    // This maintains backward compatibility with existing logic
-    return space.status === "open";
+  // Check time windows for all session modes
+  // For live mode, facilitators can enable phases by setting time windows
+  const phase = getPhaseTimeWindow(space, phaseType);
+  
+  // If no time window is set, phase is not active
+  if (!phase.startsAt || !phase.endsAt) {
+    return false;
   }
 
-  // In async mode, check time windows
-  const phase = getPhaseTimeWindow(space, phaseType);
-  const status = getPhaseStatus(space.sessionMode, phase);
-  return status === "active";
+  const now = new Date();
+  const start = new Date(phase.startsAt);
+  const end = new Date(phase.endsAt);
+
+  // Phase is active if current time is within the window
+  return now >= start && now <= end;
 }
 
 export function getPhaseTimeWindow(
@@ -67,6 +72,11 @@ export function getPhaseTimeWindow(
       return {
         startsAt: space.rankingStartsAt,
         endsAt: space.rankingEndsAt,
+      };
+    case "marketplace":
+      return {
+        startsAt: space.marketplaceStartsAt,
+        endsAt: space.marketplaceEndsAt,
       };
   }
 }

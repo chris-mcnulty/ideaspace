@@ -247,6 +247,30 @@ export default function FacilitatorWorkspace() {
     },
   });
 
+  // Update workspace settings mutation
+  const updateWorkspaceSettings = useMutation({
+    mutationFn: async (settings: { aiResultsEnabled?: boolean }) => {
+      const response = await apiRequest("PATCH", `/api/spaces/${params.space}`, settings);
+      return await response.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}`] });
+      toast({
+        title: "Settings Updated",
+        description: variables.aiResultsEnabled 
+          ? "AI personalized results have been enabled for verified participants"
+          : "AI personalized results have been disabled",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to update settings",
+        description: error.message,
+      });
+    },
+  });
+
   // Add note mutation
   const addNoteMutation = useMutation({
     mutationFn: async (content: string) => {
@@ -1895,26 +1919,152 @@ export default function FacilitatorWorkspace() {
                   </Card>
                 )}
 
-                <div className="flex justify-end">
-                  <Button
-                    variant="outline"
-                    onClick={() => generateCohortResultsMutation.mutate()}
-                    disabled={generateCohortResultsMutation.isPending}
-                    data-testid="button-regenerate-results"
-                  >
-                    {generateCohortResultsMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Regenerating...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="h-4 w-4 mr-2" />
-                        Regenerate Results
-                      </>
-                    )}
-                  </Button>
+                <div className="flex flex-col gap-4">
+                  {/* AI Results Toggle */}
+                  <Card className="bg-muted/30">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <Sparkles className="h-4 w-4 text-primary" />
+                        AI-Powered Personalized Results
+                      </CardTitle>
+                      <CardDescription>
+                        Enable AI-generated personalized results for verified participants. Participants must be logged in and email verified to access their personalized insights.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-muted-foreground">
+                          Status: {space.aiResultsEnabled ? (
+                            <Badge variant="default" className="ml-2">Enabled</Badge>
+                          ) : (
+                            <Badge variant="secondary" className="ml-2">Disabled</Badge>
+                          )}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            // Toggle AI results
+                            updateWorkspaceSettings.mutate({ aiResultsEnabled: !space.aiResultsEnabled });
+                          }}
+                          disabled={updateWorkspaceSettings.isPending}
+                          data-testid="button-toggle-ai-results"
+                        >
+                          {updateWorkspaceSettings.isPending ? (
+                            <>
+                              <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                              {space.aiResultsEnabled ? "Disabling..." : "Enabling..."}
+                            </>
+                          ) : (
+                            <>{space.aiResultsEnabled ? "Disable" : "Enable"} AI Results</>
+                          )}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <div className="flex gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => generateCohortResultsMutation.mutate()}
+                      disabled={generateCohortResultsMutation.isPending}
+                      data-testid="button-regenerate-results"
+                    >
+                      {generateCohortResultsMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Regenerating...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-4 w-4 mr-2" />
+                          Regenerate Cohort Results
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
+
+                {/* Individual Participant Results */}
+                <Card className="mt-6">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Users className="h-5 w-5 text-primary" />
+                      Individual Participant Results
+                    </CardTitle>
+                    <CardDescription>
+                      View how each participant's ideas performed across all voting modules
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {participants.map((participant) => {
+                        // Get participant's notes
+                        const participantNotes = notes.filter(n => n.participantId === participant.id);
+                        
+                        if (participantNotes.length === 0) return null;
+                        
+                        return (
+                          <div key={participant.id} className="rounded-lg border p-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                                  <User className="h-5 w-5 text-primary" />
+                                </div>
+                                <div>
+                                  <p className="font-medium">{participant.displayName}</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {participantNotes.length} {participantNotes.length === 1 ? 'idea' : 'ideas'}
+                                    {participant.userId && !participant.isGuest && (
+                                      <Badge variant="outline" className="ml-2">Verified</Badge>
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+                              {space.aiResultsEnabled && participant.userId && !participant.isGuest && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    // Generate personalized results for this participant
+                                    window.open(`/o/${params.org}/s/${params.space}/results?participantId=${participant.id}`, '_blank');
+                                  }}
+                                  data-testid={`button-view-results-${participant.id}`}
+                                >
+                                  <Sparkles className="h-3 w-3 mr-1" />
+                                  View AI Results
+                                </Button>
+                              )}
+                            </div>
+                            
+                            <div className="space-y-2">
+                              {participantNotes.map((note) => {
+                                // Find this note's performance across all modules
+                                const pairwiseWins = votes.filter(v => v.winnerNoteId === note.id).length;
+                                const bordaItem = leaderboard.find(l => l.noteId === note.id);
+                                const marketplaceItem = marketplaceLeaderboard?.leaderboard?.find((l: any) => l.noteId === note.id);
+                                
+                                return (
+                                  <div key={note.id} className="rounded border bg-muted/30 p-3 text-sm">
+                                    <p className="font-medium mb-2">{note.content}</p>
+                                    <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                                      {note.category && (
+                                        <span>Category: <Badge variant="secondary" className="text-xs">{note.category}</Badge></span>
+                                      )}
+                                      <span>Pairwise Wins: {pairwiseWins}</span>
+                                      {bordaItem && <span>Borda Score: {bordaItem.totalScore}</span>}
+                                      {marketplaceItem && <span>Marketplace Coins: {marketplaceItem.totalCoins}</span>}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             )}
           </TabsContent>

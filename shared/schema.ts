@@ -59,6 +59,9 @@ export const spaces = pgTable("spaces", {
   votingEndsAt: timestamp("voting_ends_at"),
   rankingStartsAt: timestamp("ranking_starts_at"),
   rankingEndsAt: timestamp("ranking_ends_at"),
+  marketplaceStartsAt: timestamp("marketplace_starts_at"),
+  marketplaceEndsAt: timestamp("marketplace_ends_at"),
+  aiResultsEnabled: boolean("ai_results_enabled").notNull().default(false), // Facilitator toggle for AI-generated personalized results
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

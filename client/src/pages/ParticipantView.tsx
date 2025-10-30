@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
+import { isPhaseActive } from "@/lib/phaseUtils";
 import type { Organization, Space, Note, Participant, Category } from "@shared/schema";
 
 export default function ParticipantView() {
@@ -295,8 +296,8 @@ export default function ParticipantView() {
       <main className="flex-1 overflow-hidden bg-white text-gray-900">
         <div className="h-full overflow-auto p-8">
           <div className="mx-auto max-w-7xl">
-            {/* Create Note Button (floating on white) */}
-            {!showNoteForm && (
+            {/* Create Note Button (floating on white) - Only show when ideation is active */}
+            {!showNoteForm && space && isPhaseActive(space, "ideation") && (
               <Button
                 onClick={() => setShowNoteForm(true)}
                 className="mb-6"
@@ -305,6 +306,14 @@ export default function ParticipantView() {
                 <Plus className="mr-2 h-4 w-4" />
                 Add Idea
               </Button>
+            )}
+            
+            {/* Ideation closed message */}
+            {!showNoteForm && space && !isPhaseActive(space, "ideation") && (
+              <div className="mb-6 rounded-lg border border-muted-foreground/20 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+                <Clock className="mr-2 inline-block h-4 w-4" />
+                Ideation phase is not currently active. New ideas cannot be added at this time.
+              </div>
             )}
 
             {/* Note Creation Form (on white background) */}
@@ -412,38 +421,44 @@ export default function ParticipantView() {
             </div>
           </div>
           
-          {/* Navigation Buttons */}
+          {/* Navigation Buttons - Only show when phases are active */}
           <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate(`/o/${params.org}/s/${params.space}/vote`)}
-              className="gap-2"
-              data-testid="button-go-to-voting"
-            >
-              <Vote className="h-4 w-4" />
-              Pairwise Voting
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate(`/o/${params.org}/s/${params.space}/rank`)}
-              className="gap-2"
-              data-testid="button-go-to-ranking"
-            >
-              <ListOrdered className="h-4 w-4" />
-              Stack Ranking
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate(`/o/${params.org}/s/${params.space}/marketplace`)}
-              className="gap-2"
-              data-testid="button-go-to-marketplace"
-            >
-              <Coins className="h-4 w-4" />
-              Marketplace
-            </Button>
+            {space && isPhaseActive(space, "voting") && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/o/${params.org}/s/${params.space}/vote`)}
+                className="gap-2"
+                data-testid="button-go-to-voting"
+              >
+                <Vote className="h-4 w-4" />
+                Pairwise Voting
+              </Button>
+            )}
+            {space && isPhaseActive(space, "ranking") && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/o/${params.org}/s/${params.space}/rank`)}
+                className="gap-2"
+                data-testid="button-go-to-ranking"
+              >
+                <ListOrdered className="h-4 w-4" />
+                Stack Ranking
+              </Button>
+            )}
+            {space && isPhaseActive(space, "marketplace") && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/o/${params.org}/s/${params.space}/marketplace`)}
+                className="gap-2"
+                data-testid="button-go-to-marketplace"
+              >
+                <Coins className="h-4 w-4" />
+                Marketplace
+              </Button>
+            )}
           </div>
         </div>
       </footer>

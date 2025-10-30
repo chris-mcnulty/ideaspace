@@ -982,6 +982,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid phase. Must be one of: vote, rank, marketplace, ideate" });
       }
       
+      // Automatically enable the phase by setting time windows
+      // This allows the phase to be "active" according to isPhaseActive checks
+      const now = new Date();
+      const farFuture = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000); // 1 year from now
+      
+      const updates: any = {};
+      
+      switch (phase) {
+        case "ideate":
+          updates.ideationStartsAt = now;
+          updates.ideationEndsAt = farFuture;
+          break;
+        case "vote":
+          updates.votingStartsAt = now;
+          updates.votingEndsAt = farFuture;
+          break;
+        case "rank":
+          updates.rankingStartsAt = now;
+          updates.rankingEndsAt = farFuture;
+          break;
+        case "marketplace":
+          updates.marketplaceStartsAt = now;
+          updates.marketplaceEndsAt = farFuture;
+          break;
+      }
+      
+      // Update workspace to enable the phase
+      await storage.updateSpace(req.params.id, updates);
+      
       // Broadcast navigation command to all participants
       broadcast({
         type: "navigate_to_phase",
@@ -1735,6 +1764,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(401).json({ error: "No participant session found. Please rejoin the workspace." });
         }
         data.participantId = sessionParticipantId;
+        
+        // For participants, verify ideation phase is active
+        const space = await storage.getSpace(data.spaceId);
+        if (!space) {
+          return res.status(404).json({ error: "Workspace not found" });
+        }
+        
+        // Check if ideation phase is active (time-window based for both live and async)
+        const isIdeationActive = space.ideationStartsAt && space.ideationEndsAt && 
+          new Date() >= new Date(space.ideationStartsAt) && 
+          new Date() <= new Date(space.ideationEndsAt);
+        
+        if (!isIdeationActive) {
+          return res.status(403).json({ error: "Ideation phase is not currently active. New ideas cannot be added at this time." });
+        }
       }
       
       const note = await storage.createNote(data);
