@@ -59,6 +59,215 @@ import type { Organization, Space, Note, Participant, Category, User } from "@sh
 import { Leaderboard } from "@/components/Leaderboard";
 import { KnowledgeBaseManager } from "@/components/KnowledgeBaseManager";
 
+// Comprehensive Results Table Component
+function ComprehensiveResultsTable({
+  notes,
+  votes,
+  bordaLeaderboard,
+  marketplaceLeaderboard,
+  categories,
+}: {
+  notes: Note[];
+  votes: any[];
+  bordaLeaderboard: any[];
+  marketplaceLeaderboard: any[];
+  categories: Category[];
+}) {
+  const [sortBy, setSortBy] = useState<'pairwise' | 'borda' | 'marketplace' | 'idea'>('pairwise');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+
+  // Create category map
+  const categoryMap = new Map<string, string>();
+  categories.forEach(cat => {
+    categoryMap.set(cat.id, cat.name);
+  });
+
+  // Calculate pairwise wins and total votes per note
+  const pairwiseStats = new Map<string, { wins: number; total: number }>();
+  notes.forEach(note => {
+    pairwiseStats.set(note.id, { wins: 0, total: 0 });
+  });
+  
+  votes.forEach((vote: any) => {
+    const winnerStats = pairwiseStats.get(vote.winnerNoteId);
+    const loserStats = pairwiseStats.get(vote.loserNoteId);
+    
+    if (winnerStats) {
+      winnerStats.wins += 1;
+      winnerStats.total += 1;
+    }
+    if (loserStats) {
+      loserStats.total += 1;
+    }
+  });
+
+  // Create Borda score map
+  const bordaMap = new Map<string, number>();
+  bordaLeaderboard.forEach((item: any) => {
+    bordaMap.set(item.noteId, item.averageBordaScore || item.bordaScore || 0);
+  });
+
+  // Create marketplace coins map
+  const marketplaceMap = new Map<string, number>();
+  marketplaceLeaderboard.forEach((item: any) => {
+    marketplaceMap.set(item.noteId, item.totalCoins || 0);
+  });
+
+  // Combine all data
+  const combinedData = notes.map(note => {
+    const pairwise = pairwiseStats.get(note.id) || { wins: 0, total: 0 };
+    const winRate = pairwise.total > 0 ? (pairwise.wins / pairwise.total) * 100 : 0;
+    
+    return {
+      id: note.id,
+      content: note.content,
+      category: note.manualCategoryId ? categoryMap.get(note.manualCategoryId) || 'Uncategorized' : 'Uncategorized',
+      pairwiseWins: pairwise.wins,
+      pairwiseTotal: pairwise.total,
+      winRate,
+      bordaScore: bordaMap.get(note.id) || 0,
+      marketplaceCoins: marketplaceMap.get(note.id) || 0,
+    };
+  });
+
+  // Sort data
+  const sortedData = [...combinedData].sort((a, b) => {
+    let compareValue = 0;
+    
+    switch (sortBy) {
+      case 'pairwise':
+        compareValue = a.winRate - b.winRate;
+        break;
+      case 'borda':
+        compareValue = a.bordaScore - b.bordaScore;
+        break;
+      case 'marketplace':
+        compareValue = a.marketplaceCoins - b.marketplaceCoins;
+        break;
+      case 'idea':
+        compareValue = a.content.localeCompare(b.content);
+        break;
+    }
+    
+    return sortDirection === 'desc' ? -compareValue : compareValue;
+  });
+
+  const handleSort = (column: 'pairwise' | 'borda' | 'marketplace' | 'idea') => {
+    if (sortBy === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(column);
+      setSortDirection('desc');
+    }
+  };
+
+  if (notes.length === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        No ideas yet. Add some ideas to see voting results.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="border-b">
+              <th className="text-left p-3 font-semibold">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleSort('idea')}
+                  className="hover-elevate -ml-3"
+                  data-testid="button-sort-idea"
+                >
+                  Idea {sortBy === 'idea' && (sortDirection === 'desc' ? '↓' : '↑')}
+                </Button>
+              </th>
+              <th className="text-left p-3 font-semibold">Category</th>
+              <th className="text-right p-3 font-semibold">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleSort('pairwise')}
+                  className="hover-elevate"
+                  data-testid="button-sort-pairwise"
+                >
+                  Pairwise {sortBy === 'pairwise' && (sortDirection === 'desc' ? '↓' : '↑')}
+                </Button>
+              </th>
+              <th className="text-right p-3 font-semibold">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleSort('borda')}
+                  className="hover-elevate"
+                  data-testid="button-sort-borda"
+                >
+                  Borda Score {sortBy === 'borda' && (sortDirection === 'desc' ? '↓' : '↑')}
+                </Button>
+              </th>
+              <th className="text-right p-3 font-semibold">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleSort('marketplace')}
+                  className="hover-elevate"
+                  data-testid="button-sort-marketplace"
+                >
+                  Marketplace Coins {sortBy === 'marketplace' && (sortDirection === 'desc' ? '↓' : '↑')}
+                </Button>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {sortedData.map((item, index) => (
+              <tr
+                key={item.id}
+                className="border-b hover-elevate"
+                data-testid={`results-row-${index}`}
+              >
+                <td className="p-3 max-w-md">
+                  <p className="text-sm">{item.content}</p>
+                </td>
+                <td className="p-3">
+                  <Badge variant="secondary">{item.category}</Badge>
+                </td>
+                <td className="p-3 text-right">
+                  <div className="text-sm">
+                    <div className="font-semibold">
+                      {item.pairwiseWins}/{item.pairwiseTotal}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {item.pairwiseTotal > 0 ? `${item.winRate.toFixed(1)}% win rate` : 'No votes'}
+                    </div>
+                  </div>
+                </td>
+                <td className="p-3 text-right">
+                  <div className="text-sm font-semibold">
+                    {item.bordaScore.toFixed(1)}
+                  </div>
+                </td>
+                <td className="p-3 text-right">
+                  <div className="text-sm font-semibold">
+                    {item.marketplaceCoins}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      
+      <div className="text-sm text-muted-foreground">
+        Showing {sortedData.length} ideas with results from all voting modalities. Click column headers to sort.
+      </div>
+    </div>
+  );
+}
+
 export default function FacilitatorWorkspace() {
   const params = useParams() as { org: string; space: string };
   const [, setLocation] = useLocation();
@@ -174,6 +383,12 @@ export default function FacilitatorWorkspace() {
     enabled: !!params.space,
   });
 
+  // Fetch marketplace leaderboard
+  const { data: marketplaceLeaderboard = [] } = useQuery<any[]>({
+    queryKey: [`/api/spaces/${params.space}/marketplace-leaderboard`],
+    enabled: !!params.space,
+  });
+
   // Fetch cohort results
   const { data: cohortResults, isLoading: cohortResultsLoading } = useQuery<any>({
     queryKey: [`/api/spaces/${params.space}/results/cohort`],
@@ -246,7 +461,7 @@ export default function FacilitatorWorkspace() {
 
   // Navigate participants mutation
   const navigateParticipantsMutation = useMutation({
-    mutationFn: async (phase: "vote" | "rank" | "marketplace" | "ideate") => {
+    mutationFn: async (phase: "vote" | "rank" | "marketplace" | "ideate" | "results") => {
       const response = await apiRequest("POST", `/api/spaces/${params.space}/navigate-participants`, {
         phase,
       });
@@ -255,7 +470,7 @@ export default function FacilitatorWorkspace() {
     onSuccess: (_, phase) => {
       toast({
         title: "Participants Navigated",
-        description: `All participants have been directed to the ${phase} phase`,
+        description: `All participants have been directed to the ${phase} ${phase === 'results' ? 'page' : 'phase'}`,
       });
     },
     onError: (error: Error) => {
@@ -1938,6 +2153,28 @@ export default function FacilitatorWorkspace() {
           </TabsContent>
 
           <TabsContent value="results" className="mt-6 space-y-6">
+            {/* Comprehensive Voting Results Table */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Trophy className="h-5 w-5 text-primary" />
+                  Comprehensive Voting Results
+                </CardTitle>
+                <CardDescription>
+                  All ideas with results from pairwise voting, stack ranking (Borda count), and marketplace allocation
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ComprehensiveResultsTable
+                  notes={notes}
+                  votes={votes}
+                  bordaLeaderboard={leaderboard}
+                  marketplaceLeaderboard={marketplaceLeaderboard}
+                  categories={manualCategories}
+                />
+              </CardContent>
+            </Card>
+
             {cohortResultsLoading ? (
               <div className="flex items-center justify-center min-h-[400px]">
                 <div className="flex items-center gap-2 text-muted-foreground">
@@ -2102,6 +2339,15 @@ export default function FacilitatorWorkspace() {
                   </Card>
                   
                   <div className="flex gap-3">
+                    <Button
+                      variant="default"
+                      onClick={() => navigateParticipantsMutation.mutate("results")}
+                      disabled={navigateParticipantsMutation.isPending}
+                      data-testid="button-navigate-to-results"
+                    >
+                      <Users className="mr-2 h-4 w-4" />
+                      Send to Results
+                    </Button>
                     <Button
                       variant="outline"
                       onClick={() => generateCohortResultsMutation.mutate()}

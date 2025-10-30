@@ -90,12 +90,13 @@ export default function ParticipantView() {
             rank: `/o/${params.org}/s/${params.space}/rank`,
             marketplace: `/o/${params.org}/s/${params.space}/marketplace`,
             ideate: `/o/${params.org}/s/${params.space}/participate`,
+            results: `/o/${params.org}/s/${params.space}/results`,
           };
           
           if (phaseRoutes[phase as keyof typeof phaseRoutes]) {
             toast({
               title: "Phase Change",
-              description: `Navigating to ${phase} phase...`,
+              description: `Navigating to ${phase === 'results' ? 'results page' : phase + ' phase'}...`,
             });
             navigate(phaseRoutes[phase as keyof typeof phaseRoutes]);
           }

@@ -1,6 +1,6 @@
 import { openai } from "./openai";
 import { db } from "../db";
-import { notes, votes, rankings, marketplaceAllocations, participants, spaces, knowledgeBaseDocuments, cohortResults, personalizedResults } from "@shared/schema";
+import { notes, votes, rankings, marketplaceAllocations, participants, spaces, knowledgeBaseDocuments, cohortResults, personalizedResults, categories } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { CohortResult, PersonalizedResult } from "@shared/schema";
@@ -62,6 +62,17 @@ export async function generateCohortResults(
   if (allNotes.length === 0) {
     throw new Error("No notes found for this workspace");
   }
+
+  // Fetch categories for this workspace to map category IDs to names
+  const allCategories = await db
+    .select()
+    .from(categories)
+    .where(eq(categories.spaceId, spaceId));
+
+  const categoryMap = new Map<string, string>();
+  allCategories.forEach(cat => {
+    categoryMap.set(cat.id, cat.name);
+  });
 
   // Fetch voting data (pairwise)
   const pairwiseVotes = await db
@@ -147,7 +158,7 @@ Total Marketplace Allocations: ${marketplaceData.length}
 
 All Ideas Ranked by Combined Score:
 ${notesWithScores.map((note: any, idx: any) => `
-${idx + 1}. "${note.content}" (Category: ${note.category || 'Uncategorized'})
+${idx + 1}. "${note.content}" (Category: ${note.manualCategoryId ? categoryMap.get(note.manualCategoryId) || 'Uncategorized' : 'Uncategorized'})
    - Pairwise Wins: ${note.pairwiseWins}
    - Borda Score: ${note.bordaScore}
    - Marketplace Coins: ${note.marketplaceCoins}
@@ -157,7 +168,7 @@ ${idx + 1}. "${note.content}" (Category: ${note.category || 'Uncategorized'})
 All Ideas Grouped by Category:
 ${Object.entries(
     allNotes.reduce((acc: any, note: any) => {
-      const cat = note.category || 'Uncategorized';
+      const cat = note.manualCategoryId ? categoryMap.get(note.manualCategoryId) || 'Uncategorized' : 'Uncategorized';
       if (!acc[cat]) acc[cat] = [];
       acc[cat].push(note.content);
       return acc;
