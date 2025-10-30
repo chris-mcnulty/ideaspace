@@ -203,6 +203,139 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Protected: Update user (company/global admin only)
+  app.patch("/api/admin/users/:id", requireCompanyAdmin, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const targetUserId = req.params.id;
+      
+      // Get the target user first
+      const targetUser = await storage.getUser(targetUserId);
+      if (!targetUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      // Authorization checks
+      if (currentUser.role === "company_admin") {
+        // Company admins can only update users in their organization
+        if (targetUser.organizationId !== currentUser.organizationId) {
+          return res.status(403).json({ error: "Cannot update users from other organizations" });
+        }
+        // Company admins cannot elevate users to admin roles
+        if (req.body.role && (req.body.role === "global_admin" || req.body.role === "company_admin")) {
+          return res.status(403).json({ error: "Company admins cannot assign admin roles" });
+        }
+      }
+      
+      // Parse and validate update data (password not allowed here - use reset-password endpoint)
+      const updateSchema = insertUserSchema.partial().omit({ password: true });
+      const data = updateSchema.parse(req.body);
+      
+      const updatedUser = await storage.updateUser(targetUserId, data);
+      if (!updatedUser) {
+        return res.status(404).json({ error: "Failed to update user" });
+      }
+      
+      // Remove password from response
+      const { password, ...userWithoutPassword } = updatedUser;
+      res.json(userWithoutPassword);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Failed to update user" });
+    }
+  });
+
+  // Protected: Delete user (company/global admin only)
+  app.delete("/api/admin/users/:id", requireCompanyAdmin, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const targetUserId = req.params.id;
+      
+      // Prevent self-deletion
+      if (currentUser.id === targetUserId) {
+        return res.status(400).json({ error: "Cannot delete your own account" });
+      }
+      
+      // Get the target user first
+      const targetUser = await storage.getUser(targetUserId);
+      if (!targetUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      // Authorization checks
+      if (currentUser.role === "company_admin") {
+        // Company admins can only delete users in their organization
+        if (targetUser.organizationId !== currentUser.organizationId) {
+          return res.status(403).json({ error: "Cannot delete users from other organizations" });
+        }
+        // Company admins cannot delete admin users
+        if (targetUser.role === "global_admin" || targetUser.role === "company_admin") {
+          return res.status(403).json({ error: "Company admins cannot delete admin users" });
+        }
+      }
+      
+      const deleted = await storage.deleteUser(targetUserId);
+      if (!deleted) {
+        return res.status(404).json({ error: "Failed to delete user" });
+      }
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error("Failed to delete user:", error);
+      res.status(500).json({ error: "Failed to delete user" });
+    }
+  });
+
+  // Protected: Admin reset user password (company/global admin only)
+  app.post("/api/admin/users/:id/reset-password", requireCompanyAdmin, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const targetUserId = req.params.id;
+      
+      // Get the target user first
+      const targetUser = await storage.getUser(targetUserId);
+      if (!targetUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      // Authorization checks
+      if (currentUser.role === "company_admin") {
+        // Company admins can only reset passwords for users in their organization
+        if (targetUser.organizationId !== currentUser.organizationId) {
+          return res.status(403).json({ error: "Cannot reset password for users from other organizations" });
+        }
+        // Company admins cannot reset passwords for admin users
+        if (targetUser.role === "global_admin" || targetUser.role === "company_admin") {
+          return res.status(403).json({ error: "Company admins cannot reset admin passwords" });
+        }
+      }
+      
+      // Validate new password
+      const { newPassword } = z.object({ 
+        newPassword: z.string().min(8, "Password must be at least 8 characters") 
+      }).parse(req.body);
+      
+      // Hash the new password
+      const hashedPassword = await hashPassword(newPassword);
+      
+      // Update user password
+      const updatedUser = await storage.updateUser(targetUserId, { password: hashedPassword });
+      if (!updatedUser) {
+        return res.status(404).json({ error: "Failed to reset password" });
+      }
+      
+      res.json({ message: "Password reset successfully" });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Failed to reset password:", error);
+      res.status(500).json({ error: "Failed to reset password" });
+    }
+  });
+
   app.post("/api/auth/login", (req, res, next) => {
     passport.authenticate("local", (err: any, user: User | false, info: any) => {
       if (err) {
