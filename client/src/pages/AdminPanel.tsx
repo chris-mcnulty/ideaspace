@@ -13,14 +13,16 @@ import { KnowledgeBaseManager } from "@/components/KnowledgeBaseManager";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertOrganizationSchema, createSpaceApiSchema } from "@shared/schema";
+import { insertOrganizationSchema, createSpaceApiSchema, insertUserSchema } from "@shared/schema";
 import { z } from "zod";
+import { Key, UserPlus } from "lucide-react";
 
 export default function AdminPanel() {
   const [, setLocation] = useLocation();
@@ -1985,7 +1987,599 @@ function EditOrganizationDialog({
   );
 }
 
+// Create User Dialog Component
+function CreateUserDialog({ open, onOpenChange, currentUser, organizations }: { 
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  currentUser: User;
+  organizations: Organization[];
+}) {
+  const { toast } = useToast();
+  
+  const createUserSchema = insertUserSchema.extend({
+    password: z.string().min(8, "Password must be at least 8 characters"),
+  });
+  
+  const form = useForm<z.infer<typeof createUserSchema>>({
+    resolver: zodResolver(createUserSchema),
+    defaultValues: {
+      email: "",
+      username: "",
+      displayName: "",
+      password: "",
+      role: "user",
+      organizationId: currentUser.role === "company_admin" ? currentUser.organizationId || null : null,
+      emailVerified: false,
+    },
+  });
+
+  const createUserMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof createUserSchema>) => {
+      return apiRequest("POST", "/api/admin/users", data);
+    },
+    onSuccess: () => {
+      toast({
+        title: "User created",
+        description: "The user has been created successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      form.reset();
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create user",
+        variant: "destructive",
+      });
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="dialog-create-user">
+        <DialogHeader>
+          <DialogTitle>Create New User</DialogTitle>
+          <DialogDescription>
+            Add a new user to the platform with specified role and organization.
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit((data) => createUserMutation.mutate(data))} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input placeholder="user@example.com" {...field} data-testid="input-create-user-email" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="username"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Username</FormLabel>
+                  <FormControl>
+                    <Input placeholder="johndoe" {...field} data-testid="input-create-user-username" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="displayName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Display Name (optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="John Doe" {...field} value={field.value || ""} data-testid="input-create-user-displayname" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Password</FormLabel>
+                  <FormControl>
+                    <Input type="password" placeholder="••••••••" {...field} data-testid="input-create-user-password" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="role"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Role</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value} disabled={currentUser.role === "company_admin"}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-create-user-role">
+                        <SelectValue placeholder="Select a role" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {currentUser.role === "global_admin" && (
+                        <>
+                          <SelectItem value="global_admin">Global Admin</SelectItem>
+                          <SelectItem value="company_admin">Company Admin</SelectItem>
+                        </>
+                      )}
+                      <SelectItem value="facilitator">Facilitator</SelectItem>
+                      <SelectItem value="user">User</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="organizationId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Organization (optional)</FormLabel>
+                  <Select 
+                    onValueChange={(value) => field.onChange(value === "none" ? null : value)} 
+                    value={field.value || "none"} 
+                    disabled={currentUser.role === "company_admin"}
+                  >
+                    <FormControl>
+                      <SelectTrigger data-testid="select-create-user-org">
+                        <SelectValue placeholder="No organization" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">No organization</SelectItem>
+                      {organizations.map((org) => (
+                        <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="emailVerified"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      data-testid="checkbox-create-user-verified"
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>Email Verified</FormLabel>
+                    <FormDescription>
+                      Mark this user's email as verified (skip email verification)
+                    </FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
+            <div className="flex justify-end gap-2 pt-4">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-create-user">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createUserMutation.isPending} data-testid="button-submit-create-user">
+                {createUserMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  "Create User"
+                )}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Edit User Dialog Component
+function EditUserDialog({ user, open, onOpenChange, currentUser, organizations }: {
+  user: User | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  currentUser: User;
+  organizations: Organization[];
+}) {
+  const { toast } = useToast();
+  
+  const updateUserSchema = insertUserSchema.partial().omit({ password: true });
+  
+  const form = useForm<z.infer<typeof updateUserSchema>>({
+    resolver: zodResolver(updateUserSchema),
+    defaultValues: {
+      email: user?.email || "",
+      username: user?.username || "",
+      displayName: user?.displayName || "",
+      role: user?.role || "user",
+      organizationId: user?.organizationId || null,
+      emailVerified: user?.emailVerified || false,
+    },
+  });
+
+  // Update form when user prop changes
+  if (user && form.getValues().email !== user.email) {
+    form.reset({
+      email: user.email,
+      username: user.username,
+      displayName: user.displayName || "",
+      role: user.role,
+      organizationId: user.organizationId || null,
+      emailVerified: user.emailVerified,
+    });
+  }
+
+  const updateUserMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof updateUserSchema>) => {
+      if (!user) throw new Error("No user selected");
+      return apiRequest("PATCH", `/api/admin/users/${user.id}`, data);
+    },
+    onSuccess: () => {
+      toast({
+        title: "User updated",
+        description: "The user has been updated successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update user",
+        variant: "destructive",
+      });
+    },
+  });
+
+  if (!user) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="dialog-edit-user">
+        <DialogHeader>
+          <DialogTitle>Edit User</DialogTitle>
+          <DialogDescription>
+            Update user information, role, and organization assignment.
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit((data) => updateUserMutation.mutate(data))} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input {...field} data-testid="input-edit-user-email" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="username"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Username</FormLabel>
+                  <FormControl>
+                    <Input {...field} data-testid="input-edit-user-username" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="displayName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Display Name (optional)</FormLabel>
+                  <FormControl>
+                    <Input {...field} value={field.value || ""} data-testid="input-edit-user-displayname" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="role"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Role</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value} disabled={currentUser.role === "company_admin"}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-edit-user-role">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {currentUser.role === "global_admin" && (
+                        <>
+                          <SelectItem value="global_admin">Global Admin</SelectItem>
+                          <SelectItem value="company_admin">Company Admin</SelectItem>
+                        </>
+                      )}
+                      <SelectItem value="facilitator">Facilitator</SelectItem>
+                      <SelectItem value="user">User</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="organizationId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Organization (optional)</FormLabel>
+                  <Select 
+                    onValueChange={(value) => field.onChange(value === "none" ? null : value)} 
+                    value={field.value || "none"} 
+                    disabled={currentUser.role === "company_admin"}
+                  >
+                    <FormControl>
+                      <SelectTrigger data-testid="select-edit-user-org">
+                        <SelectValue placeholder="No organization" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">No organization</SelectItem>
+                      {organizations.map((org) => (
+                        <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="emailVerified"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      data-testid="checkbox-edit-user-verified"
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>Email Verified</FormLabel>
+                    <FormDescription>
+                      Mark this user's email as verified
+                    </FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
+            <div className="flex justify-end gap-2 pt-4">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-edit-user">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={updateUserMutation.isPending} data-testid="button-submit-edit-user">
+                {updateUserMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save Changes"
+                )}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Delete User Dialog Component
+function DeleteUserDialog({ user, open, onOpenChange }: {
+  user: User | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { toast } = useToast();
+
+  const deleteUserMutation = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("No user selected");
+      return apiRequest("DELETE", `/api/admin/users/${user.id}`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "User deleted",
+        description: "The user has been permanently deleted.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete user",
+        variant: "destructive",
+      });
+    },
+  });
+
+  if (!user) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent data-testid="dialog-delete-user">
+        <DialogHeader>
+          <DialogTitle>Delete User</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to permanently delete this user?
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="rounded-lg border p-4 bg-muted/50">
+            <p className="font-medium">{user.displayName || user.username}</p>
+            <p className="text-sm text-muted-foreground">{user.email}</p>
+            <Badge className="mt-2" variant="outline">{user.role}</Badge>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            This action cannot be undone. All data associated with this user will be permanently deleted.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-delete-user">
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={() => deleteUserMutation.mutate()}
+              disabled={deleteUserMutation.isPending}
+              data-testid="button-confirm-delete-user"
+            >
+              {deleteUserMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete Permanently"
+              )}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Reset Password Dialog Component
+function ResetPasswordDialog({ user, open, onOpenChange }: {
+  user: User | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { toast } = useToast();
+  const [newPassword, setNewPassword] = useState("");
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("No user selected");
+      return apiRequest("POST", `/api/admin/users/${user.id}/reset-password`, { newPassword });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Password reset",
+        description: "The user's password has been reset successfully.",
+      });
+      setNewPassword("");
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reset password",
+        variant: "destructive",
+      });
+    },
+  });
+
+  if (!user) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent data-testid="dialog-reset-password">
+        <DialogHeader>
+          <DialogTitle>Reset User Password</DialogTitle>
+          <DialogDescription>
+            Set a new password for {user.displayName || user.username}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="rounded-lg border p-4 bg-muted/50">
+            <p className="font-medium">{user.displayName || user.username}</p>
+            <p className="text-sm text-muted-foreground">{user.email}</p>
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="new-password" className="text-sm font-medium">New Password</label>
+            <Input
+              id="new-password"
+              type="password"
+              placeholder="Enter new password (min 8 characters)"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              data-testid="input-reset-password"
+            />
+            {newPassword && newPassword.length < 8 && (
+              <p className="text-sm text-destructive">Password must be at least 8 characters</p>
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-reset-password">
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => resetPasswordMutation.mutate()}
+              disabled={resetPasswordMutation.isPending || newPassword.length < 8}
+              data-testid="button-confirm-reset-password"
+            >
+              {resetPasswordMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Resetting...
+                </>
+              ) : (
+                "Reset Password"
+              )}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function UsersTab() {
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+
+  const { data: currentUser } = useQuery<User>({
+    queryKey: ["/api/auth/me"],
+  });
+
+  const { data: organizations = [] } = useQuery<Organization[]>({
+    queryKey: ["/api/admin/organizations"],
+    enabled: currentUser?.role === "global_admin",
+  });
+
   const { data: users = [], isLoading } = useQuery<User[]>({
     queryKey: ["/api/admin/users"],
   });
@@ -1998,8 +2592,45 @@ function UsersTab() {
     );
   }
 
+  if (!currentUser) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {/* Dialogs */}
+      {currentUser && (
+        <>
+          <CreateUserDialog 
+            open={createDialogOpen} 
+            onOpenChange={setCreateDialogOpen}
+            currentUser={currentUser}
+            organizations={organizations}
+          />
+          <EditUserDialog 
+            user={selectedUser}
+            open={editDialogOpen} 
+            onOpenChange={setEditDialogOpen}
+            currentUser={currentUser}
+            organizations={organizations}
+          />
+          <DeleteUserDialog 
+            user={selectedUser}
+            open={deleteDialogOpen} 
+            onOpenChange={setDeleteDialogOpen}
+          />
+          <ResetPasswordDialog 
+            user={selectedUser}
+            open={resetPasswordDialogOpen} 
+            onOpenChange={setResetPasswordDialogOpen}
+          />
+        </>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-semibold">All Users</h2>
@@ -2007,6 +2638,13 @@ function UsersTab() {
             {users.length} user{users.length !== 1 ? 's' : ''} registered on the platform
           </p>
         </div>
+        <Button 
+          onClick={() => setCreateDialogOpen(true)}
+          data-testid="button-create-user"
+        >
+          <UserPlus className="h-4 w-4 mr-2" />
+          Create User
+        </Button>
       </div>
 
       {users.length === 0 ? (
@@ -2058,6 +2696,42 @@ function UsersTab() {
                         Pending
                       </Badge>
                     )}
+                    <div className="flex items-center gap-1 ml-2">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => {
+                          setSelectedUser(user);
+                          setEditDialogOpen(true);
+                        }}
+                        data-testid={`button-edit-user-${user.id}`}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => {
+                          setSelectedUser(user);
+                          setResetPasswordDialogOpen(true);
+                        }}
+                        data-testid={`button-reset-password-${user.id}`}
+                      >
+                        <Key className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => {
+                          setSelectedUser(user);
+                          setDeleteDialogOpen(true);
+                        }}
+                        disabled={currentUser.id === user.id}
+                        data-testid={`button-delete-user-${user.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}
