@@ -14,7 +14,7 @@ export function generatePairwiseExport(
   voteStats: Map<string, { wins: number; losses: number; winRate: number }>
 ): string {
   const timestamp = new Date().toISOString();
-  let output = `Aurora Pairwise Voting Export\n`;
+  let output = `Nebula Pairwise Voting Export\n`;
   output += `Generated: ${timestamp}\n`;
   output += `Total Ideas: ${notes.length}\n`;
   output += `\n${'='.repeat(80)}\n\n`;
@@ -88,7 +88,7 @@ export function generateStackRankingExport(
   leaderboard: BordaScore[]
 ): string {
   const timestamp = new Date().toISOString();
-  let output = `Aurora Stack Ranking Export (Borda Count)\n`;
+  let output = `Nebula Stack Ranking Export (Borda Count)\n`;
   output += `Generated: ${timestamp}\n`;
   output += `Total Ideas: ${leaderboard.length}\n`;
   output += `\n${'='.repeat(80)}\n\n`;
@@ -148,7 +148,7 @@ export function generateMarketplaceExport(
   leaderboard: MarketplaceScore[]
 ): string {
   const timestamp = new Date().toISOString();
-  let output = `Aurora Marketplace Allocation Export\n`;
+  let output = `Nebula Marketplace Allocation Export\n`;
   output += `Generated: ${timestamp}\n`;
   output += `Total Ideas: ${leaderboard.length}\n`;
   output += `\n${'='.repeat(80)}\n\n`;

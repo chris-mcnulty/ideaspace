@@ -112,7 +112,7 @@ function ComponentShowcase() {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur">
         <div className="container mx-auto px-6 py-4">
           <h1 className="text-2xl font-semibold tracking-tight">
-            Aurora Component Library
+            Nebula Component Library
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Multi-Tenant Envisioning Platform
@@ -138,7 +138,7 @@ function ComponentShowcase() {
         </div>
 
         <div className="mt-12 rounded-lg border p-8 text-center">
-          <h2 className="text-xl font-semibold">Aurora Platform Features</h2>
+          <h2 className="text-xl font-semibold">Nebula Platform Features</h2>
           <div className="mt-6 grid gap-6 text-left sm:grid-cols-2">
             <div>
               <h3 className="font-semibold">Multi-Tenant Architecture</h3>

@@ -1,7 +1,7 @@
-# Aurora - Multi-Tenant Collaborative Envisioning Platform
+# Nebula - Multi-Tenant Collaborative Envisioning Platform
 
 ## Overview
-Aurora is a web application facilitating structured collaborative envisioning sessions for cohorts. It enables facilitators to guide participants through real-time ideation, AI-powered categorization, pairwise voting, and stack ranking, culminating in personalized results. The platform provides a multi-tenant environment for organizations to conduct envisioning workshops.
+Nebula is a web application facilitating structured collaborative envisioning sessions for cohorts. It enables facilitators to guide participants through real-time ideation, AI-powered categorization, pairwise voting, and stack ranking, culminating in personalized results. The platform provides a multi-tenant environment for organizations to conduct envisioning workshops.
 
 ## User Preferences
 - The user wants iterative development.
@@ -15,12 +15,12 @@ Aurora is a web application facilitating structured collaborative envisioning se
   - Dark mode support
 
 ## System Architecture
-Aurora is a multi-tenant web application with a clear separation of concerns between frontend and backend.
+Nebula is a multi-tenant web application with a clear separation of concerns between frontend and backend.
 
 ### UI/UX Decisions
 The design system features a dark mode with a primary purple accent, dark blue-black backgrounds, and the Avenir Next LT Pro custom font. Branding includes Synozur logos and a favicon. The participant ideation view uses a white canvas with colorful sticky notes, while the landing page incorporates an AI network background and gradient text. General styling uses gradient text effects and automatic elevation on hover states.
 
-**Navigation**: Consistent sticky header across pages with Synozur logo (links to home), Aurora branding, theme toggle, and user profile menu. The UserProfileMenu provides access to Dashboard, Admin Panel (for admins/facilitators), and logout. Direct navigation to `/dashboard` is available from anywhere.
+**Navigation**: Consistent sticky header across pages with Synozur logo (links to home), Nebula branding, theme toggle, and user profile menu. The UserProfileMenu provides access to Dashboard, Admin Panel (for admins/facilitators), and logout. Direct navigation to `/dashboard` is available from anywhere.
 
 ### Technical Implementations
 - **Multi-Tenancy**: Supports organization isolation and custom branding via `/o/:org/s/:space` URL structure.

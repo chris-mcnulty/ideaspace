@@ -206,7 +206,7 @@ export default function StackRanking() {
               />
               <div className="h-6 w-px bg-border/40" />
               <span className="text-lg font-semibold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
-                Aurora
+                Nebula
               </span>
             </div>
             <div className="flex items-center gap-3">

@@ -69,7 +69,7 @@ export default function LandingPage() {
             />
             <div className="h-6 w-px bg-border/40" data-testid="divider-separator" />
             <span className="text-lg font-semibold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent" data-testid="text-app-name">
-              Aurora
+              Nebula
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -222,7 +222,7 @@ export default function LandingPage() {
               Ready to Transform Your Envisioning Process?
             </h2>
             <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-              Join leading organizations that are using Aurora to accelerate their transformation journey and unlock collective intelligence.
+              Join leading organizations that are using Nebula to accelerate their transformation journey and unlock collective intelligence.
             </p>
             <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:justify-center">
               <Button 

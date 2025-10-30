@@ -1,4 +1,4 @@
-# Aurora - Collaborative Envisioning Platform - Design Guidelines
+# Nebula - Collaborative Envisioning Platform - Design Guidelines
 
 ## Design Inspiration
 **Synozur Maturity Modeler Reference:** Dark mode professional platform with vibrant purple highlights, gradient text effects, and modern typography matching https://github.com/chris-mcnulty/synozur-maturitymodeler

@@ -86,7 +86,7 @@ export async function sendAccessRequestEmail(
           <tr>
             <td style="padding: 32px 40px; background: linear-gradient(135deg, #810FFB 0%, #E60CB3 100%);">
               <h1 style="margin: 0; color: #FFFFFF; font-size: 24px; font-weight: 600; text-align: center;">
-                Aurora
+                Nebula
               </h1>
               <p style="margin: 8px 0 0; color: rgba(255, 255, 255, 0.9); font-size: 14px; text-align: center;">
                 Collaborative Envisioning Platform
@@ -219,7 +219,7 @@ export async function sendEmailVerification(
           <tr>
             <td style="padding: 32px 40px; background: linear-gradient(135deg, #810FFB 0%, #E60CB3 100%);">
               <h1 style="margin: 0; color: #FFFFFF; font-size: 24px; font-weight: 600; text-align: center;">
-                Aurora
+                Nebula
               </h1>
               <p style="margin: 8px 0 0; color: rgba(255, 255, 255, 0.9); font-size: 14px; text-align: center;">
                 Collaborative Envisioning Platform
@@ -239,7 +239,7 @@ export async function sendEmailVerification(
               </p>
               
               <p style="margin: 0 0 20px; color: #D1D5DB; font-size: 16px; line-height: 1.6;">
-                Welcome to Aurora! To complete your registration and start using the platform, please verify your email address by clicking the button below.
+                Welcome to Nebula! To complete your registration and start using the platform, please verify your email address by clicking the button below.
               </p>
               
               <table width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 24px;">
@@ -253,7 +253,7 @@ export async function sendEmailVerification(
               </table>
               
               <p style="margin: 0 0 16px; color: #9CA3AF; font-size: 14px; line-height: 1.6;">
-                This verification link will expire in 24 hours. If you didn't create an account with Aurora, you can safely ignore this email.
+                This verification link will expire in 24 hours. If you didn't create an account with Nebula, you can safely ignore this email.
               </p>
               
               <p style="margin: 0; color: #6B7280; font-size: 12px; line-height: 1.5;">
@@ -285,11 +285,11 @@ export async function sendEmailVerification(
   const textContent = `
 Hi ${data.username},
 
-Welcome to Aurora! To complete your registration and start using the platform, please verify your email address by clicking the link below:
+Welcome to Nebula! To complete your registration and start using the platform, please verify your email address by clicking the link below:
 
 ${data.verificationUrl}
 
-This verification link will expire in 24 hours. If you didn't create an account with Aurora, you can safely ignore this email.
+This verification link will expire in 24 hours. If you didn't create an account with Nebula, you can safely ignore this email.
 
 ---
 Powered by Synozur Alliance
@@ -299,7 +299,7 @@ Powered by Synozur Alliance
   await client.send({
     to: recipientEmail,
     from: fromEmail,
-    subject: 'Verify Your Email - Aurora',
+    subject: 'Verify Your Email - Nebula',
     text: textContent,
     html: htmlContent,
   });
@@ -328,7 +328,7 @@ export async function sendPasswordReset(
           <tr>
             <td style="padding: 32px 40px; background: linear-gradient(135deg, #810FFB 0%, #E60CB3 100%);">
               <h1 style="margin: 0; color: #FFFFFF; font-size: 24px; font-weight: 600; text-align: center;">
-                Aurora
+                Nebula
               </h1>
               <p style="margin: 8px 0 0; color: rgba(255, 255, 255, 0.9); font-size: 14px; text-align: center;">
                 Collaborative Envisioning Platform
@@ -348,7 +348,7 @@ export async function sendPasswordReset(
               </p>
               
               <p style="margin: 0 0 20px; color: #D1D5DB; font-size: 16px; line-height: 1.6;">
-                We received a request to reset the password for your Aurora account. Click the button below to create a new password.
+                We received a request to reset the password for your Nebula account. Click the button below to create a new password.
               </p>
               
               <table width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 24px;">
@@ -394,7 +394,7 @@ export async function sendPasswordReset(
   const textContent = `
 Hi ${data.username},
 
-We received a request to reset the password for your Aurora account. Click the link below to create a new password:
+We received a request to reset the password for your Nebula account. Click the link below to create a new password:
 
 ${data.resetUrl}
 
@@ -408,7 +408,7 @@ Powered by Synozur Alliance
   await client.send({
     to: recipientEmail,
     from: fromEmail,
-    subject: 'Reset Your Password - Aurora',
+    subject: 'Reset Your Password - Nebula',
     text: textContent,
     html: htmlContent,
   });
