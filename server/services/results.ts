@@ -145,8 +145,8 @@ Total Pairwise Votes: ${pairwiseVotes.length}
 Total Rankings Submitted: ${new Set(rankingData.map((r: any) => r.participantId)).size}
 Total Marketplace Allocations: ${marketplaceData.length}
 
-Top 10 Ideas by Combined Score:
-${notesWithScores.slice(0, 10).map((note: any, idx: any) => `
+All Ideas Ranked by Combined Score:
+${notesWithScores.map((note: any, idx: any) => `
 ${idx + 1}. "${note.content}" (Category: ${note.category || 'Uncategorized'})
    - Pairwise Wins: ${note.pairwiseWins}
    - Borda Score: ${note.bordaScore}
@@ -202,7 +202,7 @@ Please provide your analysis in the following JSON format:
   "recommendations": "Actionable next steps for the cohort based on these results"
 }
 
-Include the top 10 ideas in topIdeas array, ranked by combined score.`,
+Include ALL ideas in the topIdeas array, ranked by combined score (highest to lowest).`,
       },
     ],
     response_format: { type: "json_object" },

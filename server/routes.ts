@@ -35,10 +35,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       fileSize: 10 * 1024 * 1024, // 10MB
     },
     fileFilter: (req, file, cb) => {
-      // Allow common document types
+      // Allow common document types and CSV
       const allowedMimes = [
         'application/pdf',
         'text/plain',
+        'text/csv',
+        'application/csv',
         'application/msword',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'application/vnd.ms-excel',
@@ -48,7 +50,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (allowedMimes.includes(file.mimetype)) {
         cb(null, true);
       } else {
-        cb(new Error('Invalid file type. Only PDF, TXT, DOC, DOCX, XLS, XLSX are allowed.'));
+        cb(new Error('Invalid file type. Only PDF, TXT, CSV, DOC, DOCX, XLS, XLSX are allowed.'));
       }
     },
   });
@@ -2685,6 +2687,388 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Failed to export marketplace allocation:", error);
       res.status(500).json({ error: "Failed to export marketplace allocation data" });
+    }
+  });
+
+  // Export ideas as CSV
+  app.get("/api/spaces/:spaceId/export/ideas-csv", requireAuth, async (req, res) => {
+    try {
+      const { spaceId } = req.params;
+      
+      // Check if user is facilitator or admin for this space
+      const space = await storage.getSpace(spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      // Verify user is facilitator or admin
+      const user = req.user as User;
+      const isFacilitator = await storage.getSpaceFacilitatorsByUser(user.id);
+      const hasFacilitatorAccess = isFacilitator.some(f => f.spaceId === spaceId);
+      
+      // Check organization access for company admins
+      let hasAccess = false;
+      if (user.role === 'global_admin') {
+        hasAccess = true;
+      } else if (user.role === 'company_admin') {
+        const companyAdmins = await storage.getCompanyAdminsByUser(user.id);
+        hasAccess = companyAdmins.some(ca => ca.organizationId === space.organizationId);
+      } else if (hasFacilitatorAccess) {
+        hasAccess = true;
+      }
+
+      if (!hasAccess) {
+        return res.status(403).json({ error: "Access denied. Facilitator or admin access required." });
+      }
+
+      // Get notes, categories, and participants
+      const notes = await storage.getNotesBySpace(spaceId);
+      const categories = await storage.getCategoriesBySpace(spaceId);
+      const participants = await storage.getParticipantsBySpace(spaceId);
+
+      // Create category lookup map
+      const categoryMap = new Map(categories.map(c => [c.id, c.name]));
+      const participantMap = new Map(participants.map(p => [p.id, p.displayName]));
+
+      // Generate CSV
+      let csv = 'Idea,Category,Participant,Created At\n';
+      
+      for (const note of notes) {
+        const content = note.content.replace(/"/g, '""'); // Escape quotes
+        const categoryName = note.manualCategoryId ? categoryMap.get(note.manualCategoryId) || 'Uncategorized' : 'Uncategorized';
+        const participantName = participantMap.get(note.participantId) || 'Unknown';
+        const createdAt = new Date(note.createdAt).toISOString();
+        
+        csv += `"${content}","${categoryName}","${participantName}","${createdAt}"\n`;
+      }
+      
+      // Set headers for file download
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="ideas-${spaceId}-${Date.now()}.csv"`);
+      res.send(csv);
+    } catch (error) {
+      console.error("Failed to export ideas CSV:", error);
+      res.status(500).json({ error: "Failed to export ideas" });
+    }
+  });
+
+  // Export categories as CSV
+  app.get("/api/spaces/:spaceId/export/categories-csv", requireAuth, async (req, res) => {
+    try {
+      const { spaceId } = req.params;
+      
+      // Check if user is facilitator or admin for this space
+      const space = await storage.getSpace(spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      // Verify user is facilitator or admin
+      const user = req.user as User;
+      const isFacilitator = await storage.getSpaceFacilitatorsByUser(user.id);
+      const hasFacilitatorAccess = isFacilitator.some(f => f.spaceId === spaceId);
+      
+      // Check organization access for company admins
+      let hasAccess = false;
+      if (user.role === 'global_admin') {
+        hasAccess = true;
+      } else if (user.role === 'company_admin') {
+        const companyAdmins = await storage.getCompanyAdminsByUser(user.id);
+        hasAccess = companyAdmins.some(ca => ca.organizationId === space.organizationId);
+      } else if (hasFacilitatorAccess) {
+        hasAccess = true;
+      }
+
+      if (!hasAccess) {
+        return res.status(403).json({ error: "Access denied. Facilitator or admin access required." });
+      }
+
+      // Get categories
+      const categories = await storage.getCategoriesBySpace(spaceId);
+
+      // Generate CSV
+      let csv = 'Name,Color,Created At\n';
+      
+      for (const category of categories) {
+        const name = category.name.replace(/"/g, '""'); // Escape quotes
+        const color = category.color;
+        const createdAt = new Date(category.createdAt).toISOString();
+        
+        csv += `"${name}","${color}","${createdAt}"\n`;
+      }
+      
+      // Set headers for file download
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="categories-${spaceId}-${Date.now()}.csv"`);
+      res.send(csv);
+    } catch (error) {
+      console.error("Failed to export categories CSV:", error);
+      res.status(500).json({ error: "Failed to export categories" });
+    }
+  });
+
+  // Import ideas from CSV
+  app.post("/api/spaces/:spaceId/import/ideas-csv", requireAuth, upload.single('file'), async (req, res) => {
+    try {
+      const { spaceId } = req.params;
+      
+      // Check if user is facilitator or admin for this space
+      const space = await storage.getSpace(spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      // Verify user is facilitator or admin
+      const user = req.user as User;
+      const isFacilitator = await storage.getSpaceFacilitatorsByUser(user.id);
+      const hasFacilitatorAccess = isFacilitator.some(f => f.spaceId === spaceId);
+      
+      // Check organization access for company admins
+      let hasAccess = false;
+      if (user.role === 'global_admin') {
+        hasAccess = true;
+      } else if (user.role === 'company_admin') {
+        const companyAdmins = await storage.getCompanyAdminsByUser(user.id);
+        hasAccess = companyAdmins.some(ca => ca.organizationId === space.organizationId);
+      } else if (hasFacilitatorAccess) {
+        hasAccess = true;
+      }
+
+      if (!hasAccess) {
+        return res.status(403).json({ error: "Access denied. Facilitator or admin access required." });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      // Parse CSV
+      const csvContent = req.file.buffer.toString('utf-8');
+      const lines = csvContent.split('\n').filter(line => line.trim());
+      
+      if (lines.length < 2) {
+        return res.status(400).json({ error: "CSV file is empty or has no data rows" });
+      }
+
+      // Skip header row
+      const dataLines = lines.slice(1);
+      
+      // Get existing categories to map names to IDs
+      const existingCategories = await storage.getCategoriesBySpace(spaceId);
+      const categoryNameToId = new Map(existingCategories.map(c => [c.name.toLowerCase(), c.id]));
+      
+      // Create a default participant for imported ideas
+      let importParticipant = await storage.getParticipantsBySpace(spaceId).then(participants => 
+        participants.find(p => p.displayName === 'CSV Import')
+      );
+      
+      if (!importParticipant) {
+        importParticipant = await storage.createParticipant({
+          spaceId,
+          displayName: 'CSV Import',
+          isGuest: true,
+          isOnline: false,
+        });
+      }
+
+      let importedCount = 0;
+      const errors: string[] = [];
+
+      for (let i = 0; i < dataLines.length; i++) {
+        try {
+          // Simple CSV parsing (handles quoted fields)
+          const line = dataLines[i];
+          const fields: string[] = [];
+          let current = '';
+          let inQuotes = false;
+          
+          for (let j = 0; j < line.length; j++) {
+            const char = line[j];
+            if (char === '"') {
+              if (inQuotes && line[j + 1] === '"') {
+                current += '"';
+                j++; // Skip next quote
+              } else {
+                inQuotes = !inQuotes;
+              }
+            } else if (char === ',' && !inQuotes) {
+              fields.push(current);
+              current = '';
+            } else {
+              current += char;
+            }
+          }
+          fields.push(current); // Add last field
+
+          if (fields.length < 1 || !fields[0].trim()) {
+            continue; // Skip empty rows
+          }
+
+          const content = fields[0].trim();
+          const categoryName = fields[1]?.trim() || '';
+          
+          // Find or create category
+          let categoryId = null;
+          if (categoryName && categoryName.toLowerCase() !== 'uncategorized') {
+            const categoryKey = categoryName.toLowerCase();
+            if (categoryNameToId.has(categoryKey)) {
+              categoryId = categoryNameToId.get(categoryKey)!;
+            } else {
+              // Create new category
+              const newCategory = await storage.createCategory({
+                spaceId,
+                name: categoryName,
+                color: `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`, // Random color
+              });
+              categoryId = newCategory.id;
+              categoryNameToId.set(categoryKey, categoryId);
+            }
+          }
+
+          // Create note
+          await storage.createNote({
+            spaceId,
+            participantId: importParticipant.id,
+            content,
+            category: null,
+            isAiCategory: false,
+            manualCategoryId: categoryId,
+            isManualOverride: categoryId !== null,
+          });
+
+          importedCount++;
+        } catch (error) {
+          errors.push(`Row ${i + 2}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+
+      res.json({
+        success: true,
+        imported: importedCount,
+        errors: errors.length > 0 ? errors : undefined,
+      });
+    } catch (error) {
+      console.error("Failed to import ideas CSV:", error);
+      res.status(500).json({ error: "Failed to import ideas" });
+    }
+  });
+
+  // Import categories from CSV
+  app.post("/api/spaces/:spaceId/import/categories-csv", requireAuth, upload.single('file'), async (req, res) => {
+    try {
+      const { spaceId } = req.params;
+      
+      // Check if user is facilitator or admin for this space
+      const space = await storage.getSpace(spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      // Verify user is facilitator or admin
+      const user = req.user as User;
+      const isFacilitator = await storage.getSpaceFacilitatorsByUser(user.id);
+      const hasFacilitatorAccess = isFacilitator.some(f => f.spaceId === spaceId);
+      
+      // Check organization access for company admins
+      let hasAccess = false;
+      if (user.role === 'global_admin') {
+        hasAccess = true;
+      } else if (user.role === 'company_admin') {
+        const companyAdmins = await storage.getCompanyAdminsByUser(user.id);
+        hasAccess = companyAdmins.some(ca => ca.organizationId === space.organizationId);
+      } else if (hasFacilitatorAccess) {
+        hasAccess = true;
+      }
+
+      if (!hasAccess) {
+        return res.status(403).json({ error: "Access denied. Facilitator or admin access required." });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      // Parse CSV
+      const csvContent = req.file.buffer.toString('utf-8');
+      const lines = csvContent.split('\n').filter(line => line.trim());
+      
+      if (lines.length < 2) {
+        return res.status(400).json({ error: "CSV file is empty or has no data rows" });
+      }
+
+      // Skip header row
+      const dataLines = lines.slice(1);
+      
+      // Get existing categories to avoid duplicates
+      const existingCategories = await storage.getCategoriesBySpace(spaceId);
+      const existingCategoryNames = new Set(existingCategories.map(c => c.name.toLowerCase()));
+
+      let importedCount = 0;
+      let skippedCount = 0;
+      const errors: string[] = [];
+
+      for (let i = 0; i < dataLines.length; i++) {
+        try {
+          // Simple CSV parsing (handles quoted fields)
+          const line = dataLines[i];
+          const fields: string[] = [];
+          let current = '';
+          let inQuotes = false;
+          
+          for (let j = 0; j < line.length; j++) {
+            const char = line[j];
+            if (char === '"') {
+              if (inQuotes && line[j + 1] === '"') {
+                current += '"';
+                j++; // Skip next quote
+              } else {
+                inQuotes = !inQuotes;
+              }
+            } else if (char === ',' && !inQuotes) {
+              fields.push(current);
+              current = '';
+            } else {
+              current += char;
+            }
+          }
+          fields.push(current); // Add last field
+
+          if (fields.length < 1 || !fields[0].trim()) {
+            continue; // Skip empty rows
+          }
+
+          const name = fields[0].trim();
+          const color = fields[1]?.trim() || `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`;
+          
+          // Skip if category already exists
+          if (existingCategoryNames.has(name.toLowerCase())) {
+            skippedCount++;
+            continue;
+          }
+
+          // Create category
+          await storage.createCategory({
+            spaceId,
+            name,
+            color,
+          });
+
+          importedCount++;
+          existingCategoryNames.add(name.toLowerCase());
+        } catch (error) {
+          errors.push(`Row ${i + 2}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+
+      res.json({
+        success: true,
+        imported: importedCount,
+        skipped: skippedCount,
+        errors: errors.length > 0 ? errors : undefined,
+      });
+    } catch (error) {
+      console.error("Failed to import categories CSV:", error);
+      res.status(500).json({ error: "Failed to import categories" });
     }
   });
 

@@ -14,11 +14,12 @@ export interface VotingProgress {
 
 /**
  * Calculate the next pair of notes for a participant to vote on
- * Uses round-robin algorithm: all unique pairs (n choose 2)
- * Returns null if all pairs have been voted on
+ * Uses RANDOM pairing - selects two random notes that can be compared
+ * Allows repeats (participants don't need to vote on all pairs)
+ * Randomizes left/right positioning
  * 
  * @param notes - All notes in the workspace
- * @param existingVotes - Votes already cast by this participant
+ * @param existingVotes - Not used (random pairs allow repeats)
  * @param scope - 'all' for cross-category voting, 'within_categories' to only pair notes in same category
  */
 export function getNextPair(
@@ -30,58 +31,8 @@ export function getNextPair(
     return null;
   }
 
-  // Create set of already-voted pairs for fast lookup
-  const votedPairs = new Set<string>();
-  for (const vote of existingVotes) {
-    // Store both orderings since voting A>B is same as voting on pair (A,B)
-    votedPairs.add(`${vote.winnerNoteId}:${vote.loserNoteId}`);
-    votedPairs.add(`${vote.loserNoteId}:${vote.winnerNoteId}`);
-  }
-
-  // Find first unvoted pair (deterministic ordering for consistency)
-  for (let i = 0; i < notes.length; i++) {
-    for (let j = i + 1; j < notes.length; j++) {
-      // If category-scoped voting, only pair notes with matching categories
-      if (scope === "within_categories") {
-        // Only pair notes that have the same category (including both null/undefined)
-        const categoryA = notes[i].manualCategoryId || null;
-        const categoryB = notes[j].manualCategoryId || null;
-        
-        if (categoryA !== categoryB) {
-          continue; // Skip this pair - different categories
-        }
-      }
-      
-      const pairKey = `${notes[i].id}:${notes[j].id}`;
-      if (!votedPairs.has(pairKey)) {
-        return {
-          noteA: notes[i],
-          noteB: notes[j],
-        };
-      }
-    }
-  }
-
-  // All pairs have been voted on
-  return null;
-}
-
-/**
- * Calculate voting progress for a participant
- * 
- * @param notes - All notes in the workspace
- * @param existingVotes - Votes already cast by this participant
- * @param scope - 'all' for cross-category voting, 'within_categories' to only count pairs in same category
- */
-export function calculateProgress(
-  notes: Note[],
-  existingVotes: Vote[],
-  scope: "all" | "within_categories" = "all"
-): VotingProgress {
-  let totalPairs = 0;
-  
+  // For category-scoped voting, group notes by category
   if (scope === "within_categories") {
-    // Group notes by category and count pairs within each category
     const notesByCategory = new Map<string | null, Note[]>();
     
     for (const note of notes) {
@@ -92,26 +43,73 @@ export function calculateProgress(
       notesByCategory.get(categoryId)!.push(note);
     }
     
-    // Sum up pairs within each category: nC2 per category
-    for (const categoryNotes of Array.from(notesByCategory.values())) {
-      const n = categoryNotes.length;
-      if (n >= 2) {
-        totalPairs += (n * (n - 1)) / 2;
-      }
+    // Filter to categories with at least 2 notes
+    const validCategories = Array.from(notesByCategory.values()).filter(
+      categoryNotes => categoryNotes.length >= 2
+    );
+    
+    if (validCategories.length === 0) {
+      return null; // No categories have enough notes to pair
     }
-  } else {
-    // Total unique pairs across all notes = n choose 2 = n * (n - 1) / 2
-    totalPairs = (notes.length * (notes.length - 1)) / 2;
+    
+    // Randomly select a category
+    const randomCategory = validCategories[Math.floor(Math.random() * validCategories.length)];
+    
+    // Randomly select two different notes from that category
+    const index1 = Math.floor(Math.random() * randomCategory.length);
+    let index2 = Math.floor(Math.random() * randomCategory.length);
+    
+    // Ensure index2 is different from index1
+    while (index2 === index1) {
+      index2 = Math.floor(Math.random() * randomCategory.length);
+    }
+    
+    // Randomly decide which note goes on left vs right
+    const noteA = Math.random() < 0.5 ? randomCategory[index1] : randomCategory[index2];
+    const noteB = noteA === randomCategory[index1] ? randomCategory[index2] : randomCategory[index1];
+    
+    return { noteA, noteB };
   }
   
-  const completedPairs = existingVotes.length;
-  const percentComplete = totalPairs > 0 ? Math.round((completedPairs / totalPairs) * 100) : 0;
+  // For cross-category voting, select any two random notes
+  const index1 = Math.floor(Math.random() * notes.length);
+  let index2 = Math.floor(Math.random() * notes.length);
+  
+  // Ensure index2 is different from index1
+  while (index2 === index1) {
+    index2 = Math.floor(Math.random() * notes.length);
+  }
+  
+  // Randomly decide which note goes on left vs right
+  const noteA = Math.random() < 0.5 ? notes[index1] : notes[index2];
+  const noteB = noteA === notes[index1] ? notes[index2] : notes[index1];
+  
+  return { noteA, noteB };
+}
 
+/**
+ * Calculate voting progress for a participant
+ * With random pairing and repeats allowed, there's no fixed "total pairs" to complete
+ * Progress simply tracks number of votes cast
+ * 
+ * @param notes - All notes in the workspace
+ * @param existingVotes - Votes already cast by this participant
+ * @param scope - Not used for random pairing (kept for API compatibility)
+ */
+export function calculateProgress(
+  notes: Note[],
+  existingVotes: Vote[],
+  scope: "all" | "within_categories" = "all"
+): VotingProgress {
+  // With random pairing and repeats, we just track vote count
+  // No concept of "total pairs" or "completion percentage"
+  const completedPairs = existingVotes.length;
+  
   return {
-    totalPairs,
+    totalPairs: 0, // Not applicable for random pairing
     completedPairs,
-    percentComplete,
-    isComplete: completedPairs >= totalPairs && totalPairs > 0,
+    percentComplete: 0, // Not applicable for random pairing
+    isComplete: false, // Never "complete" with random pairing
   };
 }
 

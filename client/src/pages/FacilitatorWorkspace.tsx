@@ -48,6 +48,7 @@ import {
   FileStack,
   Loader2,
   Download,
+  Upload,
   Trophy,
   ArrowLeft,
 } from "lucide-react";
@@ -77,6 +78,8 @@ export default function FacilitatorWorkspace() {
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [categoryName, setCategoryName] = useState("");
   const [categoryColor, setCategoryColor] = useState("#8B5CF6");
+  const [isImportIdeasDialogOpen, setIsImportIdeasDialogOpen] = useState(false);
+  const [isImportCategoriesDialogOpen, setIsImportCategoriesDialogOpen] = useState(false);
 
   // WebSocket connection for real-time updates
   const handleWebSocketMessage = useCallback((message: { type: string; data: any }) => {
@@ -462,6 +465,79 @@ export default function FacilitatorWorkspace() {
       toast({
         variant: "destructive",
         title: "Failed to update category",
+        description: error.message,
+      });
+    },
+  });
+
+  // Import ideas from CSV
+  const importIdeasMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch(`/api/spaces/${params.space}/import/ideas-csv`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Import failed" }));
+        throw new Error(errorData.error || "Failed to import ideas");
+      }
+      
+      return await response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/notes`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/categories`] });
+      setIsImportIdeasDialogOpen(false);
+      toast({
+        title: "Ideas imported",
+        description: `Successfully imported ${data.imported} ideas` + (data.errors ? `. ${data.errors.length} errors occurred.` : ''),
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to import ideas",
+        description: error.message,
+      });
+    },
+  });
+
+  // Import categories from CSV
+  const importCategoriesMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch(`/api/spaces/${params.space}/import/categories-csv`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Import failed" }));
+        throw new Error(errorData.error || "Failed to import categories");
+      }
+      
+      return await response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/categories`] });
+      setIsImportCategoriesDialogOpen(false);
+      toast({
+        title: "Categories imported",
+        description: `Successfully imported ${data.imported} categories` + (data.skipped ? `. ${data.skipped} duplicates skipped.` : ''),
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to import categories",
         description: error.message,
       });
     },
@@ -909,6 +985,80 @@ export default function FacilitatorWorkspace() {
                         {createCategoryMutation.isPending ? "Creating..." : "Create"}
                       </Button>
                     </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+                <Button
+                  variant="outline"
+                  onClick={() => window.location.href = `/api/spaces/${params.space}/export/ideas-csv`}
+                  data-testid="button-export-ideas-csv"
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Export Ideas
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => window.location.href = `/api/spaces/${params.space}/export/categories-csv`}
+                  data-testid="button-export-categories-csv"
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Export Categories
+                </Button>
+                <Dialog open={isImportIdeasDialogOpen} onOpenChange={setIsImportIdeasDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" data-testid="button-import-ideas">
+                      <Upload className="mr-2 h-4 w-4" />
+                      Import Ideas
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Import Ideas from CSV</DialogTitle>
+                      <DialogDescription>
+                        Upload a CSV file with columns: Idea, Category, Participant, Created At
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <input
+                        type="file"
+                        accept=".csv"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            importIdeasMutation.mutate(file);
+                          }
+                        }}
+                        data-testid="input-import-ideas-file"
+                      />
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                <Dialog open={isImportCategoriesDialogOpen} onOpenChange={setIsImportCategoriesDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" data-testid="button-import-categories">
+                      <Upload className="mr-2 h-4 w-4" />
+                      Import Categories
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Import Categories from CSV</DialogTitle>
+                      <DialogDescription>
+                        Upload a CSV file with columns: Name, Color, Created At
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <input
+                        type="file"
+                        accept=".csv"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            importCategoriesMutation.mutate(file);
+                          }
+                        }}
+                        data-testid="input-import-categories-file"
+                      />
+                    </div>
                   </DialogContent>
                 </Dialog>
                 <Dialog open={isAddNoteDialogOpen} onOpenChange={setIsAddNoteDialogOpen}>
