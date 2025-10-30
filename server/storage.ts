@@ -311,6 +311,35 @@ export class DbStorage implements IStorage {
   }
 
   async deleteSpace(id: string): Promise<boolean> {
+    // Delete all associated data first to avoid foreign key constraints
+    await Promise.all([
+      // Delete notes and their dependencies
+      db.delete(notes).where(eq(notes.spaceId, id)),
+      // Delete votes
+      db.delete(votes).where(eq(votes.spaceId, id)),
+      // Delete rankings
+      db.delete(rankings).where(eq(rankings.spaceId, id)),
+      // Delete marketplace allocations
+      db.delete(marketplaceAllocations).where(eq(marketplaceAllocations.spaceId, id)),
+      // Delete participants
+      db.delete(participants).where(eq(participants.spaceId, id)),
+      // Delete access requests
+      db.delete(accessRequests).where(eq(accessRequests.spaceId, id)),
+      // Delete categories
+      db.delete(categories).where(eq(categories.spaceId, id)),
+      // Delete space facilitators
+      db.delete(spaceFacilitators).where(eq(spaceFacilitators.spaceId, id)),
+      // Delete cohort results
+      db.delete(cohortResults).where(eq(cohortResults.spaceId, id)),
+      // Delete personalized results
+      db.delete(personalizedResults).where(eq(personalizedResults.spaceId, id)),
+      // Delete knowledge base documents scoped to this workspace
+      db.delete(knowledgeBaseDocuments).where(eq(knowledgeBaseDocuments.spaceId, id)),
+      // Delete AI usage logs for this workspace
+      db.delete(aiUsageLog).where(eq(aiUsageLog.spaceId, id)),
+    ]);
+
+    // Finally, delete the workspace itself
     const result = await db.delete(spaces).where(eq(spaces.id, id));
     return result.rowCount ? result.rowCount > 0 : false;
   }
