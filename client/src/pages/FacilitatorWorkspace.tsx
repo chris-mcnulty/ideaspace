@@ -10,7 +10,7 @@ import { UserProfileMenu } from "@/components/UserProfileMenu";
 import BrandHeader from "@/components/BrandHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -55,7 +55,7 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
-import type { Organization, Space, Note, Participant, Category } from "@shared/schema";
+import type { Organization, Space, Note, Participant, Category, User } from "@shared/schema";
 import { Leaderboard } from "@/components/Leaderboard";
 import { KnowledgeBaseManager } from "@/components/KnowledgeBaseManager";
 
@@ -2133,7 +2133,7 @@ export default function FacilitatorWorkspace() {
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
                                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                                  <User className="h-5 w-5 text-primary" />
+                                  <Users className="h-5 w-5 text-primary" />
                                 </div>
                                 <div>
                                   <p className="font-medium">{participant.displayName}</p>
@@ -2166,7 +2166,8 @@ export default function FacilitatorWorkspace() {
                                 // Find this note's performance across all modules
                                 const pairwiseWins = votes.filter(v => v.winnerNoteId === note.id).length;
                                 const bordaItem = leaderboard.find(l => l.noteId === note.id);
-                                const marketplaceItem = marketplaceLeaderboard?.leaderboard?.find((l: any) => l.noteId === note.id);
+                                // Marketplace leaderboard not yet implemented
+                                const marketplaceItem = null;
                                 
                                 return (
                                   <div key={note.id} className="rounded border bg-muted/30 p-3 text-sm">
@@ -2177,7 +2178,6 @@ export default function FacilitatorWorkspace() {
                                       )}
                                       <span>Pairwise Wins: {pairwiseWins}</span>
                                       {bordaItem && <span>Borda Score: {bordaItem.totalScore}</span>}
-                                      {marketplaceItem && <span>Marketplace Coins: {marketplaceItem.totalCoins}</span>}
                                     </div>
                                   </div>
                                 );

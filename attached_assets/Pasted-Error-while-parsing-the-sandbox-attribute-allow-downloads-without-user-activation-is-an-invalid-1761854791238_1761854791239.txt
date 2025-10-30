@@ -1,0 +1,569 @@
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Arv5%3A:32  Unrecognized feature: 'ambient-light-sensor'.
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Arv5%3A:32  Unrecognized feature: 'battery'.
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Arv5%3A:32  Unrecognized feature: 'execution-while-not-rendered'.
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Arv5%3A:32  Unrecognized feature: 'execution-while-out-of-viewport'.
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Arv5%3A:32  Unrecognized feature: 'layout-animations'.
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Arv5%3A:32  Unrecognized feature: 'legacy-image-formats'.
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Arv5%3A:32  Unrecognized feature: 'navigation-override'.
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Arv5%3A:32  Unrecognized feature: 'oversized-images'.
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Arv5%3A:32  Unrecognized feature: 'publickey-credentials'.
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Arv5%3A:32  Unrecognized feature: 'speaker-selection'.
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Arv5%3A:32  Unrecognized feature: 'unoptimized-images'.
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Arv5%3A:32  Unrecognized feature: 'unsized-media'.
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Arv5%3A:32  Allow attribute will take precedence over 'allowfullscreen'.
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Arv5%3A:32  Allow attribute will take precedence over 'allowpaymentrequest'.
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=SCdXUmQMb7Mo' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=V50Pt6K3KNoO' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=7pLJOTAdPgPv' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=7pLJOTAdPgPv' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=8pTSzlzX2OiB' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=UsFTv4DasrLe' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=UsFTv4DasrLe' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/spaces/1234-6133/results/cohort:1   Failed to load resource: the server responded with a status of 404 (Not Found)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=kWTwregexbfM' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=5CE6U9o4ujBd' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=3KmPIpgoKyqI' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=fAwRRdaMhdCJ' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=MvCUAqnNdmQ7' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=Nbn9q-as762q' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=YF6_T-nQRNwc' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=RTws4vPAl64w' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=0BmwSo7DNMyS' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=DLJnGLhD-YJ3' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=DLJnGLhD-YJ3' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=DLJnGLhD-YJ3' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=2-w3F2w1UL4R' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=2-w3F2w1UL4R' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/src/index.css?v=iqoZnT4Z7YUOsWsZt43z:1   Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=Po7FWdeVzC45' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/src/App.tsx?v=iqoZnT4Z7YUOsWsZt43z:1   Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=0aLGbsakal_n' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=1n_vK7AroviD' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=1n_vK7AroviD' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=kdsQ1QRvblFT' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=WZAxt1lK4Lvv' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=FWb55i1qsR5E' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=KUndwcWVl6kB' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=khFUvFmcPEmq' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=IISLEZk4U8cb' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=GcoA2AuYLH1o' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+AuroraEnvision:1 [Intervention] Slow network is detected. See https://www.chromestatus.com/feature/5636954674692096 for more details. Fallback font will be used while loading: https://replit.com/public/fonts/ibm-plex-sans-v8-latin-regular.woff2
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+AuroraEnvision:1  The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+AuroraEnvision:1  The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+AuroraEnvision:1  The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+Tracking Prevention blocked access to storage for <URL>.
+_app-2681746cded3d69a.js:13 
+      /////////////////////
+   ///////////////////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////        Curious and driven?
+  ///////////////@@@@@@@///////        Work with us!
+  ///////////////@@@@@@@///////
+  ///////////////@@@@@@@///////        https://join.replit.com/hack.with.us
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@#//////////////
+   ///////////////////////////
+      /////////////////////
+      
+_app-2681746cded3d69a.js:13 [LaunchDarkly] LaunchDarkly client initialized
+_app-2681746cded3d69a.js:13  If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ _app-2681746cded3d69a.js:13
+_app-2681746cded3d69a.js:13  If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ _app-2681746cded3d69a.js:13
+_app-2681746cded3d69a.js:13  If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ _app-2681746cded3d69a.js:13
+_app-2681746cded3d69a.js:13  If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ _app-2681746cded3d69a.js:13
+_app-2681746cded3d69a.js:13  If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ _app-2681746cded3d69a.js:13
+_app-2681746cded3d69a.js:13  If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ _app-2681746cded3d69a.js:13
+_app-2681746cded3d69a.js:13  If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ _app-2681746cded3d69a.js:13
+_app-2681746cded3d69a.js:13  If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ _app-2681746cded3d69a.js:13
+_app-2681746cded3d69a.js:13  If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ _app-2681746cded3d69a.js:13
+_app-2681746cded3d69a.js:13  If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ _app-2681746cded3d69a.js:13
+_app-2681746cded3d69a.js:13  If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ _app-2681746cded3d69a.js:13
+_app-2681746cded3d69a.js:13  If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ _app-2681746cded3d69a.js:13
+AuroraEnvision:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+_app-2681746cded3d69a.js:13  If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ _app-2681746cded3d69a.js:13
+_app-2681746cded3d69a.js:13  If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ _app-2681746cded3d69a.js:13
+framework-feb12df8fd4c4694.js:1  Unrecognized feature: 'ambient-light-sensor'.
+_ @ framework-feb12df8fd4c4694.js:1
+framework-feb12df8fd4c4694.js:1  Unrecognized feature: 'battery'.
+_ @ framework-feb12df8fd4c4694.js:1
+framework-feb12df8fd4c4694.js:1  Unrecognized feature: 'execution-while-not-rendered'.
+_ @ framework-feb12df8fd4c4694.js:1
+framework-feb12df8fd4c4694.js:1  Unrecognized feature: 'execution-while-out-of-viewport'.
+_ @ framework-feb12df8fd4c4694.js:1
+framework-feb12df8fd4c4694.js:1  Unrecognized feature: 'layout-animations'.
+_ @ framework-feb12df8fd4c4694.js:1
+framework-feb12df8fd4c4694.js:1  Unrecognized feature: 'legacy-image-formats'.
+_ @ framework-feb12df8fd4c4694.js:1
+framework-feb12df8fd4c4694.js:1  Unrecognized feature: 'navigation-override'.
+_ @ framework-feb12df8fd4c4694.js:1
+framework-feb12df8fd4c4694.js:1  Unrecognized feature: 'oversized-images'.
+_ @ framework-feb12df8fd4c4694.js:1
+framework-feb12df8fd4c4694.js:1  Unrecognized feature: 'publickey-credentials'.
+_ @ framework-feb12df8fd4c4694.js:1
+framework-feb12df8fd4c4694.js:1  Unrecognized feature: 'speaker-selection'.
+_ @ framework-feb12df8fd4c4694.js:1
+framework-feb12df8fd4c4694.js:1  Unrecognized feature: 'unoptimized-images'.
+_ @ framework-feb12df8fd4c4694.js:1
+framework-feb12df8fd4c4694.js:1  Unrecognized feature: 'unsized-media'.
+_ @ framework-feb12df8fd4c4694.js:1
+framework-feb12df8fd4c4694.js:1  Unrecognized feature: 'pointer-lock'.
+_ @ framework-feb12df8fd4c4694.js:1
+framework-feb12df8fd4c4694.js:1  Allow attribute will take precedence over 'allowfullscreen'.
+_ @ framework-feb12df8fd4c4694.js:1
+framework-feb12df8fd4c4694.js:1  Allow attribute will take precedence over 'allowpaymentrequest'.
+_ @ framework-feb12df8fd4c4694.js:1
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=fesn9Y8EY5FA' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/api/auth/me:1   Failed to load resource: the server responded with a status of 401 (Unauthorized)
+_app-2681746cded3d69a.js:13  If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ _app-2681746cded3d69a.js:13
+_app-2681746cded3d69a.js:13  If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ _app-2681746cded3d69a.js:13
+  WebSocket connection to 'wss://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/?token=fesn9Y8EY5FA' failed: 
+setupWebSocket @ e790b9bb-142e-4283-a…ev/@vite/client:536
+e790b9bb-142e-4283-a…ev/@vite/client:536  Uncaught (in promise) SyntaxError: Failed to construct 'WebSocket': The URL 'wss://localhost:undefined/?token=fesn9Y8EY5FA' is invalid.
+    at setupWebSocket (e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/@vite/client:536:19)
+    at fallback (e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/@vite/client:509:16)
+    at WebSocket.<anonymous> (e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/@vite/client:555:7)
+injected.js:27  [WebSocket] Error: Event
+(anonymous) @ injected.js:27
+injected.js:27 [WebSocket] Disconnected
+injected.js:27 [FacilitatorWorkspace] WebSocket disconnected
+injected.js:27 [WebSocket] Reconnecting... (attempt 1/5)
+injected.js:27  [WebSocket] Error: Event
+(anonymous) @ injected.js:27
+injected.js:27 [WebSocket] Disconnected
+injected.js:27 [FacilitatorWorkspace] WebSocket disconnected
+injected.js:27 [WebSocket] Reconnecting... (attempt 2/5)
+injected.js:27  [WebSocket] Error: Event
+(anonymous) @ injected.js:27
+injected.js:27 [WebSocket] Disconnected
+injected.js:27 [FacilitatorWorkspace] WebSocket disconnected
+injected.js:27 [WebSocket] Reconnecting... (attempt 3/5)
+injected.js:27  [WebSocket] Error: Event
+(anonymous) @ injected.js:27
+injected.js:27 [WebSocket] Disconnected
+injected.js:27 [FacilitatorWorkspace] WebSocket disconnected
+injected.js:27 [WebSocket] Reconnecting... (attempt 4/5)
+injected.js:27  [WebSocket] Error: Event
+(anonymous) @ injected.js:27
+injected.js:27 [WebSocket] Disconnected
+injected.js:27 [FacilitatorWorkspace] WebSocket disconnected
+injected.js:27 [WebSocket] Reconnecting... (attempt 5/5)
+injected.js:27  [WebSocket] Error: Event
+(anonymous) @ injected.js:27
+injected.js:27 [WebSocket] Disconnected
+injected.js:27 [FacilitatorWorkspace] WebSocket disconnected
+FacilitatorWorkspace.tsx:2014  Uncaught ReferenceError: CardDescription is not defined
+    at FacilitatorWorkspace (FacilitatorWorkspace.tsx:2014:24)
+    at renderWithHooks (react-dom.development.js:15486:18)
+    at updateFunctionComponent (react-dom.development.js:19617:20)
+    at beginWork (react-dom.development.js:21640:16)
+    at HTMLUnknownElement.callCallback2 (react-dom.development.js:4164:14)
+    at Object.invokeGuardedCallbackDev (react-dom.development.js:4213:16)
+    at invokeGuardedCallback (react-dom.development.js:4277:31)
+    at beginWork$1 (react-dom.development.js:27490:7)
+    at performUnitOfWork (react-dom.development.js:26596:12)
+    at workLoopSync (react-dom.development.js:26505:5)
+FacilitatorWorkspace.tsx:2014  Uncaught ReferenceError: CardDescription is not defined
+    at FacilitatorWorkspace (FacilitatorWorkspace.tsx:2014:24)
+    at renderWithHooks (react-dom.development.js:15486:18)
+    at updateFunctionComponent (react-dom.development.js:19617:20)
+    at beginWork (react-dom.development.js:21640:16)
+    at HTMLUnknownElement.callCallback2 (react-dom.development.js:4164:14)
+    at Object.invokeGuardedCallbackDev (react-dom.development.js:4213:16)
+    at invokeGuardedCallback (react-dom.development.js:4277:31)
+    at beginWork$1 (react-dom.development.js:27490:7)
+    at performUnitOfWork (react-dom.development.js:26596:12)
+    at workLoopSync (react-dom.development.js:26505:5)
+injected.js:27  The above error occurred in the <FacilitatorWorkspace> component:
+
+    at FacilitatorWorkspace (https://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/src/pages/FacilitatorWorkspace.tsx:78:18)
+    at Route (https://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=05139b52:323:16)
+    at Switch (https://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=05139b52:379:17)
+    at Router
+    at Provider (https://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-OXZDJRWN.js?v=05139b52:38:15)
+    at TooltipProvider (https://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tooltip.js?v=05139b52:62:5)
+    at ThemeProvider (https://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/src/components/ThemeProvider.tsx:25:3)
+    at QueryClientProvider (https://e790b9bb-142e-4283-ad40-0d97909b078e-00-2m5ydpw5a67dn.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=05139b52:2805:3)
+    at App
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries.
+(anonymous) @ injected.js:27
+react-dom.development.js:12056  Uncaught ReferenceError: CardDescription is not defined
+    at FacilitatorWorkspace (FacilitatorWorkspace.tsx:2014:24)
+    at renderWithHooks (react-dom.development.js:15486:18)
+    at updateFunctionComponent (react-dom.development.js:19617:20)
+    at beginWork (react-dom.development.js:21640:16)
+    at beginWork$1 (react-dom.development.js:27465:14)
+    at performUnitOfWork (react-dom.development.js:26596:12)
+    at workLoopSync (react-dom.development.js:26505:5)
+    at renderRootSync (react-dom.development.js:26473:7)
+    at recoverFromConcurrentError (react-dom.development.js:25889:20)
+    at performSyncWorkOnRoot (react-dom.development.js:26135:20)
+injected.js:27  [WebSocket] Error: Event
+(anonymous) @ injected.js:27
+injected.js:27 [WebSocket] Disconnected
+injected.js:27 [FacilitatorWorkspace] WebSocket disconnected
+[NEW] Explain Console errors by using Copilot in Edge: click
+         
+         to explain an error. 
+        Learn more
+        Don't show again
