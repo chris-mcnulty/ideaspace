@@ -8,6 +8,7 @@ import { useLocation } from "wouter";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { useAuth } from "@/hooks/use-auth";
+import nebulaBg from "@assets/AdobeStock_245281455_Smaller_1761866686758.jpg";
 
 export default function LandingPage() {
   const { isAuthenticated } = useAuth();
@@ -94,7 +95,7 @@ export default function LandingPage() {
         <section 
           className="relative overflow-hidden px-6 py-24 md:py-32 lg:py-40"
           style={{
-            backgroundImage: 'url(/bg-ai-network.png)',
+            backgroundImage: `url(${nebulaBg})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat'
