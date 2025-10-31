@@ -272,7 +272,7 @@ export default function FacilitatorWorkspace() {
   const params = useParams() as { org: string; space: string };
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedNotes, setSelectedNotes] = useState<Set<string>>(new Set());
   const [isAddNoteDialogOpen, setIsAddNoteDialogOpen] = useState(false);
@@ -354,6 +354,14 @@ export default function FacilitatorWorkspace() {
       document.title = "Nebula - Facilitator Workspace | The Synozur Alliance";
     }
   }, [org, space]);
+
+  // Authentication guard - redirect to login if not authenticated
+  // Only redirect after auth check is complete (not loading) and user is definitely not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      setLocation('/login');
+    }
+  }, [authLoading, isAuthenticated, setLocation]);
 
   // Fetch notes
   const { data: notes = [], isLoading: notesLoading } = useQuery<Note[]>({
