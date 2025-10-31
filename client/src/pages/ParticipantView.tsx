@@ -252,13 +252,22 @@ export default function ParticipantView() {
         <div className="flex h-full items-center justify-between px-6">
           <div className="flex items-center gap-3">
             {org?.logoUrl ? (
-              <img src={org.logoUrl} alt={org.name} className="h-8 w-auto object-contain" />
+              <img src={org.logoUrl} alt={org.name} className="h-8 w-auto object-contain" data-testid="img-org-logo" />
             ) : (
               <img 
                 src="/logos/synozur-horizontal-color.png" 
                 alt="Synozur Alliance" 
                 className="h-8 w-auto object-contain"
+                data-testid="img-default-logo"
               />
+            )}
+            {org?.name && (
+              <>
+                <div className="h-6 w-px bg-border/40" />
+                <span className="text-lg font-semibold" data-testid="text-org-name">
+                  {org.name}
+                </span>
+              </>
             )}
             <div className="h-6 w-px bg-border/40" />
             <span className="text-lg font-semibold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
