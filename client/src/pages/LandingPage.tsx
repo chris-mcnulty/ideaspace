@@ -117,7 +117,17 @@ export default function LandingPage() {
               </p>
 
               <div className="mt-8 text-sm text-white italic">
-                This is our beta version; signup to learn more when we release the full version with enhanced features, benchmarks, and comprehensive analytics.
+                This is our beta version;{" "}
+                <a 
+                  href="https://www.synozur.com/join" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-primary hover:text-primary/80 underline underline-offset-2 transition-colors"
+                  data-testid="link-signup"
+                >
+                  signup
+                </a>{" "}
+                to learn more when we release the full version with enhanced features, benchmarks, and comprehensive analytics.
               </div>
 
               <Card className="mx-auto mt-12 max-w-md shadow-2xl border-purple-500/20">
