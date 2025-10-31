@@ -93,7 +93,7 @@ export default function LandingPage() {
       <main>
         {/* Hero Section with Background Image */}
         <section 
-          className="relative overflow-hidden px-6 py-24 md:py-32 lg:py-40"
+          className="relative overflow-hidden px-6 py-12 md:py-16 lg:py-20"
           style={{
             backgroundImage: `url(${nebulaBg})`,
             backgroundSize: 'cover',
