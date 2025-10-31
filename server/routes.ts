@@ -1288,9 +1288,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const data = z.object({
         title: z.string().min(1),
         description: z.string().optional(),
-        scope: z.enum(['system', 'organization', 'workspace']),
+        scope: z.enum(['system', 'organization', 'workspace', 'multi_workspace']),
         organizationId: z.string().optional(),
         spaceId: z.string().optional(),
+        spaceIds: z.array(z.string()).optional(), // For multi_workspace scope
         tags: z.array(z.string()).optional(),
       }).parse(JSON.parse(req.body.metadata || '{}'));
 
@@ -1342,6 +1343,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      if (data.scope === 'multi_workspace') {
+        if (!data.spaceIds || data.spaceIds.length === 0) {
+          return res.status(400).json({ error: "At least one workspace ID required for multi-workspace scope" });
+        }
+        
+        if (!data.organizationId) {
+          return res.status(400).json({ error: "Organization ID required for multi-workspace scope" });
+        }
+
+        // Check if user is global admin or company admin of the organization
+        if (currentUser.role !== 'global_admin') {
+          if (currentUser.role !== 'company_admin' || currentUser.organizationId !== data.organizationId) {
+            const companyAdmins = await storage.getCompanyAdminsByUser(currentUser.id);
+            const hasPermission = companyAdmins.some(ca => ca.organizationId === data.organizationId);
+            if (!hasPermission) {
+              return res.status(403).json({ error: "Insufficient permissions for this organization" });
+            }
+          }
+        }
+
+        // Verify all selected workspaces belong to the specified organization
+        for (const spaceId of data.spaceIds) {
+          const space = await storage.getSpace(spaceId);
+          if (!space) {
+            return res.status(404).json({ error: `Workspace ${spaceId} not found` });
+          }
+          if (space.organizationId !== data.organizationId) {
+            return res.status(400).json({ error: `Workspace ${spaceId} does not belong to the specified organization` });
+          }
+        }
+      }
+
       // Save file to local storage
       const uploadedFile = await fileUploadService.saveFile(
         file.buffer,
@@ -1363,6 +1396,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tags: data.tags || null,
         uploadedBy: currentUser.id,
       });
+
+      // For multi_workspace scope, create junction table entries
+      if (data.scope === 'multi_workspace' && data.spaceIds) {
+        for (const spaceId of data.spaceIds) {
+          await storage.createDocumentWorkspaceAccess({
+            documentId: document.id,
+            spaceId,
+          });
+        }
+      }
 
       res.status(201).json(document);
     } catch (error) {

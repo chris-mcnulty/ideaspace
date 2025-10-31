@@ -30,6 +30,8 @@ import {
   type InsertPasswordResetToken,
   type KnowledgeBaseDocument,
   type InsertKnowledgeBaseDocument,
+  type DocumentWorkspaceAccess,
+  type InsertDocumentWorkspaceAccess,
   type WorkspaceTemplate,
   type InsertWorkspaceTemplate,
   type WorkspaceTemplateNote,
@@ -56,6 +58,7 @@ import {
   emailVerificationTokens,
   passwordResetTokens,
   knowledgeBaseDocuments,
+  documentWorkspaceAccess,
   workspaceTemplates,
   workspaceTemplateNotes,
   workspaceTemplateDocuments,
@@ -169,6 +172,8 @@ export interface IStorage {
   createKnowledgeBaseDocument(document: InsertKnowledgeBaseDocument): Promise<KnowledgeBaseDocument>;
   updateKnowledgeBaseDocument(id: string, document: Partial<InsertKnowledgeBaseDocument>): Promise<KnowledgeBaseDocument | undefined>;
   deleteKnowledgeBaseDocument(id: string): Promise<boolean>;
+  createDocumentWorkspaceAccess(access: InsertDocumentWorkspaceAccess): Promise<DocumentWorkspaceAccess>;
+  getDocumentWorkspaceAccesses(documentId: string): Promise<DocumentWorkspaceAccess[]>;
 
   // Workspace Templates
   getWorkspaceTemplate(id: string): Promise<WorkspaceTemplate | undefined>;
@@ -631,13 +636,38 @@ export class DbStorage implements IStorage {
   }
 
   async getKnowledgeBaseDocumentsForSpace(spaceId: string, organizationId: string): Promise<KnowledgeBaseDocument[]> {
-    return db.select().from(knowledgeBaseDocuments).where(
+    // Get documents with standard scopes
+    const standardDocs = await db.select().from(knowledgeBaseDocuments).where(
       or(
         eq(knowledgeBaseDocuments.scope, "system"),
         and(eq(knowledgeBaseDocuments.scope, "organization"), eq(knowledgeBaseDocuments.organizationId, organizationId)),
         and(eq(knowledgeBaseDocuments.scope, "workspace"), eq(knowledgeBaseDocuments.spaceId, spaceId))
       )
-    ).orderBy(desc(knowledgeBaseDocuments.createdAt));
+    );
+
+    // Get multi_workspace documents that have access to this workspace
+    const multiWorkspaceDocs = await db
+      .select({ document: knowledgeBaseDocuments })
+      .from(knowledgeBaseDocuments)
+      .innerJoin(
+        documentWorkspaceAccess,
+        eq(knowledgeBaseDocuments.id, documentWorkspaceAccess.documentId)
+      )
+      .where(
+        and(
+          eq(knowledgeBaseDocuments.scope, "multi_workspace"),
+          eq(documentWorkspaceAccess.spaceId, spaceId)
+        )
+      );
+
+    // Combine and deduplicate
+    const allDocs = [
+      ...standardDocs,
+      ...multiWorkspaceDocs.map(row => row.document)
+    ];
+
+    // Sort by creation date
+    return allDocs.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
   async createKnowledgeBaseDocument(document: InsertKnowledgeBaseDocument): Promise<KnowledgeBaseDocument> {
@@ -657,6 +687,15 @@ export class DbStorage implements IStorage {
   async deleteKnowledgeBaseDocument(id: string): Promise<boolean> {
     const result = await db.delete(knowledgeBaseDocuments).where(eq(knowledgeBaseDocuments.id, id));
     return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async createDocumentWorkspaceAccess(access: InsertDocumentWorkspaceAccess): Promise<DocumentWorkspaceAccess> {
+    const [created] = await db.insert(documentWorkspaceAccess).values(access).returning();
+    return created;
+  }
+
+  async getDocumentWorkspaceAccesses(documentId: string): Promise<DocumentWorkspaceAccess[]> {
+    return db.select().from(documentWorkspaceAccess).where(eq(documentWorkspaceAccess.documentId, documentId));
   }
 
   // Workspace Templates
