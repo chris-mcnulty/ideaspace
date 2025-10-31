@@ -106,11 +106,16 @@ export default function LandingPage() {
           
           <div className="container relative mx-auto z-10">
             <div className="mx-auto max-w-4xl text-center">
-              <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
-                <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-                  Collaborative Envisioning Platform
+              <h1 className="text-5xl font-bold tracking-tight sm:text-6xl md:text-7xl lg:text-8xl">
+                <span className="text-white md:bg-gradient-to-r md:from-blue-400 md:via-purple-400 md:to-pink-400 md:bg-clip-text md:text-transparent">
+                  Nebula
                 </span>
               </h1>
+              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl lg:text-6xl mt-4">
+                <span className="text-white md:bg-gradient-to-r md:from-blue-400 md:via-purple-400 md:to-pink-400 md:bg-clip-text md:text-transparent">
+                  Collaborative Envisioning Platform
+                </span>
+              </h2>
               <p className="mt-6 text-lg leading-relaxed text-gray-200 md:text-xl lg:text-2xl">
                 Guide cohorts through structured activities to envision the future,
                 prioritize initiatives, and generate actionable insights powered by AI.
