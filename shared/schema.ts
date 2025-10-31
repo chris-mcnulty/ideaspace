@@ -43,7 +43,7 @@ export const passwordResetTokens = pgTable("password_reset_tokens", {
 
 export const spaces = pgTable("spaces", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  organizationId: varchar("organization_id").notNull().references(() => organizations.id),
+  organizationId: varchar("organization_id").references(() => organizations.id), // Nullable for system templates
   name: text("name").notNull(),
   purpose: text("purpose").notNull(),
   code: varchar("code", { length: 9 }).notNull().unique(), // 8-digit workspace code (nnnn-nnnn)
@@ -63,6 +63,8 @@ export const spaces = pgTable("spaces", {
   marketplaceEndsAt: timestamp("marketplace_ends_at"),
   marketplaceCoinBudget: integer("marketplace_coin_budget").notNull().default(100), // Number of coins each participant gets in marketplace
   aiResultsEnabled: boolean("ai_results_enabled").notNull().default(false), // Facilitator toggle for AI-generated personalized results
+  isTemplate: boolean("is_template").notNull().default(false), // True if this workspace is a template
+  templateScope: text("template_scope").default("organization"), // 'system' (global) or 'organization' (org-specific)
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

@@ -102,6 +102,12 @@ export interface IStorage {
     participantsCount: number;
     accessRequestsCount: number;
   }>;
+  
+  // Template Management (simplified system using isTemplate flag)
+  getTemplates(organizationId?: string): Promise<Space[]>; // Get system + org templates
+  markWorkspaceAsTemplate(id: string, templateScope: 'system' | 'organization'): Promise<Space | undefined>;
+  unmarkWorkspaceAsTemplate(id: string): Promise<Space | undefined>;
+  cloneWorkspaceFromTemplate(templateId: string, newWorkspaceData: Partial<InsertSpace>): Promise<Space>;
 
   // Company Admins (association)
   getCompanyAdminsByOrganization(organizationId: string): Promise<CompanyAdmin[]>;
@@ -374,6 +380,110 @@ export class DbStorage implements IStorage {
       participantsCount: participantsResult.length,
       accessRequestsCount: accessRequestsResult.length,
     };
+  }
+
+  // Template Management (simplified system using isTemplate flag)
+  async getTemplates(organizationId?: string): Promise<Space[]> {
+    // Get system templates (isTemplate=true, templateScope='system') + org templates if specified
+    if (organizationId) {
+      return db.select().from(spaces).where(
+        and(
+          eq(spaces.isTemplate, true),
+          or(
+            eq(spaces.templateScope, 'system'),
+            and(
+              eq(spaces.templateScope, 'organization'),
+              eq(spaces.organizationId, organizationId)
+            )
+          )
+        )
+      ).orderBy(desc(spaces.createdAt));
+    }
+    // Get only system templates
+    return db.select().from(spaces).where(
+      and(
+        eq(spaces.isTemplate, true),
+        eq(spaces.templateScope, 'system')
+      )
+    ).orderBy(desc(spaces.createdAt));
+  }
+
+  async markWorkspaceAsTemplate(id: string, templateScope: 'system' | 'organization'): Promise<Space | undefined> {
+    const [updated] = await db.update(spaces).set({
+      isTemplate: true,
+      templateScope,
+      status: 'archived', // Archive templates so they don't show up in normal workspace lists
+      hidden: true,
+      updatedAt: new Date()
+    }).where(eq(spaces.id, id)).returning();
+    return updated;
+  }
+
+  async unmarkWorkspaceAsTemplate(id: string): Promise<Space | undefined> {
+    const [updated] = await db.update(spaces).set({
+      isTemplate: false,
+      templateScope: null,
+      updatedAt: new Date()
+    }).where(eq(spaces.id, id)).returning();
+    return updated;
+  }
+
+  async cloneWorkspaceFromTemplate(templateId: string, newWorkspaceData: Partial<InsertSpace>): Promise<Space> {
+    // Get the template workspace
+    const template = await this.getSpace(templateId);
+    if (!template || !template.isTemplate) {
+      throw new Error("Template not found or workspace is not a template");
+    }
+
+    // Create new workspace with data from template + overrides
+    const newSpace = await this.createSpace({
+      ...newWorkspaceData,
+      name: newWorkspaceData.name || template.name,
+      purpose: newWorkspaceData.purpose || template.purpose,
+      icon: template.icon,
+      sessionMode: template.sessionMode,
+      pairwiseScope: template.pairwiseScope,
+      marketplaceCoinBudget: template.marketplaceCoinBudget,
+      guestAllowed: newWorkspaceData.guestAllowed !== undefined ? newWorkspaceData.guestAllowed : template.guestAllowed,
+      isTemplate: false, // Cloned workspace is NOT a template
+      templateScope: null,
+    } as InsertSpace);
+
+    // Create a "Template" participant for attribution
+    const templateParticipant = await this.createParticipant({
+      spaceId: newSpace.id,
+      displayName: "Template",
+      isGuest: true,
+    });
+
+    // Clone notes from template
+    const templateNotes = await this.getNotesBySpace(templateId);
+    for (const note of templateNotes) {
+      await this.createNote({
+        spaceId: newSpace.id,
+        participantId: templateParticipant.id,
+        content: note.content,
+        manualCategoryId: null, // Don't clone category assignments
+        isManualOverride: false,
+      });
+    }
+
+    // Clone knowledge base documents from template
+    const templateDocs = await db.select().from(knowledgeBaseDocuments).where(
+      eq(knowledgeBaseDocuments.spaceId, templateId)
+    );
+    for (const doc of templateDocs) {
+      await this.createKnowledgeBaseDocument({
+        name: doc.name,
+        filePath: doc.filePath,
+        fileType: doc.fileType,
+        scope: 'workspace',
+        spaceId: newSpace.id,
+        uploadedBy: doc.uploadedBy,
+      });
+    }
+
+    return newSpace;
   }
 
   // Participants
