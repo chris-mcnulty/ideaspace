@@ -2,7 +2,7 @@ import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft, LogIn, Eye, EyeOff } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -15,6 +15,10 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [emailNotVerified, setEmailNotVerified] = useState(false);
   const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    document.title = "Nebula - Sign In | The Synozur Alliance";
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

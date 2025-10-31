@@ -47,6 +47,15 @@ export default function ParticipantView() {
     queryKey: [`/api/spaces/${params.space}`],
   });
 
+  // Set page title dynamically
+  useEffect(() => {
+    if (org && space) {
+      document.title = `Nebula - ${org.name} ${space.name} | The Synozur Alliance`;
+    } else {
+      document.title = "Nebula - Participant View | The Synozur Alliance";
+    }
+  }, [org, space]);
+
   // Fetch notes
   const { data: notes = [] } = useQuery<Note[]>({
     queryKey: [`/api/spaces/${params.space}/notes`],

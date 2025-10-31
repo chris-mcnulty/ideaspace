@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -345,6 +345,15 @@ export default function FacilitatorWorkspace() {
   const { data: space, isLoading: spaceLoading } = useQuery<Space>({
     queryKey: [`/api/spaces/${params.space}`],
   });
+
+  // Set page title dynamically
+  useEffect(() => {
+    if (org && space) {
+      document.title = `Nebula - ${org.name} ${space.name} | The Synozur Alliance`;
+    } else {
+      document.title = "Nebula - Facilitator Workspace | The Synozur Alliance";
+    }
+  }, [org, space]);
 
   // Fetch notes
   const { data: notes = [], isLoading: notesLoading } = useQuery<Note[]>({

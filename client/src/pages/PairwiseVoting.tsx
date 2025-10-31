@@ -64,6 +64,15 @@ export default function PairwiseVoting() {
     queryKey: [`/api/spaces/${params.space}`],
   });
 
+  // Set page title dynamically
+  useEffect(() => {
+    if (org && space) {
+      document.title = `Nebula - ${org.name} ${space.name} | The Synozur Alliance`;
+    } else {
+      document.title = "Nebula - Pairwise Voting | The Synozur Alliance";
+    }
+  }, [org, space]);
+
   // Fetch next pair
   const { data, isLoading, error, refetch } = useQuery<NextPairResponse>({
     queryKey: [`/api/spaces/${params.space}/participants/${participantId}/next-pair`],

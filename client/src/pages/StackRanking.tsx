@@ -79,6 +79,10 @@ export default function StackRanking() {
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
   
+  useEffect(() => {
+    document.title = "Nebula - Stack Ranking | The Synozur Alliance";
+  }, []);
+  
   // Get participant ID from session storage (consistent with WaitingRoom/ParticipantView)
   const participantId = sessionStorage.getItem("participantId");
 

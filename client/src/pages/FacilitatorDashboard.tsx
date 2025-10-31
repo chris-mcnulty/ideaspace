@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
+import { useEffect } from "react";
 
 interface WorkspaceWithStats {
   id: string;
@@ -30,6 +31,10 @@ interface WorkspaceWithStats {
 
 export default function FacilitatorDashboard() {
   const { user } = useAuth();
+
+  useEffect(() => {
+    document.title = "Nebula - Dashboard | The Synozur Alliance";
+  }, []);
 
   const { data: workspaces, isLoading } = useQuery<WorkspaceWithStats[]>({
     queryKey: ["/api/my-workspaces"],

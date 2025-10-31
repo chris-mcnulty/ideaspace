@@ -10,11 +10,16 @@ import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import type { PersonalizedResult } from "@shared/schema";
+import { useEffect } from "react";
 
 export default function Results() {
   const { org, space: spaceId } = useParams() as { org: string; space: string };
   const { isAuthenticated } = useAuth();
   const { toast } = useToast();
+
+  useEffect(() => {
+    document.title = "Nebula - Results | The Synozur Alliance";
+  }, []);
 
   // Fetch personalized results for the participant
   const { data: personalizedResults, isLoading, error } = useQuery<PersonalizedResult>({

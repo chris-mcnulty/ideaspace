@@ -28,6 +28,10 @@ export default function Marketplace() {
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
   
+  useEffect(() => {
+    document.title = "Nebula - Marketplace Allocation | The Synozur Alliance";
+  }, []);
+  
   // Get participant ID from session storage
   const participantId = sessionStorage.getItem("participantId");
 

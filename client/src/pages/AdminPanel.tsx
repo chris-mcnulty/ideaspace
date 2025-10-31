@@ -8,7 +8,7 @@ import type { Organization, Space, User, AccessRequest, WorkspaceTemplate } from
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { KnowledgeBaseManager } from "@/components/KnowledgeBaseManager";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
@@ -26,6 +26,10 @@ import { Key, UserPlus } from "lucide-react";
 
 export default function AdminPanel() {
   const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    document.title = "Nebula - Admin Panel | The Synozur Alliance";
+  }, []);
 
   // Fetch current user
   const { data: currentUser, isLoading: userLoading } = useQuery<User>({
