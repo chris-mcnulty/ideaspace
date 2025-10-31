@@ -933,29 +933,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = createSpaceApiSchema.parse(req.body);
       
-      // Auto-generate code if not provided
-      const code = data.code || await generateWorkspaceCode();
-      
       // Extract templateId from data (it's not part of insertSpaceSchema)
       // Normalize empty strings to undefined for safety
       const { templateId: rawTemplateId, ...spaceData } = data;
       const templateId = rawTemplateId && rawTemplateId.trim() !== "" ? rawTemplateId : undefined;
-      
+
+      // If templateId is provided, clone from template workspace
+      if (templateId) {
+        try {
+          // Check if this is a workspace template (new system with isTemplate flag)
+          const templateWorkspace = await storage.getSpace(templateId);
+          if (templateWorkspace && templateWorkspace.isTemplate) {
+            // Use new simplified template system
+            const newWorkspace = await storage.cloneWorkspaceFromTemplate(templateId, {
+              ...spaceData,
+              code: data.code || await generateWorkspaceCode(),
+            });
+            return res.status(201).json(newWorkspace);
+          } else {
+            // Fall back to old template system
+            const code = data.code || await generateWorkspaceCode();
+            const space = await storage.createSpace({
+              ...spaceData,
+              code,
+            });
+            await storage.cloneTemplateIntoWorkspace(templateId, space.id, "Template");
+            return res.status(201).json(space);
+          }
+        } catch (templateError) {
+          console.error("Failed to clone template data:", templateError);
+          return res.status(500).json({ error: "Failed to clone from template" });
+        }
+      }
+
+      // No template - create blank workspace
+      const code = data.code || await generateWorkspaceCode();
       const space = await storage.createSpace({
         ...spaceData,
         code,
       });
-
-      // If templateId is provided, clone template data into the new workspace
-      if (templateId) {
-        try {
-          await storage.cloneTemplateIntoWorkspace(templateId, space.id, "Template");
-        } catch (templateError) {
-          console.error("Failed to clone template data:", templateError);
-          // Note: We don't fail the workspace creation if template cloning fails
-          // The workspace is created, just without template data
-        }
-      }
       
       res.status(201).json(space);
     } catch (error) {
@@ -1761,6 +1777,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Failed to fetch template details:", error);
       res.status(500).json({ error: "Failed to fetch template details" });
+    }
+  });
+
+  // Simplified Template System (using isTemplate flag on spaces table)
+  // Get workspace templates (system + org templates)
+  app.get("/api/templates/spaces", requireAuth, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const organizationId = currentUser.organizationId || undefined;
+      
+      const templates = await storage.getTemplates(organizationId);
+      res.json(templates);
+    } catch (error) {
+      console.error("Failed to fetch workspace templates:", error);
+      res.status(500).json({ error: "Failed to fetch templates" });
+    }
+  });
+
+  // Mark a workspace as a template
+  app.post("/api/workspaces/:id/mark-as-template", requireAuth, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const { id } = req.params;
+      const { templateScope } = req.body;
+
+      // Validate templateScope
+      if (templateScope !== 'system' && templateScope !== 'organization') {
+        return res.status(400).json({ error: "Invalid template scope. Must be 'system' or 'organization'" });
+      }
+
+      // Only global admins can create system templates
+      if (templateScope === 'system' && currentUser.role !== 'global_admin') {
+        return res.status(403).json({ error: "Only global admins can create system templates" });
+      }
+
+      // Verify workspace exists and user has permission
+      const workspace = await storage.getSpace(id);
+      if (!workspace) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      // Check permissions for organization templates
+      if (templateScope === 'organization') {
+        if (currentUser.role !== 'global_admin' && currentUser.role !== 'company_admin') {
+          return res.status(403).json({ error: "Insufficient permissions to create organization templates" });
+        }
+        if (currentUser.role === 'company_admin' && workspace.organizationId !== currentUser.organizationId) {
+          return res.status(403).json({ error: "Cannot create template for another organization" });
+        }
+      }
+
+      const updatedWorkspace = await storage.markWorkspaceAsTemplate(id, templateScope);
+      res.json(updatedWorkspace);
+    } catch (error) {
+      console.error("Failed to mark workspace as template:", error);
+      res.status(500).json({ error: "Failed to mark workspace as template" });
+    }
+  });
+
+  // Unmark a workspace as a template
+  app.post("/api/workspaces/:id/unmark-as-template", requireAuth, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const { id } = req.params;
+
+      const workspace = await storage.getSpace(id);
+      if (!workspace) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      // Only global admins can unmark system templates
+      if (workspace.templateScope === 'system' && currentUser.role !== 'global_admin') {
+        return res.status(403).json({ error: "Only global admins can unmark system templates" });
+      }
+
+      // Check permissions for organization templates
+      if (workspace.templateScope === 'organization') {
+        if (currentUser.role !== 'global_admin' && currentUser.role !== 'company_admin') {
+          return res.status(403).json({ error: "Insufficient permissions to unmark organization templates" });
+        }
+        if (currentUser.role === 'company_admin' && workspace.organizationId !== currentUser.organizationId) {
+          return res.status(403).json({ error: "Cannot unmark template for another organization" });
+        }
+      }
+
+      const updatedWorkspace = await storage.unmarkWorkspaceAsTemplate(id);
+      res.json(updatedWorkspace);
+    } catch (error) {
+      console.error("Failed to unmark workspace as template:", error);
+      res.status(500).json({ error: "Failed to unmark workspace as template" });
     }
   });
 

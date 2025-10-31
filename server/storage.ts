@@ -474,9 +474,11 @@ export class DbStorage implements IStorage {
     );
     for (const doc of templateDocs) {
       await this.createKnowledgeBaseDocument({
-        name: doc.name,
+        title: doc.title,
+        filename: doc.filename,
         filePath: doc.filePath,
-        fileType: doc.fileType,
+        fileSize: doc.fileSize,
+        mimeType: doc.mimeType,
         scope: 'workspace',
         spaceId: newSpace.id,
         uploadedBy: doc.uploadedBy,
