@@ -22,6 +22,8 @@ The design system features a dark mode with a primary purple accent, dark blue-b
 
 **Navigation**: Consistent sticky header across pages with Synozur logo (links to home), Nebula branding, theme toggle, and user profile menu. The UserProfileMenu provides access to Dashboard, Admin Panel (for admins/facilitators), and logout. Direct navigation to `/dashboard` is available from anywhere.
 
+**Organization Branding**: All participant-facing screens (ParticipantView, PairwiseVoting, StackRanking, Marketplace) and the facilitator workspace display the organization logo and name in the header. Headers show: [Org Logo] | [Org Name] | Nebula, with fallback to Synozur default logo when no custom logo is configured.
+
 ### Technical Implementations
 - **Multi-Tenancy**: Supports organization isolation and custom branding via `/o/:org/s/:space` URL structure.
 - **Real-time Collaboration**: Utilizes WebSockets for live updates of notes and participant presence.
