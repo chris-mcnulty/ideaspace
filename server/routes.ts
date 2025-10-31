@@ -55,6 +55,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   });
 
+  // Helper function to resolve workspace identifier (code or UUID) to UUID
+  async function resolveWorkspaceId(identifier: string): Promise<string | null> {
+    const isWorkspaceCode = /^\d{4}-\d{4}$/.test(identifier);
+    
+    if (isWorkspaceCode) {
+      const space = await storage.getSpaceByCode(identifier);
+      return space?.id || null;
+    }
+    
+    // Already a UUID or other ID format
+    return identifier;
+  }
+
   // Workspace code lookup (public endpoint for entry flow)
   app.get("/api/spaces/lookup/:code", async (req, res) => {
     try {
@@ -1754,7 +1767,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Participants
   app.get("/api/spaces/:spaceId/participants", async (req, res) => {
     try {
-      const participants = await storage.getParticipantsBySpace(req.params.spaceId);
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      const participants = await storage.getParticipantsBySpace(spaceId);
       res.json(participants);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch participants" });
@@ -1806,7 +1823,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Notes
   app.get("/api/spaces/:spaceId/notes", async (req, res) => {
     try {
-      const notes = await storage.getNotesBySpace(req.params.spaceId);
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      const notes = await storage.getNotesBySpace(spaceId);
       res.json(notes);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch notes" });
@@ -1983,7 +2004,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all categories for a workspace
   app.get("/api/spaces/:spaceId/categories", async (req, res) => {
     try {
-      const categories = await storage.getCategoriesBySpace(req.params.spaceId);
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      const categories = await storage.getCategoriesBySpace(spaceId);
       res.json(categories);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch categories" });
@@ -2242,7 +2267,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Votes
   app.get("/api/spaces/:spaceId/votes", async (req, res) => {
     try {
-      const votes = await storage.getVotesBySpace(req.params.spaceId);
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      const votes = await storage.getVotesBySpace(spaceId);
       res.json(votes);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch votes" });
@@ -2396,7 +2425,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get Borda count leaderboard for a space
   app.get("/api/spaces/:spaceId/leaderboard", async (req, res) => {
     try {
-      const { spaceId } = req.params;
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
       
       const notes = await storage.getNotesBySpace(spaceId);
       const rankings = await storage.getRankingsBySpace(spaceId);
@@ -2417,7 +2449,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get ranking progress for a space
   app.get("/api/spaces/:spaceId/ranking-progress", async (req, res) => {
     try {
-      const { spaceId } = req.params;
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
       
       const participants = await storage.getParticipantsBySpace(spaceId);
       const rankings = await storage.getRankingsBySpace(spaceId);
@@ -2539,7 +2574,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get marketplace leaderboard
   app.get("/api/spaces/:spaceId/marketplace-leaderboard", async (req, res) => {
     try {
-      const { spaceId } = req.params;
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
       
       const notes = await storage.getNotesBySpace(spaceId);
       const allocations = await storage.getMarketplaceAllocationsBySpace(spaceId);
@@ -2556,7 +2594,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get marketplace allocation progress
   app.get("/api/spaces/:spaceId/marketplace-progress", async (req, res) => {
     try {
-      const { spaceId } = req.params;
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
       const { coinBudget } = req.query;
       
       const participants = await storage.getParticipantsBySpace(spaceId);
@@ -3408,7 +3449,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get cohort results for a workspace
   app.get("/api/spaces/:spaceId/results/cohort", requireAuth, async (req, res) => {
     try {
-      const { spaceId } = req.params;
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
 
       const cohortResults = await storage.getCohortResultsBySpace(spaceId);
 
