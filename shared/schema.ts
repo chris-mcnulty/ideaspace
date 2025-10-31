@@ -168,13 +168,21 @@ export const knowledgeBaseDocuments = pgTable("knowledge_base_documents", {
   filePath: text("file_path").notNull(), // Path in local storage
   fileSize: integer("file_size").notNull(), // Size in bytes
   mimeType: text("mime_type").notNull(), // e.g., application/pdf, text/plain
-  scope: text("scope").notNull(), // 'system', 'organization', 'workspace'
+  scope: text("scope").notNull(), // 'system', 'organization', 'workspace', 'multi_workspace'
   organizationId: varchar("organization_id").references(() => organizations.id), // null for system scope
-  spaceId: varchar("space_id").references(() => spaces.id), // null for system/organization scope
+  spaceId: varchar("space_id").references(() => spaces.id), // null for system/organization scope, deprecated for multi_workspace
   tags: text("tags").array(), // Tags for categorization and filtering
   uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Document Workspace Access: Junction table for multi-workspace document sharing
+export const documentWorkspaceAccess = pgTable("document_workspace_access", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  documentId: varchar("document_id").notNull().references(() => knowledgeBaseDocuments.id, { onDelete: "cascade" }),
+  spaceId: varchar("space_id").notNull().references(() => spaces.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 // Workspace Templates: Reusable workspace configurations with seeded content
@@ -334,6 +342,11 @@ export const insertKnowledgeBaseDocumentSchema = createInsertSchema(knowledgeBas
   updatedAt: true,
 });
 
+export const insertDocumentWorkspaceAccessSchema = createInsertSchema(documentWorkspaceAccess).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertWorkspaceTemplateSchema = createInsertSchema(workspaceTemplates).omit({
   id: true,
   createdAt: true,
@@ -416,6 +429,9 @@ export type InsertAccessRequest = z.infer<typeof insertAccessRequestSchema>;
 
 export type KnowledgeBaseDocument = typeof knowledgeBaseDocuments.$inferSelect;
 export type InsertKnowledgeBaseDocument = z.infer<typeof insertKnowledgeBaseDocumentSchema>;
+
+export type DocumentWorkspaceAccess = typeof documentWorkspaceAccess.$inferSelect;
+export type InsertDocumentWorkspaceAccess = z.infer<typeof insertDocumentWorkspaceAccessSchema>;
 
 export type WorkspaceTemplate = typeof workspaceTemplates.$inferSelect;
 export type InsertWorkspaceTemplate = z.infer<typeof insertWorkspaceTemplateSchema>;
