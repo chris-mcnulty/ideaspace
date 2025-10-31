@@ -2949,7 +2949,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "CSV file is empty or has no data rows" });
       }
 
-      // Skip header row
+      // Skip header row (CSV format: Idea,Category[,Participant,Created At])
+      // Note: Only Idea and Category fields are imported. Participant and Created At are optional and ignored.
       const dataLines = lines.slice(1);
       
       // Get existing categories to map names to IDs
