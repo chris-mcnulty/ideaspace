@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
@@ -18,7 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Upload, FileText, Trash2, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import type { KnowledgeBaseDocument } from "@shared/schema";
+import type { KnowledgeBaseDocument, Space } from "@shared/schema";
 
 interface KnowledgeBaseManagerProps {
   scope: 'system' | 'organization' | 'workspace';
@@ -33,6 +36,8 @@ export function KnowledgeBaseManager({ scope, scopeId, title, description }: Kno
   const [file, setFile] = useState<File | null>(null);
   const [documentTitle, setDocumentTitle] = useState("");
   const [documentDescription, setDocumentDescription] = useState("");
+  const [workspaceSelectionMode, setWorkspaceSelectionMode] = useState<'all' | 'specific'>('all');
+  const [selectedWorkspaceIds, setSelectedWorkspaceIds] = useState<string[]>([]);
 
   const queryKey = scopeId
     ? ["/api/knowledge-base/documents", scope, scopeId]
@@ -56,21 +61,53 @@ export function KnowledgeBaseManager({ scope, scopeId, title, description }: Kno
     },
   });
 
+  // Fetch workspaces when scope is organization
+  const { data: workspaces = [] } = useQuery<Space[]>({
+    queryKey: ['/api/organizations', scopeId, 'spaces'],
+    queryFn: async () => {
+      if (scope !== 'organization' || !scopeId) {
+        return [];
+      }
+      const response = await fetch(`/api/organizations/${scopeId}/spaces`, {
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch workspaces');
+      }
+      return response.json();
+    },
+    enabled: scope === 'organization' && !!scopeId,
+  });
+
   const uploadMutation = useMutation({
     mutationFn: async () => {
       if (!file || !documentTitle) {
         throw new Error("File and title are required");
       }
 
+      // Validate specific workspace selection
+      if (scope === 'organization' && workspaceSelectionMode === 'specific' && selectedWorkspaceIds.length === 0) {
+        throw new Error("Please select at least one workspace");
+      }
+
       const formData = new FormData();
       formData.append('file', file);
+      
+      // Determine the actual scope to use
+      const actualScope = scope === 'organization' && workspaceSelectionMode === 'specific' 
+        ? 'multi_workspace' 
+        : scope;
       
       const metadata = {
         title: documentTitle,
         description: documentDescription || undefined,
-        scope,
-        ...(scope === 'organization' && scopeId ? { organizationId: scopeId } : {}),
-        ...(scope === 'workspace' && scopeId ? { spaceId: scopeId } : {}),
+        scope: actualScope,
+        ...(actualScope === 'organization' && scopeId ? { organizationId: scopeId } : {}),
+        ...(actualScope === 'workspace' && scopeId ? { spaceId: scopeId } : {}),
+        ...(actualScope === 'multi_workspace' && scopeId ? { 
+          organizationId: scopeId,
+          spaceIds: selectedWorkspaceIds 
+        } : {}),
       };
       
       formData.append('metadata', JSON.stringify(metadata));
@@ -98,6 +135,8 @@ export function KnowledgeBaseManager({ scope, scopeId, title, description }: Kno
       setFile(null);
       setDocumentTitle("");
       setDocumentDescription("");
+      setWorkspaceSelectionMode('all');
+      setSelectedWorkspaceIds([]);
     },
     onError: (error: Error) => {
       toast({
@@ -214,6 +253,73 @@ export function KnowledgeBaseManager({ scope, scopeId, title, description }: Kno
                     data-testid="input-description"
                   />
                 </div>
+
+                {/* Workspace selection for organization scope */}
+                {scope === 'organization' && workspaces.length > 0 && (
+                  <div className="space-y-3 border-t pt-4">
+                    <Label>Workspace Access</Label>
+                    <RadioGroup
+                      value={workspaceSelectionMode}
+                      onValueChange={(value) => {
+                        setWorkspaceSelectionMode(value as 'all' | 'specific');
+                        if (value === 'all') {
+                          setSelectedWorkspaceIds([]);
+                        }
+                      }}
+                      data-testid="radio-workspace-mode"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="all" id="all-workspaces" data-testid="radio-all-workspaces" />
+                        <Label htmlFor="all-workspaces" className="font-normal cursor-pointer">
+                          All workspaces in organization
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="specific" id="specific-workspaces" data-testid="radio-specific-workspaces" />
+                        <Label htmlFor="specific-workspaces" className="font-normal cursor-pointer">
+                          Select specific workspaces
+                        </Label>
+                      </div>
+                    </RadioGroup>
+
+                    {workspaceSelectionMode === 'specific' && (
+                      <div className="space-y-2">
+                        <Label className="text-sm text-muted-foreground">
+                          Select workspaces ({selectedWorkspaceIds.length} selected)
+                        </Label>
+                        <ScrollArea className="h-48 rounded-md border p-3">
+                          <div className="space-y-2">
+                            {workspaces.map((workspace) => (
+                              <div key={workspace.id} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`workspace-${workspace.id}`}
+                                  checked={selectedWorkspaceIds.includes(workspace.id)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setSelectedWorkspaceIds([...selectedWorkspaceIds, workspace.id]);
+                                    } else {
+                                      setSelectedWorkspaceIds(selectedWorkspaceIds.filter(id => id !== workspace.id));
+                                    }
+                                  }}
+                                  data-testid={`checkbox-workspace-${workspace.id}`}
+                                />
+                                <Label
+                                  htmlFor={`workspace-${workspace.id}`}
+                                  className="text-sm font-normal cursor-pointer flex-1"
+                                >
+                                  <div>{workspace.name}</div>
+                                  {workspace.purpose && (
+                                    <div className="text-xs text-muted-foreground">{workspace.purpose}</div>
+                                  )}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <DialogFooter>
                 <Button
