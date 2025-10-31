@@ -44,6 +44,7 @@ The design system features a dark mode with a primary purple accent, dark blue-b
 - **Facilitator Dashboard**: A central dashboard displaying all accessible workspaces with quick actions and RBAC for viewing permissions.
 - **Admin Panel UI**: Complete admin interface with full CRUD operations:
   - Create organizations and workspaces via dialog forms
+  - **Create Workspace from Template**: Template selector in Create Workspace dialog allows cloning notes and documents from existing templates. Features organization-scoped templates, "No template (blank workspace)" option, security validation preventing cross-tenant access, and automatic "Template" participant creation for cloned content
   - Edit organizations (name, slug, logo, color) and workspaces (name, purpose, guest access)
   - Delete organizations (with workspace validation) and workspaces
   - Archive/unarchive workspaces (toggle hidden status)
