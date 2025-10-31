@@ -1496,15 +1496,16 @@ function NewWorkspaceDialog({
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   
-  // Fetch available templates for this organization
-  const { data: templates = [] } = useQuery<WorkspaceTemplate[]>({
-    queryKey: ["/api/templates", { organizationId }],
-    queryFn: async () => {
-      const response = await fetch(`/api/templates?organizationId=${organizationId}`);
-      if (!response.ok) throw new Error("Failed to fetch templates");
-      return response.json();
-    },
+  // Fetch workspace templates (new simplified system)
+  // Include organizationId in query key to prevent cache collision between orgs
+  const { data: allTemplates = [] } = useQuery<Space[]>({
+    queryKey: ["/api/templates/spaces", organizationId],
   });
+
+  // Filter to show system templates + org-specific templates for this org
+  const templates = allTemplates.filter(t => 
+    t.templateScope === 'system' || t.organizationId === organizationId
+  );
   
   const form = useForm<z.infer<typeof createSpaceApiSchema>>({
     resolver: zodResolver(createSpaceApiSchema),
@@ -1614,13 +1615,13 @@ function NewWorkspaceDialog({
                             value={template.id}
                             data-testid={`template-option-${template.id}`}
                           >
-                            {template.name} ({template.type})
+                            {template.name} {template.templateScope === 'system' ? '(System)' : '(Organization)'}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                     <p className="text-sm text-muted-foreground">
-                      Clone notes and documents from an existing template
+                      Clone notes, categories, and documents from an existing template
                     </p>
                     <FormMessage />
                   </FormItem>
