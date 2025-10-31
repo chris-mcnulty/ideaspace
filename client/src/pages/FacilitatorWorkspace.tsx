@@ -675,8 +675,8 @@ export default function FacilitatorWorkspace() {
       if (status === "open") {
         const now = new Date();
         const farFuture = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000); // 1 year from now
-        updates.ideationStartsAt = now;
-        updates.ideationEndsAt = farFuture;
+        updates.ideationStartsAt = now.toISOString();
+        updates.ideationEndsAt = farFuture.toISOString();
       }
       
       const response = await apiRequest("PATCH", `/api/spaces/${params.space}`, updates);
