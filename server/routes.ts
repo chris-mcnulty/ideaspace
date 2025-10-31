@@ -1591,7 +1591,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else if (currentUser.role === 'company_admin' && currentUser.organizationId === space.organizationId) {
         hasPermission = true;
       } else {
-        const facilitators = await storage.getSpaceFacilitatorsBySpace(data.spaceId);
+        const facilitators = await storage.getSpaceFacilitatorsBySpace(space.id);
         hasPermission = facilitators.some(f => f.userId === currentUser.id);
       }
 
@@ -1600,7 +1600,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const template = await storage.createWorkspaceTemplateFromSpace(
-        data.spaceId,
+        space.id,
         data.name,
         data.type,
         data.description,
