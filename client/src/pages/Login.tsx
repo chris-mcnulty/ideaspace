@@ -39,7 +39,7 @@ export default function Login() {
           setLocation("/dashboard");
         } else {
           // Regular users shouldn't use login, they join via codes
-          setError("Standard users should join workspaces using a 4-digit code from the home page.");
+          setError("Standard users should join workspaces using an 8-digit code from the home page.");
           return;
         }
       } else {
@@ -229,7 +229,7 @@ export default function Login() {
                     className="text-primary hover:underline"
                     data-testid="link-join-workspace"
                   >
-                    Use a 4-digit code instead
+                    Use an 8-digit code instead
                   </button>
                 </p>
               </div>
