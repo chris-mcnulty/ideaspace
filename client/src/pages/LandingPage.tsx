@@ -117,7 +117,7 @@ export default function LandingPage() {
               </p>
 
               <div className="mt-8 text-sm text-white italic">
-                This is our beta version;{" "}
+                Nebula's in beta;{" "}
                 <a 
                   href="https://www.synozur.com/join" 
                   target="_blank" 
@@ -127,7 +127,7 @@ export default function LandingPage() {
                 >
                   signup
                 </a>{" "}
-                to learn more when we release the full version with enhanced features, benchmarks, and comprehensive analytics.
+                for news and updates.
               </div>
 
               <Card className="mx-auto mt-12 max-w-md shadow-2xl border-purple-500/20">
