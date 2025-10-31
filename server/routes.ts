@@ -923,10 +923,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Auto-generate code if not provided
       const code = data.code || await generateWorkspaceCode();
       
+      // Extract templateId from data (it's not part of insertSpaceSchema)
+      // Normalize empty strings to undefined for safety
+      const { templateId: rawTemplateId, ...spaceData } = data;
+      const templateId = rawTemplateId && rawTemplateId.trim() !== "" ? rawTemplateId : undefined;
+      
       const space = await storage.createSpace({
-        ...data,
+        ...spaceData,
         code,
       });
+
+      // If templateId is provided, clone template data into the new workspace
+      if (templateId) {
+        try {
+          await storage.cloneTemplateIntoWorkspace(templateId, space.id, "Template");
+        } catch (templateError) {
+          console.error("Failed to clone template data:", templateError);
+          // Note: We don't fail the workspace creation if template cloning fails
+          // The workspace is created, just without template data
+        }
+      }
+      
       res.status(201).json(space);
     } catch (error) {
       if (error instanceof z.ZodError) {

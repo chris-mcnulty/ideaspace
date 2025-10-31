@@ -778,6 +778,68 @@ export class DbStorage implements IStorage {
     return db.select().from(workspaceTemplateDocuments).where(eq(workspaceTemplateDocuments.templateId, templateId)).orderBy(workspaceTemplateDocuments.createdAt);
   }
 
+  async cloneTemplateIntoWorkspace(templateId: string, spaceId: string, participantName: string = "Template"): Promise<void> {
+    // Get the template and workspace to validate organization match
+    const template = await this.getWorkspaceTemplate(templateId);
+    if (!template) {
+      throw new Error("Template not found");
+    }
+
+    const workspace = await this.getSpace(spaceId);
+    if (!workspace) {
+      throw new Error("Workspace not found");
+    }
+
+    // SECURITY: Verify template belongs to same organization as workspace
+    if (template.organizationId !== workspace.organizationId) {
+      throw new Error("Template does not belong to the same organization as the workspace");
+    }
+
+    // Get template notes and documents
+    const templateNotes = await this.getWorkspaceTemplateNotes(templateId);
+    const templateDocuments = await this.getWorkspaceTemplateDocuments(templateId);
+
+    // Only create participant if there are notes or documents to clone
+    if (templateNotes.length === 0 && templateDocuments.length === 0) {
+      return; // Nothing to clone, exit early
+    }
+
+    // Create a template participant for the cloned notes
+    const participantData: InsertParticipant = {
+      spaceId,
+      displayName: participantName,
+    };
+    const [participant] = await db.insert(participants).values(participantData).returning();
+
+    // Clone notes into workspace
+    for (const templateNote of templateNotes) {
+      const noteData: InsertNote = {
+        spaceId,
+        content: templateNote.content,
+        participantId: participant.id,
+        category: templateNote.category || undefined,
+      };
+      await db.insert(notes).values(noteData);
+    }
+
+    // Clone documents into workspace knowledge base
+    for (const templateDoc of templateDocuments) {
+      const docData: InsertKnowledgeBaseDocument = {
+        title: templateDoc.title,
+        description: templateDoc.description,
+        filename: templateDoc.filename,
+        filePath: templateDoc.filePath,
+        fileSize: templateDoc.fileSize,
+        mimeType: templateDoc.mimeType,
+        scope: "workspace",
+        spaceId: spaceId,
+        tags: templateDoc.tags || [],
+        uploadedBy: participant.id, // Use template participant as uploader
+      };
+      await db.insert(knowledgeBaseDocuments).values(docData);
+    }
+  }
+
   // AI Usage Logs
   async getAiUsageLogs(filters: {
     organizationId?: string;

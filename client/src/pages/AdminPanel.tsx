@@ -1365,6 +1365,16 @@ function NewWorkspaceDialog({
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   
+  // Fetch available templates for this organization
+  const { data: templates = [] } = useQuery<WorkspaceTemplate[]>({
+    queryKey: ["/api/templates", { organizationId }],
+    queryFn: async () => {
+      const response = await fetch(`/api/templates?organizationId=${organizationId}`);
+      if (!response.ok) throw new Error("Failed to fetch templates");
+      return response.json();
+    },
+  });
+  
   const form = useForm<z.infer<typeof createSpaceApiSchema>>({
     resolver: zodResolver(createSpaceApiSchema),
     defaultValues: {
@@ -1376,6 +1386,7 @@ function NewWorkspaceDialog({
       status: "draft",
       sessionMode: "live",
       icon: "brain",
+      templateId: undefined,
     },
   });
 
@@ -1400,6 +1411,7 @@ function NewWorkspaceDialog({
         status: "draft",
         sessionMode: "live",
         icon: "brain",
+        templateId: undefined,
       });
     },
     onError: (error: any) => {
@@ -1445,6 +1457,45 @@ function NewWorkspaceDialog({
                 </FormItem>
               )}
             />
+            {templates.length > 0 && (
+              <FormField
+                control={form.control}
+                name="templateId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Template (Optional)</FormLabel>
+                    <Select 
+                      onValueChange={(value) => field.onChange(value === "none" ? undefined : value)} 
+                      value={field.value || "none"}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-template">
+                          <SelectValue placeholder="Start from scratch or select a template" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none" data-testid="template-option-none">
+                          No template (blank workspace)
+                        </SelectItem>
+                        {templates.map((template) => (
+                          <SelectItem 
+                            key={template.id} 
+                            value={template.id}
+                            data-testid={`template-option-${template.id}`}
+                          >
+                            {template.name} ({template.type})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-sm text-muted-foreground">
+                      Clone notes and documents from an existing template
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             <FormField
               control={form.control}
               name="purpose"

@@ -286,8 +286,10 @@ export const insertSpaceSchema = createInsertSchema(spaces).omit({
 });
 
 // API schema for creating spaces (code is optional, auto-generated if not provided)
+// templateId is optional - if provided, workspace will be created from template
 export const createSpaceApiSchema = insertSpaceSchema.extend({
   code: z.string().length(9).regex(/^\d{4}-\d{4}$/).optional(),
+  templateId: z.string().optional(),
 });
 
 export const insertParticipantSchema = createInsertSchema(participants).omit({
