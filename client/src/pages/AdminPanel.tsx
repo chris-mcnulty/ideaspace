@@ -383,6 +383,7 @@ function WorkspaceRow({
   const [, setLocation] = useLocation();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [markTemplateDialogOpen, setMarkTemplateDialogOpen] = useState(false);
   const { toast } = useToast();
 
   const toggleHiddenMutation = useMutation({
@@ -405,6 +406,35 @@ function WorkspaceRow({
       toast({
         variant: "destructive",
         title: "Failed to update workspace",
+        description: error.message || "Please try again",
+      });
+    },
+  });
+
+  const markAsTemplateMutation = useMutation({
+    mutationFn: async (templateScope: 'system' | 'organization') => {
+      const response = await apiRequest("POST", `/api/workspaces/${space.id}/mark-as-template`, {
+        templateScope
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to mark as template");
+      }
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/organizations", space.organizationId, "spaces"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/templates/spaces"] });
+      toast({
+        title: "Workspace marked as template",
+        description: "This workspace can now be used as a template for new workspaces",
+      });
+      setMarkTemplateDialogOpen(false);
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to mark as template",
         description: error.message || "Please try again",
       });
     },
@@ -474,6 +504,15 @@ function WorkspaceRow({
                 )}
               </Button>
               <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setMarkTemplateDialogOpen(true)}
+                data-testid={`button-mark-template-${space.id}`}
+              >
+                <FileStack className="h-3 w-3 mr-1" />
+                Mark as Template
+              </Button>
+              <Button 
                 variant="ghost" 
                 size="icon"
                 onClick={() => setDeleteDialogOpen(true)}
@@ -498,6 +537,54 @@ function WorkspaceRow({
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
       />
+
+      <Dialog open={markTemplateDialogOpen} onOpenChange={setMarkTemplateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mark as Template</DialogTitle>
+            <DialogDescription>
+              Choose the template scope for "{space.name}"
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-3">
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => markAsTemplateMutation.mutate('organization')}
+                disabled={markAsTemplateMutation.isPending}
+                data-testid="button-org-template"
+              >
+                <Building2 className="h-4 w-4 mr-2" />
+                <div className="text-left">
+                  <div className="font-medium">Organization Template</div>
+                  <div className="text-xs text-muted-foreground">Available only to this organization</div>
+                </div>
+              </Button>
+              {currentUserRole === "global_admin" && (
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => markAsTemplateMutation.mutate('system')}
+                  disabled={markAsTemplateMutation.isPending}
+                  data-testid="button-system-template"
+                >
+                  <FileStack className="h-4 w-4 mr-2" />
+                  <div className="text-left">
+                    <div className="font-medium">System Template</div>
+                    <div className="text-xs text-muted-foreground">Available to all organizations</div>
+                  </div>
+                </Button>
+              )}
+            </div>
+            {markAsTemplateMutation.isPending && (
+              <div className="flex items-center justify-center py-2">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
@@ -731,55 +818,41 @@ function TemplatesTab({
   organizations: Organization[];
 }) {
   const { toast } = useToast();
-  const [expandedTemplateId, setExpandedTemplateId] = useState<string | null>(null);
 
-  // Fetch templates based on user role
-  const organizationId = currentUser.role === "company_admin" ? currentUser.organizationId : undefined;
-  
-  const { data: templates = [], isLoading } = useQuery<WorkspaceTemplate[]>({
-    queryKey: organizationId ? ["/api/templates", { organizationId }] : ["/api/templates"],
-    queryFn: async () => {
-      const params = organizationId ? `?organizationId=${organizationId}` : '';
-      const response = await fetch(`/api/templates${params}`);
-      if (!response.ok) throw new Error("Failed to fetch templates");
-      return response.json();
-    },
+  // Fetch workspace templates (new simplified system using isTemplate flag)
+  const { data: workspaceTemplates = [], isLoading } = useQuery<Space[]>({
+    queryKey: ["/api/templates/spaces"],
   });
 
-  // Delete template mutation
-  const deleteTemplateMutation = useMutation({
-    mutationFn: async (templateId: string) => {
-      const response = await fetch(`/api/templates/${templateId}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+  // Unmark template mutation
+  const unmarkTemplateMutation = useMutation({
+    mutationFn: async (workspaceId: string) => {
+      const response = await apiRequest("POST", `/api/workspaces/${workspaceId}/unmark-as-template`);
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Failed to delete template");
+        throw new Error(error.error || "Failed to unmark template");
       }
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/templates/spaces"] });
       toast({
-        title: "Template deleted",
-        description: "The workspace template has been deleted successfully",
+        title: "Template unmarked",
+        description: "The workspace is no longer a template",
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Failed to delete template",
+        title: "Failed to unmark template",
         description: error.message,
         variant: "destructive",
       });
     },
   });
 
-  const handleDelete = (templateId: string) => {
-    if (confirm("Are you sure you want to delete this template? This action cannot be undone.")) {
-      deleteTemplateMutation.mutate(templateId);
+  const handleUnmark = (workspaceId: string) => {
+    if (confirm("Are you sure you want to unmark this workspace as a template? It will be restored as a regular workspace.")) {
+      unmarkTemplateMutation.mutate(workspaceId);
     }
   };
 
@@ -791,101 +864,159 @@ function TemplatesTab({
     );
   }
 
-  if (templates.length === 0) {
+  if (workspaceTemplates.length === 0) {
     return (
       <Card>
         <CardContent className="pt-12 pb-12 text-center text-muted-foreground">
           <FileStack className="h-16 w-16 mx-auto mb-4 opacity-50" />
           <h3 className="text-lg font-medium mb-2">No templates yet</h3>
-          <p className="text-sm max-w-md mx-auto">
+          <p className="text-sm max-w-md mx-auto mb-4">
             Workspace templates allow you to create pre-configured workspaces with seeded notes and knowledge base documents.
-            Create a template from an existing workspace in the Facilitator Workspace.
+            Mark an existing workspace as a template from the workspace list below.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {currentUser.role === "global_admin" 
+              ? "Global admins can create system-wide templates available to all organizations."
+              : "Company admins can create organization-specific templates."}
           </p>
         </CardContent>
       </Card>
     );
   }
 
+  // Group templates by scope
+  const systemTemplates = workspaceTemplates.filter(t => t.templateScope === 'system');
+  const orgTemplates = workspaceTemplates.filter(t => t.templateScope === 'organization');
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold">Workspace Templates</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Manage reusable workspace configurations with pre-seeded content
-          </p>
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-semibold">Workspace Templates</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Reusable workspace configurations that can be deployed across organizations
+        </p>
+      </div>
+
+      {systemTemplates.length > 0 && (
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-lg font-medium">System Templates</h3>
+            <p className="text-sm text-muted-foreground">Available to all organizations</p>
+          </div>
+          <div className="grid gap-4">
+            {systemTemplates.map((template) => (
+              <WorkspaceTemplateCard
+                key={template.id}
+                template={template}
+                organization={null}
+                onUnmark={handleUnmark}
+                unmarkPending={unmarkTemplateMutation.isPending}
+                currentUser={currentUser}
+              />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="grid gap-4">
-        {templates.map((template) => {
-          const org = organizations.find(o => o.id === template.organizationId);
-          const isExpanded = expandedTemplateId === template.id;
-
-          return (
-            <Card key={template.id} data-testid={`card-template-${template.id}`}>
-              <CardHeader>
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <CardTitle className="text-lg">{template.name}</CardTitle>
-                      <Badge variant="secondary" data-testid={`badge-type-${template.id}`}>
-                        {template.type}
-                      </Badge>
-                      {template.organizationId && org && (
-                        <Badge variant="outline" data-testid={`badge-org-${template.id}`}>
-                          {org.name}
-                        </Badge>
-                      )}
-                      {!template.organizationId && (
-                        <Badge variant="default" data-testid={`badge-scope-${template.id}`}>
-                          System
-                        </Badge>
-                      )}
-                    </div>
-                    {template.description && (
-                      <p className="text-sm text-muted-foreground">{template.description}</p>
-                    )}
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Created {new Date(template.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setExpandedTemplateId(isExpanded ? null : template.id)}
-                      data-testid={`button-view-details-${template.id}`}
-                    >
-                      {isExpanded ? "Hide Details" : "View Details"}
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => handleDelete(template.id)}
-                      disabled={deleteTemplateMutation.isPending}
-                      data-testid={`button-delete-${template.id}`}
-                    >
-                      {deleteTemplateMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <X className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-
-              {isExpanded && (
-                <CardContent>
-                  <TemplateDetails templateId={template.id} />
-                </CardContent>
-              )}
-            </Card>
-          );
-        })}
-      </div>
+      {orgTemplates.length > 0 && (
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-lg font-medium">Organization Templates</h3>
+            <p className="text-sm text-muted-foreground">Scoped to specific organizations</p>
+          </div>
+          <div className="grid gap-4">
+            {orgTemplates.map((template) => {
+              const org = organizations.find(o => o.id === template.organizationId);
+              return (
+                <WorkspaceTemplateCard
+                  key={template.id}
+                  template={template}
+                  organization={org || null}
+                  onUnmark={handleUnmark}
+                  unmarkPending={unmarkTemplateMutation.isPending}
+                  currentUser={currentUser}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function WorkspaceTemplateCard({
+  template,
+  organization,
+  onUnmark,
+  unmarkPending,
+  currentUser,
+}: {
+  template: Space;
+  organization: Organization | null;
+  onUnmark: (id: string) => void;
+  unmarkPending: boolean;
+  currentUser: User;
+}) {
+  // Fetch notes and categories for this template
+  const { data: notes = [] } = useQuery<any[]>({
+    queryKey: ["/api/spaces", template.id, "notes"],
+  });
+
+  const { data: categories = [] } = useQuery<any[]>({
+    queryKey: ["/api/spaces", template.id, "categories"],
+  });
+
+  const canUnmark = 
+    currentUser.role === "global_admin" || 
+    (template.templateScope === "organization" && 
+     (currentUser.role === "company_admin" && currentUser.organizationId === template.organizationId));
+
+  return (
+    <Card data-testid={`card-template-${template.id}`}>
+      <CardHeader>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-2">
+              <CardTitle className="text-lg">{template.name}</CardTitle>
+              <Badge 
+                variant={template.templateScope === 'system' ? 'default' : 'secondary'}
+                data-testid={`badge-scope-${template.id}`}
+              >
+                {template.templateScope === 'system' ? 'System' : 'Organization'}
+              </Badge>
+              {organization && (
+                <Badge variant="outline" data-testid={`badge-org-${template.id}`}>
+                  {organization.name}
+                </Badge>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">{template.purpose}</p>
+            <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
+              <span>{notes.length} notes</span>
+              <span>{categories.length} categories</span>
+              <span>Code: {template.code}</span>
+              <span>Created {new Date(template.createdAt).toLocaleDateString()}</span>
+            </div>
+          </div>
+          {canUnmark && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onUnmark(template.id)}
+              disabled={unmarkPending}
+              data-testid={`button-unmark-${template.id}`}
+            >
+              {unmarkPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Unmark as Template"
+              )}
+            </Button>
+          )}
+        </div>
+      </CardHeader>
+    </Card>
   );
 }
 
