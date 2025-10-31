@@ -1936,6 +1936,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.status(204).send();
     } catch (error) {
+      console.error("Failed to delete note:", error);
       res.status(500).json({ error: "Failed to delete note" });
     }
   });
