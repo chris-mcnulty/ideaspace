@@ -1803,6 +1803,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const { templateScope } = req.body;
 
+      // Resolve workspace ID (supports both UUID and workspace code)
+      const workspaceId = await resolveWorkspaceId(id);
+      if (!workspaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
       // Validate templateScope
       if (templateScope !== 'system' && templateScope !== 'organization') {
         return res.status(400).json({ error: "Invalid template scope. Must be 'system' or 'organization'" });
@@ -1814,7 +1820,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Verify workspace exists and user has permission
-      const workspace = await storage.getSpace(id);
+      const workspace = await storage.getSpace(workspaceId);
       if (!workspace) {
         return res.status(404).json({ error: "Workspace not found" });
       }
@@ -1829,7 +1835,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const updatedWorkspace = await storage.markWorkspaceAsTemplate(id, templateScope);
+      const updatedWorkspace = await storage.markWorkspaceAsTemplate(workspaceId, templateScope);
       res.json(updatedWorkspace);
     } catch (error) {
       console.error("Failed to mark workspace as template:", error);
@@ -1843,7 +1849,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const currentUser = req.user as User;
       const { id } = req.params;
 
-      const workspace = await storage.getSpace(id);
+      // Resolve workspace ID (supports both UUID and workspace code)
+      const workspaceId = await resolveWorkspaceId(id);
+      if (!workspaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      const workspace = await storage.getSpace(workspaceId);
       if (!workspace) {
         return res.status(404).json({ error: "Workspace not found" });
       }
@@ -1863,7 +1875,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const updatedWorkspace = await storage.unmarkWorkspaceAsTemplate(id);
+      const updatedWorkspace = await storage.unmarkWorkspaceAsTemplate(workspaceId);
       res.json(updatedWorkspace);
     } catch (error) {
       console.error("Failed to unmark workspace as template:", error);
