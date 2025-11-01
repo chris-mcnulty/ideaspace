@@ -103,8 +103,9 @@ export interface IStorage {
     accessRequestsCount: number;
   }>;
   
-  // Template Management (simplified system using isTemplate flag)
+  // Template Management (snapshot-based system using isTemplate flag)
   getTemplates(organizationId?: string): Promise<Space[]>; // Get system + org templates
+  createTemplateSnapshot(sourceWorkspaceId: string, templateScope: 'system' | 'organization'): Promise<Space>;
   markWorkspaceAsTemplate(id: string, templateScope: 'system' | 'organization'): Promise<Space | undefined>;
   unmarkWorkspaceAsTemplate(id: string): Promise<Space | undefined>;
   cloneWorkspaceFromTemplate(templateId: string, newWorkspaceData: Partial<InsertSpace>): Promise<Space>;
@@ -426,6 +427,86 @@ export class DbStorage implements IStorage {
       updatedAt: new Date()
     }).where(eq(spaces.id, id)).returning();
     return updated;
+  }
+
+  async createTemplateSnapshot(sourceWorkspaceId: string, templateScope: 'system' | 'organization'): Promise<Space> {
+    // Get the source workspace
+    const sourceWorkspace = await this.getSpace(sourceWorkspaceId);
+    if (!sourceWorkspace) {
+      throw new Error("Source workspace not found");
+    }
+
+    // Create timestamp for unique template name
+    const timestamp = new Date().toISOString().slice(0, 10); // YYYY-MM-DD format
+    
+    // Create a frozen snapshot workspace as the template
+    const templateSnapshot = await this.createSpace({
+      organizationId: sourceWorkspace.organizationId,
+      name: `${sourceWorkspace.name} (Template - ${timestamp})`,
+      purpose: sourceWorkspace.purpose || `Template snapshot created from "${sourceWorkspace.name}"`,
+      icon: sourceWorkspace.icon,
+      sessionMode: sourceWorkspace.sessionMode,
+      pairwiseScope: sourceWorkspace.pairwiseScope,
+      marketplaceCoinBudget: sourceWorkspace.marketplaceCoinBudget,
+      guestAllowed: sourceWorkspace.guestAllowed,
+      hidden: true, // Hide templates from normal workspace lists
+      status: 'archived', // Archive templates
+      isTemplate: true,
+      templateScope,
+    } as InsertSpace);
+
+    // Create a "Template" participant for attribution
+    const templateParticipant = await this.createParticipant({
+      spaceId: templateSnapshot.id,
+      displayName: "Template",
+      isGuest: true,
+    });
+
+    // Clone categories from source workspace FIRST (to map IDs for notes)
+    const sourceCategories = await this.getCategoriesBySpace(sourceWorkspaceId);
+    const categoryIdMap = new Map<string, string>(); // old ID -> new ID
+    
+    for (const category of sourceCategories) {
+      const newCategory = await this.createCategory({
+        spaceId: templateSnapshot.id,
+        name: category.name,
+        color: category.color,
+      });
+      categoryIdMap.set(category.id, newCategory.id);
+    }
+
+    // Clone notes from source workspace with mapped category IDs
+    const sourceNotes = await this.getNotesBySpace(sourceWorkspaceId);
+    for (const note of sourceNotes) {
+      const newCategoryId = note.manualCategoryId ? categoryIdMap.get(note.manualCategoryId) : null;
+      
+      await this.createNote({
+        spaceId: templateSnapshot.id,
+        participantId: templateParticipant.id,
+        content: note.content,
+        manualCategoryId: newCategoryId || null, // Map to new category ID
+        isManualOverride: note.isManualOverride,
+      });
+    }
+
+    // Clone knowledge base documents from source workspace
+    const sourceDocs = await db.select().from(knowledgeBaseDocuments).where(
+      eq(knowledgeBaseDocuments.spaceId, sourceWorkspaceId)
+    );
+    for (const doc of sourceDocs) {
+      await this.createKnowledgeBaseDocument({
+        title: doc.title,
+        filename: doc.filename,
+        filePath: doc.filePath,
+        fileSize: doc.fileSize,
+        mimeType: doc.mimeType,
+        scope: 'workspace',
+        spaceId: templateSnapshot.id,
+        uploadedBy: doc.uploadedBy,
+      });
+    }
+
+    return templateSnapshot;
   }
 
   async cloneWorkspaceFromTemplate(templateId: string, newWorkspaceData: Partial<InsertSpace>): Promise<Space> {

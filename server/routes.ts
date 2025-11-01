@@ -1796,7 +1796,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Mark a workspace as a template
+  // Create a template snapshot from a workspace
   app.post("/api/workspaces/:id/mark-as-template", requireAuth, async (req, res) => {
     try {
       const currentUser = req.user as User;
@@ -1835,11 +1835,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const updatedWorkspace = await storage.markWorkspaceAsTemplate(workspaceId, templateScope);
-      res.json(updatedWorkspace);
+      // Create a frozen snapshot copy as the template (not the original workspace)
+      const templateSnapshot = await storage.createTemplateSnapshot(workspaceId, templateScope);
+      res.json(templateSnapshot);
     } catch (error) {
-      console.error("Failed to mark workspace as template:", error);
-      res.status(500).json({ error: "Failed to mark workspace as template" });
+      console.error("Failed to create template snapshot:", error);
+      res.status(500).json({ error: "Failed to create template snapshot" });
     }
   });
 

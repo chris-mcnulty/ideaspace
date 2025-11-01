@@ -44,13 +44,15 @@ The design system features a dark mode with a primary purple accent, dark blue-b
 - **Facilitator Dashboard**: A central dashboard displaying all accessible workspaces with quick actions and RBAC for viewing permissions.
 - **Admin Panel UI**: Complete admin interface with full CRUD operations:
   - Create organizations and workspaces via dialog forms
-  - **Workspace Template System**: Simplified template architecture where regular workspaces can be marked as templates with two scopes:
+  - **Workspace Template System**: Snapshot-based template architecture where workspaces can be saved as frozen templates with two scopes:
     - **System Templates** (global admins only): Available to all organizations for deploying standardized workspace configurations
     - **Organization Templates** (global/company admins): Scoped to specific organizations for internal reuse
-    - Templates tab displays all templates grouped by scope with metadata (notes count, categories, workspace code)
-    - Mark/unmark workspaces as templates via "Mark as Template" button with scope selection dialog
+    - **Snapshot Behavior**: When "Save as Template" is clicked, the system creates a **frozen snapshot copy** of the workspace with a timestamp in the name. The original workspace remains fully editable and unchanged. Future modifications to the original do NOT affect the template snapshot.
+    - Templates tab displays all template snapshots grouped by scope with metadata (notes count, categories, workspace code)
+    - Save as template creates a separate frozen copy via "Save as Template" button with scope selection dialog
+    - Template snapshots are hidden and archived to prevent accidental modification
     - Create Workspace dialog shows filtered templates (system + org-specific) with scope indicators
-    - Template cloning copies notes, categories, and knowledge base documents to new workspaces with "Template" participant attribution
+    - Template cloning copies notes (with category mappings), categories, and knowledge base documents to new workspaces with "Template" participant attribution
     - RBAC enforced at storage layer with proper cache scoping per organization to prevent cross-tenant data exposure
   - Edit organizations (name, slug, logo, color) and workspaces (name, purpose, guest access)
   - Delete organizations (with workspace validation) and workspaces

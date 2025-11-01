@@ -982,12 +982,12 @@ export default function FacilitatorWorkspace() {
       }
       return await response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       setIsTemplateDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ["/api/templates/spaces"] });
       toast({
-        title: "Workspace marked as template",
-        description: "This workspace can now be used as a template for new workspaces",
+        title: "Template snapshot created",
+        description: `A frozen copy "${data.name}" has been saved as a template. Your original workspace remains unchanged.`,
       });
     },
     onError: (error: Error) => {
@@ -1404,30 +1404,33 @@ export default function FacilitatorWorkspace() {
                   </DialogContent>
                 </Dialog>
 
-                {/* Mark as Template Dialog */}
+                {/* Save as Template Dialog */}
                 <Dialog open={isTemplateDialogOpen} onOpenChange={setIsTemplateDialogOpen}>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>Mark as Template</DialogTitle>
+                      <DialogTitle>Save as Template</DialogTitle>
                       <DialogDescription>
-                        Choose the template scope for "{space.name}"
+                        Create a frozen snapshot template from "{space.name}"
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
                       <div className="rounded-md bg-muted/50 p-4 mb-4">
-                        <p className="text-sm text-muted-foreground mb-2">
-                          This template will include:
+                        <p className="text-sm font-medium mb-2">
+                          This creates a frozen snapshot that includes:
                         </p>
-                        <ul className="space-y-1 text-sm">
+                        <ul className="space-y-1 text-sm text-muted-foreground">
                           <li className="flex items-center gap-2">
                             <StickyNote className="h-3 w-3" />
-                            {notes.length} note{notes.length !== 1 ? 's' : ''}
+                            {notes.length} note{notes.length !== 1 ? 's' : ''} (current state)
                           </li>
                           <li className="flex items-center gap-2">
                             <BookOpen className="h-3 w-3" />
                             Knowledge base documents for this workspace
                           </li>
                         </ul>
+                        <p className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
+                          💡 The template will be a separate frozen copy. Changes to this workspace won't affect the template.
+                        </p>
                       </div>
                       <div className="space-y-3">
                         <Button
