@@ -1738,7 +1738,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get template details (notes and documents)
+  // Simplified Template System (using isTemplate flag on spaces table)
+  // IMPORTANT: This route must come BEFORE /api/templates/:id to avoid route conflict
+  // Get workspace templates (system + org templates)
+  app.get("/api/templates/spaces", requireAuth, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const organizationId = currentUser.organizationId || undefined;
+      
+      const templates = await storage.getTemplates(organizationId);
+      res.json(templates);
+    } catch (error) {
+      console.error("Failed to fetch workspace templates:", error);
+      res.status(500).json({ error: "Failed to fetch templates" });
+    }
+  });
+
+  // Get template details (notes and documents) - OLD SYSTEM
   app.get("/api/templates/:id", requireAuth, async (req, res) => {
     try {
       const currentUser = req.user as User;
@@ -1777,21 +1793,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Failed to fetch template details:", error);
       res.status(500).json({ error: "Failed to fetch template details" });
-    }
-  });
-
-  // Simplified Template System (using isTemplate flag on spaces table)
-  // Get workspace templates (system + org templates)
-  app.get("/api/templates/spaces", requireAuth, async (req, res) => {
-    try {
-      const currentUser = req.user as User;
-      const organizationId = currentUser.organizationId || undefined;
-      
-      const templates = await storage.getTemplates(organizationId);
-      res.json(templates);
-    } catch (error) {
-      console.error("Failed to fetch workspace templates:", error);
-      res.status(500).json({ error: "Failed to fetch templates" });
     }
   });
 
