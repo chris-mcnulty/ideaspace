@@ -280,9 +280,6 @@ export default function FacilitatorWorkspace() {
   const [newNoteContent, setNewNoteContent] = useState("");
   const [mergedNoteContent, setMergedNoteContent] = useState("");
   const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
-  const [templateName, setTemplateName] = useState("");
-  const [templateType, setTemplateType] = useState("general");
-  const [templateDescription, setTemplateDescription] = useState("");
   const [rewriteDialogNote, setRewriteDialogNote] = useState<Note | null>(null);
   const [rewriteVariations, setRewriteVariations] = useState<Array<{ version: number; content: string }>>([]);
   const [editDialogNote, setEditDialogNote] = useState<Note | null>(null);
@@ -334,6 +331,12 @@ export default function FacilitatorWorkspace() {
     onOpen: () => console.log('[FacilitatorWorkspace] WebSocket connected'),
     onClose: () => console.log('[FacilitatorWorkspace] WebSocket disconnected'),
     enabled: !!params.space,
+  });
+
+  // Fetch current user
+  const { data: currentUser } = useQuery<User>({
+    queryKey: ["/api/auth/me"],
+    enabled: isAuthenticated,
   });
 
   // Fetch organization
@@ -967,52 +970,34 @@ export default function FacilitatorWorkspace() {
     },
   });
 
-  // Create template mutation
-  const createTemplateMutation = useMutation({
-    mutationFn: async (data: { name: string; type: string; description?: string }) => {
-      const response = await apiRequest("POST", "/api/templates", {
-        spaceId: params.space,
-        name: data.name,
-        type: data.type,
-        description: data.description || undefined,
+  // Mark workspace as template mutation (new simplified system)
+  const markAsTemplateMutation = useMutation({
+    mutationFn: async (templateScope: 'system' | 'organization') => {
+      const response = await apiRequest("POST", `/api/workspaces/${params.space}/mark-as-template`, {
+        templateScope
       });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to mark as template");
+      }
       return await response.json();
     },
-    onSuccess: (_, variables) => {
+    onSuccess: () => {
       setIsTemplateDialogOpen(false);
-      setTemplateName("");
-      setTemplateType("general");
-      setTemplateDescription("");
+      queryClient.invalidateQueries({ queryKey: ["/api/templates/spaces"] });
       toast({
-        title: "Template created",
-        description: `Workspace template "${variables.name}" has been created successfully`,
+        title: "Workspace marked as template",
+        description: "This workspace can now be used as a template for new workspaces",
       });
     },
     onError: (error: Error) => {
       toast({
         variant: "destructive",
-        title: "Failed to create template",
+        title: "Failed to mark as template",
         description: error.message,
       });
     },
   });
-
-  const handleCreateTemplate = () => {
-    const trimmedName = templateName.trim();
-    if (!trimmedName) {
-      toast({
-        variant: "destructive",
-        title: "Template name required",
-        description: "Please enter a name for the template",
-      });
-      return;
-    }
-    createTemplateMutation.mutate({
-      name: trimmedName,
-      type: templateType,
-      description: templateDescription.trim() || undefined,
-    });
-  };
 
   if (spaceLoading) {
     return (
@@ -1419,59 +1404,21 @@ export default function FacilitatorWorkspace() {
                   </DialogContent>
                 </Dialog>
 
-                {/* Save as Template Dialog */}
+                {/* Mark as Template Dialog */}
                 <Dialog open={isTemplateDialogOpen} onOpenChange={setIsTemplateDialogOpen}>
-                  <DialogContent className="max-w-lg">
+                  <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>Save Workspace as Template</DialogTitle>
+                      <DialogTitle>Mark as Template</DialogTitle>
                       <DialogDescription>
-                        Create a reusable template with this workspace's notes and knowledge base documents.
+                        Choose the template scope for "{space.name}"
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="template-name">Template Name *</Label>
-                        <Input
-                          id="template-name"
-                          placeholder="e.g., Company Values Ideation"
-                          value={templateName}
-                          onChange={(e) => setTemplateName(e.target.value)}
-                          data-testid="input-template-name"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="template-type">Template Type *</Label>
-                        <select
-                          id="template-type"
-                          value={templateType}
-                          onChange={(e) => setTemplateType(e.target.value)}
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          data-testid="select-template-type"
-                        >
-                          <option value="general">General</option>
-                          <option value="values">Company Values</option>
-                          <option value="vision">Vision & Strategy</option>
-                          <option value="innovation">Innovation</option>
-                          <option value="problem-solving">Problem Solving</option>
-                          <option value="planning">Planning</option>
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="template-description">Description (Optional)</Label>
-                        <Textarea
-                          id="template-description"
-                          placeholder="Describe when and how to use this template..."
-                          value={templateDescription}
-                          onChange={(e) => setTemplateDescription(e.target.value)}
-                          rows={3}
-                          data-testid="textarea-template-description"
-                        />
-                      </div>
-                      <div className="rounded-md bg-muted/50 p-4">
-                        <p className="text-sm text-muted-foreground">
+                      <div className="rounded-md bg-muted/50 p-4 mb-4">
+                        <p className="text-sm text-muted-foreground mb-2">
                           This template will include:
                         </p>
-                        <ul className="mt-2 space-y-1 text-sm">
+                        <ul className="space-y-1 text-sm">
                           <li className="flex items-center gap-2">
                             <StickyNote className="h-3 w-3" />
                             {notes.length} note{notes.length !== 1 ? 's' : ''}
@@ -1482,34 +1429,42 @@ export default function FacilitatorWorkspace() {
                           </li>
                         </ul>
                       </div>
-                    </div>
-                    <DialogFooter>
-                      <Button
-                        variant="outline"
-                        onClick={() => setIsTemplateDialogOpen(false)}
-                        disabled={createTemplateMutation.isPending}
-                        data-testid="button-cancel-template"
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={handleCreateTemplate}
-                        disabled={!templateName.trim() || createTemplateMutation.isPending}
-                        data-testid="button-save-template"
-                      >
-                        {createTemplateMutation.isPending ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Creating...
-                          </>
-                        ) : (
-                          <>
-                            <FileStack className="mr-2 h-4 w-4" />
-                            Create Template
-                          </>
+                      <div className="space-y-3">
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start"
+                          onClick={() => markAsTemplateMutation.mutate('organization')}
+                          disabled={markAsTemplateMutation.isPending}
+                          data-testid="button-org-template"
+                        >
+                          <Users className="h-4 w-4 mr-2" />
+                          <div className="text-left">
+                            <div className="font-medium">Organization Template</div>
+                            <div className="text-xs text-muted-foreground">Available only to this organization</div>
+                          </div>
+                        </Button>
+                        {currentUser && (currentUser.role === "global_admin") && (
+                          <Button
+                            variant="outline"
+                            className="w-full justify-start"
+                            onClick={() => markAsTemplateMutation.mutate('system')}
+                            disabled={markAsTemplateMutation.isPending}
+                            data-testid="button-system-template"
+                          >
+                            <FileStack className="h-4 w-4 mr-2" />
+                            <div className="text-left">
+                              <div className="font-medium">System Template</div>
+                              <div className="text-xs text-muted-foreground">Available to all organizations</div>
+                            </div>
+                          </Button>
                         )}
-                      </Button>
-                    </DialogFooter>
+                      </div>
+                      {markAsTemplateMutation.isPending && (
+                        <div className="flex items-center justify-center py-2">
+                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
                   </DialogContent>
                 </Dialog>
               </div>
