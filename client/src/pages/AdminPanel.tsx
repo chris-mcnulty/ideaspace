@@ -1500,6 +1500,11 @@ function NewWorkspaceDialog({
   // Include organizationId in query key to prevent cache collision between orgs
   const { data: allTemplates = [] } = useQuery<Space[]>({
     queryKey: ["/api/templates/spaces", organizationId],
+    queryFn: async () => {
+      const response = await fetch("/api/templates/spaces");
+      if (!response.ok) throw new Error("Failed to fetch templates");
+      return response.json();
+    },
   });
 
   // Filter to show system templates + org-specific templates for this org
