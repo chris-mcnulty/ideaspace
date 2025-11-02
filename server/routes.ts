@@ -1534,6 +1534,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!hasPermission) {
           return res.status(403).json({ error: "Insufficient permissions" });
         }
+
+        // Use getKnowledgeBaseDocumentsForSpace to include multi_workspace documents
+        const documents = await storage.getKnowledgeBaseDocumentsForSpace(workspaceId, space.organizationId);
+        return res.json(documents);
       }
 
       const documents = await storage.getKnowledgeBaseDocumentsByScope(
