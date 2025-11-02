@@ -958,6 +958,8 @@ function WorkspaceTemplateCard({
   unmarkPending: boolean;
   currentUser: User;
 }) {
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+
   // Fetch notes and categories for this template
   const { data: notes = [] } = useQuery<any[]>({
     queryKey: ["/api/spaces", template.id, "notes"],
@@ -973,50 +975,70 @@ function WorkspaceTemplateCard({
      (currentUser.role === "company_admin" && currentUser.organizationId === template.organizationId));
 
   return (
-    <Card data-testid={`card-template-${template.id}`}>
-      <CardHeader>
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
-              <CardTitle className="text-lg">{template.name}</CardTitle>
-              <Badge 
-                variant={template.templateScope === 'system' ? 'default' : 'secondary'}
-                data-testid={`badge-scope-${template.id}`}
-              >
-                {template.templateScope === 'system' ? 'System' : 'Organization'}
-              </Badge>
-              {organization && (
-                <Badge variant="outline" data-testid={`badge-org-${template.id}`}>
-                  {organization.name}
+    <>
+      <Card data-testid={`card-template-${template.id}`}>
+        <CardHeader>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-2">
+                <CardTitle className="text-lg">{template.name}</CardTitle>
+                <Badge 
+                  variant={template.templateScope === 'system' ? 'default' : 'secondary'}
+                  data-testid={`badge-scope-${template.id}`}
+                >
+                  {template.templateScope === 'system' ? 'System' : 'Organization'}
                 </Badge>
-              )}
+                {organization && (
+                  <Badge variant="outline" data-testid={`badge-org-${template.id}`}>
+                    {organization.name}
+                  </Badge>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">{template.purpose}</p>
+              <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
+                <span>{notes.length} notes</span>
+                <span>{categories.length} categories</span>
+                <span>Code: {template.code}</span>
+                <span>Created {new Date(template.createdAt).toLocaleDateString()}</span>
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground">{template.purpose}</p>
-            <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
-              <span>{notes.length} notes</span>
-              <span>{categories.length} categories</span>
-              <span>Code: {template.code}</span>
-              <span>Created {new Date(template.createdAt).toLocaleDateString()}</span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditDialogOpen(true)}
+                data-testid={`button-edit-template-${template.id}`}
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Edit
+              </Button>
+              {canUnmark && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onUnmark(template.id)}
+                  disabled={unmarkPending}
+                  data-testid={`button-unmark-${template.id}`}
+                >
+                  {unmarkPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "Unmark as Template"
+                  )}
+                </Button>
+              )}
             </div>
           </div>
-          {canUnmark && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onUnmark(template.id)}
-              disabled={unmarkPending}
-              data-testid={`button-unmark-${template.id}`}
-            >
-              {unmarkPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                "Unmark as Template"
-              )}
-            </Button>
-          )}
-        </div>
-      </CardHeader>
-    </Card>
+        </CardHeader>
+      </Card>
+
+      <EditWorkspaceDialog
+        space={template}
+        organizationId={template.organizationId}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+      />
+    </>
   );
 }
 
