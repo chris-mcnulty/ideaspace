@@ -54,6 +54,8 @@ import {
   Coins,
   Eye,
   EyeOff,
+  Lock,
+  Unlock,
 } from "lucide-react";
 import type { Organization, Space, Note, Participant, Category, User } from "@shared/schema";
 import { Leaderboard } from "@/components/Leaderboard";
@@ -541,7 +543,7 @@ export default function FacilitatorWorkspace() {
 
   // Update workspace settings mutation
   const updateWorkspaceSettings = useMutation({
-    mutationFn: async (settings: { aiResultsEnabled?: boolean; marketplaceCoinBudget?: number }) => {
+    mutationFn: async (settings: { aiResultsEnabled?: boolean; marketplaceCoinBudget?: number; resultsPublicAfterClose?: boolean }) => {
       const response = await apiRequest("PATCH", `/api/spaces/${params.space}`, settings);
       return await response.json();
     },
@@ -554,6 +556,10 @@ export default function FacilitatorWorkspace() {
           : "AI personalized results have been disabled";
       } else if (variables.marketplaceCoinBudget !== undefined) {
         description = `Marketplace coin budget updated to ${variables.marketplaceCoinBudget} coins per participant`;
+      } else if (variables.resultsPublicAfterClose !== undefined) {
+        description = variables.resultsPublicAfterClose
+          ? "Results will remain accessible after workspace is closed"
+          : "Results will be hidden once workspace is closed";
       }
       toast({
         title: "Settings Updated",
@@ -2357,6 +2363,52 @@ export default function FacilitatorWorkspace() {
                             </>
                           ) : (
                             <>{space.aiResultsEnabled ? "Disable" : "Enable"} AI Results</>
+                          )}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Results Public After Close Toggle */}
+                  <Card className="bg-muted/30">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        {space.resultsPublicAfterClose ? (
+                          <Unlock className="h-4 w-4 text-primary" />
+                        ) : (
+                          <Lock className="h-4 w-4 text-muted-foreground" />
+                        )}
+                        Results Access After Workspace Closure
+                      </CardTitle>
+                      <CardDescription>
+                        When enabled, participants can still view results even after the workspace is closed. When disabled, results become inaccessible once the workspace closes.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-muted-foreground">
+                          Status: {space.resultsPublicAfterClose ? (
+                            <Badge variant="default" className="ml-2">Accessible</Badge>
+                          ) : (
+                            <Badge variant="secondary" className="ml-2">Restricted</Badge>
+                          )}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            updateWorkspaceSettings.mutate({ resultsPublicAfterClose: !space.resultsPublicAfterClose });
+                          }}
+                          disabled={updateWorkspaceSettings.isPending}
+                          data-testid="button-toggle-results-public-after-close"
+                        >
+                          {updateWorkspaceSettings.isPending ? (
+                            <>
+                              <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                              {space.resultsPublicAfterClose ? "Restricting..." : "Allowing..."}
+                            </>
+                          ) : (
+                            <>{space.resultsPublicAfterClose ? "Restrict Access" : "Allow Access"}</>
                           )}
                         </Button>
                       </div>
