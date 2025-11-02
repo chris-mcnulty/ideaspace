@@ -8,13 +8,125 @@ interface BrandingConfig {
   primaryColor?: string; // Hex color
 }
 
+// Font cache - stores base64 font data after first load
+let fontCache: {
+  regular: string | null;
+  bold: string | null;
+} = {
+  regular: null,
+  bold: null,
+};
+let fontLoadPromise: Promise<void> | null = null;
+
 /**
- * Set brand font (Helvetica - professional sans-serif similar to Avenir Next LT Pro)
- * jsPDF has limited custom font support, so we use Helvetica which closely matches
- * the Avenir aesthetic used in the web application.
+ * Load Avenir Next LT Pro fonts and cache them
+ * Only fetches fonts once, then reuses cached base64 data
  */
-function setBrandFont(doc: jsPDF, bold: boolean = false) {
-  doc.setFont('helvetica', bold ? 'bold' : 'normal');
+async function loadFontData(): Promise<void> {
+  if (fontCache.regular && fontCache.bold) {
+    return; // Already loaded
+  }
+
+  if (fontLoadPromise) {
+    return fontLoadPromise;
+  }
+
+  fontLoadPromise = (async () => {
+    try {
+      // Load both Regular and Bold font files
+      const [regularResponse, boldResponse] = await Promise.all([
+        fetch('/fonts/AvenirNextLTPro-Regular.ttf'),
+        fetch('/fonts/AvenirNextLTPro-Bold.ttf'),
+      ]);
+
+      // Check responses
+      if (!regularResponse.ok || !boldResponse.ok) {
+        throw new Error('Failed to fetch font files');
+      }
+
+      const [regularArrayBuffer, boldArrayBuffer] = await Promise.all([
+        regularResponse.arrayBuffer(),
+        boldResponse.arrayBuffer(),
+      ]);
+
+      // Convert to base64 and cache
+      fontCache.regular = arrayBufferToBase64(regularArrayBuffer);
+      fontCache.bold = arrayBufferToBase64(boldArrayBuffer);
+    } catch (error) {
+      console.error('Failed to load Avenir fonts, falling back to Helvetica:', error);
+      // Reset promise so we can retry next time
+      fontLoadPromise = null;
+      throw error;
+    }
+  })();
+
+  return fontLoadPromise;
+}
+
+/**
+ * Register cached fonts with a jsPDF instance
+ * Must be called for each new jsPDF document
+ */
+function registerFontsOnDocument(doc: jsPDF): boolean {
+  if (!fontCache.regular || !fontCache.bold) {
+    return false; // Fonts not loaded
+  }
+
+  try {
+    // Register fonts on this specific jsPDF instance
+    doc.addFileToVFS('AvenirNextLTPro-Regular.ttf', fontCache.regular);
+    doc.addFont('AvenirNextLTPro-Regular.ttf', 'Avenir Next LT Pro', 'normal');
+
+    doc.addFileToVFS('AvenirNextLTPro-Bold.ttf', fontCache.bold);
+    doc.addFont('AvenirNextLTPro-Bold.ttf', 'Avenir Next LT Pro', 'bold');
+
+    return true;
+  } catch (error) {
+    console.error('Failed to register fonts on jsPDF instance:', error);
+    return false;
+  }
+}
+
+/**
+ * Load and register Avenir Next LT Pro fonts with jsPDF
+ * This fetches fonts once and registers them on the provided document
+ */
+async function loadAvenirFonts(doc: jsPDF): Promise<boolean> {
+  try {
+    // Load font data (cached after first call)
+    await loadFontData();
+    
+    // Register fonts on this specific document
+    return registerFontsOnDocument(doc);
+  } catch (error) {
+    // Font loading failed, will use fallback
+    return false;
+  }
+}
+
+/**
+ * Convert ArrayBuffer to base64 string
+ */
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+/**
+ * Set brand font (Avenir Next LT Pro)
+ * Uses cached flag to determine if fonts are available on this document
+ */
+function setBrandFont(doc: jsPDF, bold: boolean = false, fontsAvailable: boolean = false) {
+  if (fontsAvailable) {
+    doc.setFont('Avenir Next LT Pro', bold ? 'bold' : 'normal');
+  } else {
+    // Fallback to Helvetica if fonts not loaded
+    doc.setFont('helvetica', bold ? 'bold' : 'normal');
+  }
 }
 
 /**
@@ -33,7 +145,8 @@ function hexToRgb(hex: string): [number, number, number] {
 async function addBrandedHeader(
   doc: jsPDF,
   branding: BrandingConfig,
-  title: string
+  title: string,
+  fontsAvailable: boolean
 ) {
   const pageWidth = doc.internal.pageSize.getWidth();
   const primaryRgb = branding.primaryColor
@@ -62,19 +175,19 @@ async function addBrandedHeader(
   }
 
   // Add organization name
-  setBrandFont(doc);
+  setBrandFont(doc, false, fontsAvailable);
   doc.setFontSize(10);
   doc.setTextColor(100, 100, 100);
   doc.text(branding.orgName, branding.orgLogo ? 50 : 15, 20);
 
   // Add Nebula branding
-  setBrandFont(doc, true);
+  setBrandFont(doc, true, fontsAvailable);
   doc.setFontSize(12);
   doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
   doc.text('Nebula', branding.orgLogo ? 50 : 15, 27);
 
   // Add title
-  setBrandFont(doc, true);
+  setBrandFont(doc, true, fontsAvailable);
   doc.setFontSize(20);
   doc.setTextColor(0, 0, 0);
   doc.text(title, 15, 45);
@@ -90,11 +203,11 @@ async function addBrandedHeader(
 /**
  * Add footer to PDF
  */
-function addFooter(doc: jsPDF, branding: BrandingConfig) {
+function addFooter(doc: jsPDF, branding: BrandingConfig, fontsAvailable: boolean) {
   const pageHeight = doc.internal.pageSize.getHeight();
   const pageWidth = doc.internal.pageSize.getWidth();
 
-  setBrandFont(doc);
+  setBrandFont(doc, false, fontsAvailable);
   doc.setFontSize(8);
   doc.setTextColor(150, 150, 150);
   doc.text(
@@ -114,28 +227,32 @@ export async function generateCohortResultsPDF(
   workspaceName: string
 ): Promise<void> {
   const doc = new jsPDF();
+  
+  // Load Avenir fonts first
+  const fontsAvailable = await loadAvenirFonts(doc);
+  
   const primaryRgb = branding.primaryColor
     ? hexToRgb(branding.primaryColor)
     : [139, 92, 246];
 
   // Add header
-  let yPos = await addBrandedHeader(doc, branding, 'Cohort Results');
+  let yPos = await addBrandedHeader(doc, branding, 'Cohort Results', fontsAvailable);
 
   // Add workspace info
-  setBrandFont(doc);
+  setBrandFont(doc, false, fontsAvailable);
   doc.setFontSize(12);
   doc.setTextColor(100, 100, 100);
   doc.text(`Workspace: ${workspaceName}`, 15, yPos + 5);
   yPos += 15;
 
   // Add summary section
-  setBrandFont(doc, true);
+  setBrandFont(doc, true, fontsAvailable);
   doc.setFontSize(14);
   doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
   doc.text('Executive Summary', 15, yPos);
   yPos += 8;
 
-  setBrandFont(doc);
+  setBrandFont(doc, false, fontsAvailable);
   doc.setFontSize(10);
   doc.setTextColor(0, 0, 0);
   const summaryLines = doc.splitTextToSize(
@@ -153,13 +270,13 @@ export async function generateCohortResultsPDF(
       yPos = 20;
     }
 
-    setBrandFont(doc, true);
+    setBrandFont(doc, true, fontsAvailable);
     doc.setFontSize(14);
     doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text('Key Themes', 15, yPos);
     yPos += 8;
 
-    setBrandFont(doc);
+    setBrandFont(doc, false, fontsAvailable);
     doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);
     keyThemes.forEach((theme) => {
@@ -190,7 +307,7 @@ export async function generateCohortResultsPDF(
       yPos = 20;
     }
 
-    setBrandFont(doc, true);
+    setBrandFont(doc, true, fontsAvailable);
     doc.setFontSize(14);
     doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text('Top Ideas', 15, yPos);
@@ -215,11 +332,11 @@ export async function generateCohortResultsPDF(
         textColor: [255, 255, 255],
         fontSize: 9,
         fontStyle: 'bold',
-        font: 'helvetica',
+        font: fontsAvailable ? 'Avenir Next LT Pro' : 'helvetica',
       },
       bodyStyles: {
         fontSize: 8,
-        font: 'helvetica',
+        font: fontsAvailable ? 'Avenir Next LT Pro' : 'helvetica',
       },
       columnStyles: {
         0: { cellWidth: 15 },
@@ -241,13 +358,13 @@ export async function generateCohortResultsPDF(
       yPos = 20;
     }
 
-    setBrandFont(doc, true);
+    setBrandFont(doc, true, fontsAvailable);
     doc.setFontSize(14);
     doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text('Key Insights', 15, yPos);
     yPos += 8;
 
-    setBrandFont(doc);
+    setBrandFont(doc, false, fontsAvailable);
     doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);
     const insightLines = doc.splitTextToSize(
@@ -265,13 +382,13 @@ export async function generateCohortResultsPDF(
       yPos = 20;
     }
 
-    setBrandFont(doc, true);
+    setBrandFont(doc, true, fontsAvailable);
     doc.setFontSize(14);
     doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text('Recommendations', 15, yPos);
     yPos += 8;
 
-    setBrandFont(doc);
+    setBrandFont(doc, false, fontsAvailable);
     doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);
     const recLines = doc.splitTextToSize(
@@ -282,7 +399,7 @@ export async function generateCohortResultsPDF(
   }
 
   // Add footer
-  addFooter(doc, branding);
+  addFooter(doc, branding, fontsAvailable);
 
   // Download PDF
   const fileName = `${workspaceName.replace(/[^a-z0-9]/gi, '_')}_Cohort_Results_${new Date().toISOString().split('T')[0]}.pdf`;
@@ -299,15 +416,19 @@ export async function generatePersonalizedResultsPDF(
   workspaceName: string
 ): Promise<void> {
   const doc = new jsPDF();
+  
+  // Load Avenir fonts first
+  const fontsAvailable = await loadAvenirFonts(doc);
+  
   const primaryRgb = branding.primaryColor
     ? hexToRgb(branding.primaryColor)
     : [139, 92, 246];
 
   // Add header
-  let yPos = await addBrandedHeader(doc, branding, 'Personalized Results');
+  let yPos = await addBrandedHeader(doc, branding, 'Personalized Results', fontsAvailable);
 
   // Add participant info
-  setBrandFont(doc);
+  setBrandFont(doc, false, fontsAvailable);
   doc.setFontSize(12);
   doc.setTextColor(100, 100, 100);
   doc.text(`Participant: ${participantName}`, 15, yPos + 5);
@@ -316,13 +437,13 @@ export async function generatePersonalizedResultsPDF(
 
   // Add alignment score
   if (personalizedResult.alignmentScore !== null) {
-    setBrandFont(doc, true);
+    setBrandFont(doc, true, fontsAvailable);
     doc.setFontSize(14);
     doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text('Cohort Alignment Score', 15, yPos);
     yPos += 8;
 
-    setBrandFont(doc, true);
+    setBrandFont(doc, true, fontsAvailable);
     doc.setFontSize(24);
     doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text(`${personalizedResult.alignmentScore}%`, 15, yPos);
@@ -330,13 +451,13 @@ export async function generatePersonalizedResultsPDF(
   }
 
   // Add personal summary
-  setBrandFont(doc, true);
+  setBrandFont(doc, true, fontsAvailable);
   doc.setFontSize(14);
   doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
   doc.text('Your Journey', 15, yPos);
   yPos += 8;
 
-  setBrandFont(doc);
+  setBrandFont(doc, false, fontsAvailable);
   doc.setFontSize(10);
   doc.setTextColor(0, 0, 0);
   const summaryLines = doc.splitTextToSize(
@@ -359,6 +480,7 @@ export async function generatePersonalizedResultsPDF(
       yPos = 20;
     }
 
+    setBrandFont(doc, true, fontsAvailable);
     doc.setFontSize(14);
     doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text('Your Top Contributions', 15, yPos);
@@ -370,6 +492,7 @@ export async function generatePersonalizedResultsPDF(
         yPos = 20;
       }
 
+      setBrandFont(doc, false, fontsAvailable);
       doc.setFontSize(10);
       doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
       doc.text(`#${index + 1}`, 15, yPos);
@@ -393,11 +516,13 @@ export async function generatePersonalizedResultsPDF(
       yPos = 20;
     }
 
+    setBrandFont(doc, true, fontsAvailable);
     doc.setFontSize(14);
     doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text('Personalized Insights', 15, yPos);
     yPos += 8;
 
+    setBrandFont(doc, false, fontsAvailable);
     doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);
     const insightLines = doc.splitTextToSize(
@@ -415,11 +540,13 @@ export async function generatePersonalizedResultsPDF(
       yPos = 20;
     }
 
+    setBrandFont(doc, true, fontsAvailable);
     doc.setFontSize(14);
     doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text('Next Steps & Recommendations', 15, yPos);
     yPos += 8;
 
+    setBrandFont(doc, false, fontsAvailable);
     doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);
     const recLines = doc.splitTextToSize(
@@ -430,7 +557,7 @@ export async function generatePersonalizedResultsPDF(
   }
 
   // Add footer
-  addFooter(doc, branding);
+  addFooter(doc, branding, fontsAvailable);
 
   // Download PDF
   const fileName = `${participantName.replace(/[^a-z0-9]/gi, '_')}_Personalized_Results_${new Date().toISOString().split('T')[0]}.pdf`;

@@ -41,6 +41,7 @@ The design system features a dark mode with a primary purple accent, dark blue-b
 - **Export System**: Facilitators and admins can export categorized snapshots of all voting modules (Pairwise, Stack Ranking, Marketplace Allocation) into text files optimized for GenAI analytics.
 - **Consolidated Data Export/Import**: Single unified CSV export/import system replacing 4 separate buttons. Exports ideas with categories in combined format (Idea, Category, Participant, Created At) where category is repeated for each idea. Import automatically creates missing categories and accepts flexible CSV formats - only "Idea" field is required, "Category" is optional, and "Participant"/"Created At" fields are optional/ignored (all imported ideas are assigned to "CSV Import" participant with current timestamp). Accessible via "Export/Import Data" button in facilitator workspace with tabbed dialog interface (Export/Import tabs).
 - **Results Generation System**: An AI-powered system using GPT-4o and knowledge base integration to generate cohort summaries and personalized participant results with alignment scores and recommendations.
+- **Branded PDF Export**: Client-side PDF generation using jsPDF for cohort and personalized results with organization branding (logo, primary color, name). PDFs use Avenir Next LT Pro fonts (matching web application typography) loaded dynamically from `/fonts/` directory. Includes cohort summaries with key themes, top ideas table, insights, and recommendations, as well as personalized results with alignment scores, top contributions, and participant-specific insights.
 - **Facilitator Dashboard**: A central dashboard displaying all accessible workspaces with quick actions and RBAC for viewing permissions.
 - **Admin Panel UI**: Complete admin interface with full CRUD operations:
   - Create organizations and workspaces via dialog forms
@@ -73,6 +74,7 @@ The design system features a dark mode with a primary purple accent, dark blue-b
 - **Email Service**: SendGrid
 - **File Upload**: `multer`
 - **Routing**: Wouter
+- **PDF Generation**: jsPDF, jspdf-autotable
 - **State Management/Data Fetching**: TanStack Query
 - **Styling**: Tailwind CSS, Shadcn UI
 - **WebSocket**: `ws` library
