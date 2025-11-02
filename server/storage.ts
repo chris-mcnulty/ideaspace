@@ -503,20 +503,34 @@ export class DbStorage implements IStorage {
       });
     }
 
-    // Clone knowledge base documents from source workspace
+    // Reference knowledge base documents from source workspace (don't copy)
+    // Convert workspace-scoped documents to multi_workspace so they can be shared between template and source
     const sourceDocs = await db.select().from(knowledgeBaseDocuments).where(
       eq(knowledgeBaseDocuments.spaceId, sourceWorkspaceId)
     );
+    
     for (const doc of sourceDocs) {
-      await this.createKnowledgeBaseDocument({
-        title: doc.title,
-        filename: doc.filename,
-        filePath: doc.filePath,
-        fileSize: doc.fileSize,
-        mimeType: doc.mimeType,
-        scope: 'workspace',
+      // Convert workspace-scoped documents to multi_workspace
+      if (doc.scope === 'workspace') {
+        await db.update(knowledgeBaseDocuments)
+          .set({ 
+            scope: 'multi_workspace',
+            spaceId: null, // multi_workspace docs don't have a single spaceId
+            organizationId: sourceWorkspace.organizationId // Maintain organization scope
+          })
+          .where(eq(knowledgeBaseDocuments.id, doc.id));
+        
+        // Create access entry for the original source workspace
+        await this.createDocumentWorkspaceAccess({
+          documentId: doc.id,
+          spaceId: sourceWorkspaceId,
+        });
+      }
+      
+      // Create access entry for the template snapshot to reference this document
+      await this.createDocumentWorkspaceAccess({
+        documentId: doc.id,
         spaceId: templateSnapshot.id,
-        uploadedBy: doc.uploadedBy,
       });
     }
 
@@ -578,20 +592,34 @@ export class DbStorage implements IStorage {
       });
     }
 
-    // Clone knowledge base documents from template
+    // Reference knowledge base documents from template instead of copying
+    // Get all documents associated with the template (workspace-scoped or multi_workspace)
     const templateDocs = await db.select().from(knowledgeBaseDocuments).where(
       eq(knowledgeBaseDocuments.spaceId, templateId)
     );
+    
     for (const doc of templateDocs) {
-      await this.createKnowledgeBaseDocument({
-        title: doc.title,
-        filename: doc.filename,
-        filePath: doc.filePath,
-        fileSize: doc.fileSize,
-        mimeType: doc.mimeType,
-        scope: 'workspace',
+      // Convert workspace-scoped documents to multi_workspace so they can be shared
+      if (doc.scope === 'workspace') {
+        await db.update(knowledgeBaseDocuments)
+          .set({ 
+            scope: 'multi_workspace',
+            spaceId: null, // multi_workspace docs don't have a single spaceId
+            organizationId: template.organizationId // Maintain organization scope
+          })
+          .where(eq(knowledgeBaseDocuments.id, doc.id));
+        
+        // Create access entry for the original template workspace
+        await this.createDocumentWorkspaceAccess({
+          documentId: doc.id,
+          spaceId: templateId,
+        });
+      }
+      
+      // Create access entry for the new workspace to reference this document
+      await this.createDocumentWorkspaceAccess({
+        documentId: doc.id,
         spaceId: newSpace.id,
-        uploadedBy: doc.uploadedBy,
       });
     }
 
