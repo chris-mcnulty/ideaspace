@@ -156,7 +156,17 @@ export async function generateCohortResultsPDF(
   }
 
   // Add top ideas table
-  if (cohortResult.topIdeas && cohortResult.topIdeas.length > 0) {
+  const topIdeas = cohortResult.topIdeas as Array<{
+    rank?: number;
+    overallRank?: number;
+    content: string;
+    category?: string;
+    pairwiseWins?: number;
+    bordaScore?: number;
+    marketplaceCoins?: number;
+  }> | undefined;
+  
+  if (topIdeas && topIdeas.length > 0) {
     if (yPos > 200) {
       doc.addPage();
       yPos = 20;
@@ -166,16 +176,6 @@ export async function generateCohortResultsPDF(
     doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text('Top Ideas', 15, yPos);
     yPos += 5;
-
-    const topIdeas = cohortResult.topIdeas as Array<{
-      rank?: number;
-      overallRank?: number;
-      content: string;
-      category?: string;
-      pairwiseWins?: number;
-      bordaScore?: number;
-      marketplaceCoins?: number;
-    }>;
 
     const tableData = topIdeas.slice(0, 10).map((idea) => [
       String(idea.rank || idea.overallRank || '-'),
@@ -290,19 +290,19 @@ export async function generatePersonalizedResultsPDF(
   // Add alignment score
   if (personalizedResult.alignmentScore !== null) {
     doc.setFontSize(14);
-    doc.setTextColor(...primaryRgb);
+    doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text('Cohort Alignment Score', 15, yPos);
     yPos += 8;
 
     doc.setFontSize(24);
-    doc.setTextColor(...primaryRgb);
+    doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text(`${personalizedResult.alignmentScore}%`, 15, yPos);
     yPos += 15;
   }
 
   // Add personal summary
   doc.setFontSize(14);
-  doc.setTextColor(...primaryRgb);
+  doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
   doc.text('Your Journey', 15, yPos);
   yPos += 8;
 
@@ -316,22 +316,22 @@ export async function generatePersonalizedResultsPDF(
   yPos += summaryLines.length * 5 + 10;
 
   // Add top contributions
-  if (personalizedResult.topContributions && personalizedResult.topContributions.length > 0) {
+  const topContributions = personalizedResult.topContributions as Array<{
+    noteId: string;
+    content: string;
+    impact: string;
+  }> | undefined;
+  
+  if (topContributions && topContributions.length > 0) {
     if (yPos > 200) {
       doc.addPage();
       yPos = 20;
     }
 
     doc.setFontSize(14);
-    doc.setTextColor(...primaryRgb);
+    doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text('Your Top Contributions', 15, yPos);
     yPos += 8;
-
-    const topContributions = personalizedResult.topContributions as Array<{
-      noteId: string;
-      content: string;
-      impact: string;
-    }>;
 
     topContributions.forEach((contribution, index) => {
       if (yPos > 250) {
@@ -340,7 +340,7 @@ export async function generatePersonalizedResultsPDF(
       }
 
       doc.setFontSize(10);
-      doc.setTextColor(...primaryRgb);
+      doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
       doc.text(`#${index + 1}`, 15, yPos);
 
       doc.setTextColor(0, 0, 0);
@@ -363,7 +363,7 @@ export async function generatePersonalizedResultsPDF(
     }
 
     doc.setFontSize(14);
-    doc.setTextColor(...primaryRgb);
+    doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text('Personalized Insights', 15, yPos);
     yPos += 8;
 
@@ -385,7 +385,7 @@ export async function generatePersonalizedResultsPDF(
     }
 
     doc.setFontSize(14);
-    doc.setTextColor(...primaryRgb);
+    doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text('Next Steps & Recommendations', 15, yPos);
     yPos += 8;
 
