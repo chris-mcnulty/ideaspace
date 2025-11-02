@@ -537,15 +537,30 @@ export class DbStorage implements IStorage {
       isGuest: true,
     });
 
-    // Clone notes from template
+    // Clone categories from template FIRST (to map IDs for notes)
+    const templateCategories = await this.getCategoriesBySpace(templateId);
+    const categoryIdMap = new Map<string, string>(); // old ID -> new ID
+    
+    for (const category of templateCategories) {
+      const newCategory = await this.createCategory({
+        spaceId: newSpace.id,
+        name: category.name,
+        color: category.color,
+      });
+      categoryIdMap.set(category.id, newCategory.id);
+    }
+
+    // Clone notes from template with mapped category IDs
     const templateNotes = await this.getNotesBySpace(templateId);
     for (const note of templateNotes) {
+      const newCategoryId = note.manualCategoryId ? categoryIdMap.get(note.manualCategoryId) : null;
+      
       await this.createNote({
         spaceId: newSpace.id,
         participantId: templateParticipant.id,
         content: note.content,
-        manualCategoryId: null, // Don't clone category assignments
-        isManualOverride: false,
+        manualCategoryId: newCategoryId || null, // Map to new category ID
+        isManualOverride: note.isManualOverride,
       });
     }
 
