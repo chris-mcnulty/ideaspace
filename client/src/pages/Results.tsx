@@ -9,8 +9,9 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import type { PersonalizedResult } from "@shared/schema";
+import type { PersonalizedResult, Organization, Space, Participant } from "@shared/schema";
 import { useEffect } from "react";
+import { generatePersonalizedResultsPDF } from "@/lib/pdfGenerator";
 
 export default function Results() {
   const { org, space: spaceId } = useParams() as { org: string; space: string };
@@ -21,6 +22,18 @@ export default function Results() {
     document.title = "Nebula - Results | The Synozur Alliance";
   }, []);
 
+  // Fetch organization
+  const { data: organization } = useQuery<Organization>({
+    queryKey: [`/api/organizations/${org}`],
+    enabled: !!org,
+  });
+
+  // Fetch space
+  const { data: space } = useQuery<Space>({
+    queryKey: [`/api/spaces/${spaceId}`],
+    enabled: !!spaceId,
+  });
+
   // Fetch personalized results for the participant
   const { data: personalizedResults, isLoading, error } = useQuery<PersonalizedResult>({
     queryKey: [`/api/spaces/${spaceId}/results/personalized`],
@@ -28,17 +41,46 @@ export default function Results() {
     enabled: !!spaceId,
   });
 
-  // Download results as PDF (via print dialog)
-  const handleDownload = () => {
-    if (!personalizedResults) return;
-    
-    // Trigger browser print dialog which allows saving as PDF
-    window.print();
+  // Fetch participant data for PDF generation
+  const { data: participant } = useQuery<Participant>({
+    queryKey: [`/api/participants/${personalizedResults?.participantId}`],
+    enabled: !!personalizedResults?.participantId,
+  });
 
-    toast({
-      title: "Download Results",
-      description: "Use the print dialog to save your results as a PDF",
-    });
+  // Download results as branded PDF
+  const handleDownload = async () => {
+    if (!personalizedResults || !organization || !space || !participant) {
+      toast({
+        variant: "destructive",
+        title: "Cannot download PDF",
+        description: "Results, workspace, organization, or participant data not yet loaded",
+      });
+      return;
+    }
+
+    try {
+      await generatePersonalizedResultsPDF(
+        personalizedResults,
+        {
+          orgName: organization.name,
+          orgLogo: organization.logoUrl || undefined,
+          primaryColor: organization.primaryColor || undefined,
+        },
+        participant.displayName,
+        space.name
+      );
+      toast({
+        title: "PDF Downloaded",
+        description: "Your personalized results have been downloaded as a branded PDF",
+      });
+    } catch (error) {
+      console.error("Failed to generate PDF:", error);
+      toast({
+        variant: "destructive",
+        title: "Failed to generate PDF",
+        description: "Please try again later",
+      });
+    }
   };
 
   // Email results mutation

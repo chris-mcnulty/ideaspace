@@ -58,6 +58,7 @@ import {
 import type { Organization, Space, Note, Participant, Category, User } from "@shared/schema";
 import { Leaderboard } from "@/components/Leaderboard";
 import { KnowledgeBaseManager } from "@/components/KnowledgeBaseManager";
+import { generateCohortResultsPDF } from "@/lib/pdfGenerator";
 
 // Comprehensive Results Table Component
 function ComprehensiveResultsTable({
@@ -454,6 +455,41 @@ export default function FacilitatorWorkspace() {
       });
     },
   });
+
+  // Download cohort results as branded PDF
+  const handleDownloadCohortPDF = async () => {
+    if (!cohortResults || !space || !org) {
+      toast({
+        variant: "destructive",
+        title: "Cannot download PDF",
+        description: "Results, workspace, or organization data not available",
+      });
+      return;
+    }
+
+    try {
+      await generateCohortResultsPDF(
+        cohortResults,
+        {
+          orgName: org.name,
+          orgLogo: org.logoUrl || undefined,
+          primaryColor: org.primaryColor || undefined,
+        },
+        space.name
+      );
+      toast({
+        title: "PDF Downloaded",
+        description: "Branded cohort results PDF has been downloaded successfully",
+      });
+    } catch (error) {
+      console.error("Failed to generate PDF:", error);
+      toast({
+        variant: "destructive",
+        title: "Failed to generate PDF",
+        description: "Please try again later",
+      });
+    }
+  };
 
   // Update pairwise scope mutation
   const updatePairwiseScopeMutation = useMutation({
@@ -2349,6 +2385,14 @@ export default function FacilitatorWorkspace() {
                           Regenerate Cohort Results
                         </>
                       )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={handleDownloadCohortPDF}
+                      data-testid="button-download-cohort-pdf"
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      Download PDF
                     </Button>
                   </div>
                 </div>
