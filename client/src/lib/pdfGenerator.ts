@@ -9,6 +9,15 @@ interface BrandingConfig {
 }
 
 /**
+ * Set brand font (Helvetica - professional sans-serif similar to Avenir Next LT Pro)
+ * jsPDF has limited custom font support, so we use Helvetica which closely matches
+ * the Avenir aesthetic used in the web application.
+ */
+function setBrandFont(doc: jsPDF, bold: boolean = false) {
+  doc.setFont('helvetica', bold ? 'bold' : 'normal');
+}
+
+/**
  * Convert hex color to RGB values for jsPDF
  */
 function hexToRgb(hex: string): [number, number, number] {
@@ -53,16 +62,19 @@ async function addBrandedHeader(
   }
 
   // Add organization name
+  setBrandFont(doc);
   doc.setFontSize(10);
   doc.setTextColor(100, 100, 100);
   doc.text(branding.orgName, branding.orgLogo ? 50 : 15, 20);
 
   // Add Nebula branding
+  setBrandFont(doc, true);
   doc.setFontSize(12);
   doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
   doc.text('Nebula', branding.orgLogo ? 50 : 15, 27);
 
   // Add title
+  setBrandFont(doc, true);
   doc.setFontSize(20);
   doc.setTextColor(0, 0, 0);
   doc.text(title, 15, 45);
@@ -82,6 +94,7 @@ function addFooter(doc: jsPDF, branding: BrandingConfig) {
   const pageHeight = doc.internal.pageSize.getHeight();
   const pageWidth = doc.internal.pageSize.getWidth();
 
+  setBrandFont(doc);
   doc.setFontSize(8);
   doc.setTextColor(150, 150, 150);
   doc.text(
@@ -109,17 +122,20 @@ export async function generateCohortResultsPDF(
   let yPos = await addBrandedHeader(doc, branding, 'Cohort Results');
 
   // Add workspace info
+  setBrandFont(doc);
   doc.setFontSize(12);
   doc.setTextColor(100, 100, 100);
   doc.text(`Workspace: ${workspaceName}`, 15, yPos + 5);
   yPos += 15;
 
   // Add summary section
+  setBrandFont(doc, true);
   doc.setFontSize(14);
   doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
   doc.text('Executive Summary', 15, yPos);
   yPos += 8;
 
+  setBrandFont(doc);
   doc.setFontSize(10);
   doc.setTextColor(0, 0, 0);
   const summaryLines = doc.splitTextToSize(
@@ -137,11 +153,13 @@ export async function generateCohortResultsPDF(
       yPos = 20;
     }
 
+    setBrandFont(doc, true);
     doc.setFontSize(14);
     doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text('Key Themes', 15, yPos);
     yPos += 8;
 
+    setBrandFont(doc);
     doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);
     keyThemes.forEach((theme) => {
@@ -172,6 +190,7 @@ export async function generateCohortResultsPDF(
       yPos = 20;
     }
 
+    setBrandFont(doc, true);
     doc.setFontSize(14);
     doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text('Top Ideas', 15, yPos);
@@ -195,9 +214,12 @@ export async function generateCohortResultsPDF(
         fillColor: [primaryRgb[0], primaryRgb[1], primaryRgb[2]],
         textColor: [255, 255, 255],
         fontSize: 9,
+        fontStyle: 'bold',
+        font: 'helvetica',
       },
       bodyStyles: {
         fontSize: 8,
+        font: 'helvetica',
       },
       columnStyles: {
         0: { cellWidth: 15 },
@@ -219,11 +241,13 @@ export async function generateCohortResultsPDF(
       yPos = 20;
     }
 
+    setBrandFont(doc, true);
     doc.setFontSize(14);
     doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text('Key Insights', 15, yPos);
     yPos += 8;
 
+    setBrandFont(doc);
     doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);
     const insightLines = doc.splitTextToSize(
@@ -241,11 +265,13 @@ export async function generateCohortResultsPDF(
       yPos = 20;
     }
 
+    setBrandFont(doc, true);
     doc.setFontSize(14);
     doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text('Recommendations', 15, yPos);
     yPos += 8;
 
+    setBrandFont(doc);
     doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);
     const recLines = doc.splitTextToSize(
@@ -281,6 +307,7 @@ export async function generatePersonalizedResultsPDF(
   let yPos = await addBrandedHeader(doc, branding, 'Personalized Results');
 
   // Add participant info
+  setBrandFont(doc);
   doc.setFontSize(12);
   doc.setTextColor(100, 100, 100);
   doc.text(`Participant: ${participantName}`, 15, yPos + 5);
@@ -289,11 +316,13 @@ export async function generatePersonalizedResultsPDF(
 
   // Add alignment score
   if (personalizedResult.alignmentScore !== null) {
+    setBrandFont(doc, true);
     doc.setFontSize(14);
     doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text('Cohort Alignment Score', 15, yPos);
     yPos += 8;
 
+    setBrandFont(doc, true);
     doc.setFontSize(24);
     doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text(`${personalizedResult.alignmentScore}%`, 15, yPos);
@@ -301,11 +330,13 @@ export async function generatePersonalizedResultsPDF(
   }
 
   // Add personal summary
+  setBrandFont(doc, true);
   doc.setFontSize(14);
   doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
   doc.text('Your Journey', 15, yPos);
   yPos += 8;
 
+  setBrandFont(doc);
   doc.setFontSize(10);
   doc.setTextColor(0, 0, 0);
   const summaryLines = doc.splitTextToSize(
