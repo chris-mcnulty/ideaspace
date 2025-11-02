@@ -34,6 +34,7 @@ The design system features a dark mode with a primary purple accent, dark blue-b
 - **Stack Ranking (Borda Count)**: Features a drag-and-drop interface for ranking, Borda count algorithm for scoring, real-time leaderboard, and facilitator progress tracking.
 - **Guest Access Control System**: Manages workspace access with configurable guest permissions, access request workflow, SendGrid email notifications, and automatic participant-to-account linking.
 - **Facilitator Controls**: Provides tools for managing notes (preload, add, edit with dialog, delete, merge, bulk select, AI-powered rewrites), controlling session states, and triggering AI categorization.
+- **Share Links & QR Codes**: Facilitators can generate shareable URLs and QR codes for direct navigation to any workspace section (Waiting Room, Ideation, Pairwise Voting, Stack Ranking, Marketplace Allocation, Results). URLs automatically adapt to the current server environment using `window.location.origin`, ensuring production-ready links. QR codes are generated client-side using the `qrcode` package at 300x300px resolution and can be downloaded as PNG files with descriptive filenames (format: `Nebula_{spaceCode}_{sectionName}_QR.png`). Includes copy-to-clipboard functionality with toast notifications for enhanced UX.
 - **Unified Category Management**: A single category system where both AI and humans use the same infrastructure. Facilitators can create categories manually or let AI generate them. Human decisions always take precedence - once a facilitator manually assigns a category (via dropdown on note cards), the `isManualOverride` flag is set, preventing AI from ever re-categorizing that note. AI categorization only processes uncategorized notes, matches to existing categories (case-insensitive), or creates new categories as needed. All categories use the same FK relationship (`manualCategoryId`) ensuring referential integrity. WebSocket broadcasts ensure real-time updates across clients.
 - **Participant Editing Permissions**: Allows participants to edit and delete their own cards when the workspace is "open".
 - **Knowledge Base System**: A three-tiered document management system (System, Organization, Workspace scopes) for grounding AI categorization, supporting PDF/TXT/DOC/DOCX/XLS/XLSX files with secure local storage and RBAC. Documents can be shared across workspaces using the `multi_workspace` scope with `document_workspace_access` junction table. When a workspace is marked as a template, its documents are automatically converted to multi_workspace scope, allowing workspaces created from that template to reference the same documents (not copies), preventing duplication and ensuring consistency.
@@ -75,6 +76,7 @@ The design system features a dark mode with a primary purple accent, dark blue-b
 - **File Upload**: `multer`
 - **Routing**: Wouter
 - **PDF Generation**: jsPDF, jspdf-autotable
+- **QR Code Generation**: qrcode
 - **State Management/Data Fetching**: TanStack Query
 - **Styling**: Tailwind CSS, Shadcn UI
 - **WebSocket**: `ws` library
