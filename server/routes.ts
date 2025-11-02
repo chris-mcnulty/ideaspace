@@ -2062,7 +2062,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/notes", async (req, res) => {
+  app.post("/api/notes", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
     try {
       const data = insertNoteSchema.parse(req.body);
       
@@ -2110,7 +2110,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/notes/:id", async (req, res) => {
+  app.patch("/api/notes/:id", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
     try {
       // First, get the note to check permissions
       const existingNote = await storage.getNote(req.params.id);
@@ -2163,7 +2163,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/notes/:id", async (req, res) => {
+  app.delete("/api/notes/:id", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
     try {
       // First, get the note to check permissions
       const existingNote = await storage.getNote(req.params.id);
@@ -2506,7 +2506,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/votes", async (req, res) => {
+  app.post("/api/votes", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
     try {
       const data = insertVoteSchema.parse(req.body);
       const vote = await storage.createVote(data);
@@ -2530,7 +2530,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get next pair of notes for participant to vote on
-  app.get("/api/spaces/:spaceId/participants/:participantId/next-pair", async (req, res) => {
+  app.get("/api/spaces/:spaceId/participants/:participantId/next-pair", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
     try {
       const { spaceId, participantId } = req.params;
       
@@ -2590,7 +2590,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/rankings/bulk", async (req, res) => {
+  app.post("/api/rankings/bulk", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
     try {
       const { participantId, spaceId, rankings: rankingData } = req.body as {
         participantId: string;
@@ -2715,7 +2715,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Marketplace Allocations
   // Submit bulk marketplace allocations
-  app.post("/api/marketplace-allocations/bulk", async (req, res) => {
+  app.post("/api/marketplace-allocations/bulk", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
     try {
       const { spaceId, allocations: allocationData } = req.body as {
         spaceId: string;
@@ -3697,7 +3697,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Generate personalized results for a participant
-  app.post("/api/spaces/:spaceId/results/personalized", async (req, res) => {
+  app.post("/api/spaces/:spaceId/results/personalized", createWorkspaceAccessMiddleware({ allowClosed: true }), async (req, res) => {
     try {
       const { spaceId } = req.params;
       const sessionParticipantId = req.session?.participantId;
@@ -3725,7 +3725,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get personalized results for a participant
-  app.get("/api/spaces/:spaceId/results/personalized", async (req, res) => {
+  app.get("/api/spaces/:spaceId/results/personalized", createWorkspaceAccessMiddleware({ allowClosed: true }), async (req, res) => {
     try {
       const { spaceId } = req.params;
       const sessionParticipantId = req.session?.participantId;
