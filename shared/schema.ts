@@ -63,6 +63,7 @@ export const spaces = pgTable("spaces", {
   marketplaceEndsAt: timestamp("marketplace_ends_at"),
   marketplaceCoinBudget: integer("marketplace_coin_budget").notNull().default(100), // Number of coins each participant gets in marketplace
   aiResultsEnabled: boolean("ai_results_enabled").notNull().default(false), // Facilitator toggle for AI-generated personalized results
+  resultsPublicAfterClose: boolean("results_public_after_close").notNull().default(false), // Allow read-only results access after workspace is closed
   isTemplate: boolean("is_template").notNull().default(false), // True if this workspace is a template
   templateScope: text("template_scope").default("organization"), // 'system' (global) or 'organization' (org-specific)
   createdAt: timestamp("created_at").defaultNow().notNull(),

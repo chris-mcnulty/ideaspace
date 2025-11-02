@@ -80,3 +80,31 @@ The design system features a dark mode with a primary purple accent, dark blue-b
 - **State Management/Data Fetching**: TanStack Query
 - **Styling**: Tailwind CSS, Shadcn UI
 - **WebSocket**: `ws` library
+
+## Feature Backlog
+
+### Vocabulary/Terminology Customization System
+**Priority**: Medium-High | **Effort**: ~3-4 weeks
+
+A centralized vocabulary management system allowing global admins to define default terminology and organizations to override terms throughout the UX (e.g., "Project" instead of "Workspace", "Suggestion" instead of "Idea").
+
+**Core Features**:
+- Global admin defines default terminology for all platform objects
+- Company admins can override terms for their organization
+- Predefined vocabulary templates for different industries (Healthcare, Education, Corporate Innovation)
+- Objects to support: Workspace, Idea/Note, Whiteboard, Pairwise Voting, Stack Ranking, Marketplace
+- Context provider for consistent term usage throughout app
+
+**Technical Requirements**:
+- New tables: `vocabulary_terms`, `organization_vocabulary`, `vocabulary_templates`
+- API endpoints for term management and template application
+- Frontend VocabularyContext with `getTerm(key, plural?)` helper
+- Replace hardcoded strings across all UX surfaces
+- RBAC: Global admins manage defaults, Company admins customize for org
+
+**Business Value**:
+- Customization for different industries and use cases
+- Brand consistency with organizational vocabulary
+- Same platform serves multiple markets with appropriate language
+
+**See**: Full specification in previous agent context or request detailed spec

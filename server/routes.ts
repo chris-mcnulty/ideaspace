@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request as ExpressRequest, Response as ExpressResponse, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import passport from "passport";
@@ -25,6 +25,102 @@ declare module "express-session" {
   interface SessionData {
     participantId?: string;
   }
+}
+
+// Middleware factory to check workspace access based on status and guest permissions
+function createWorkspaceAccessMiddleware(options: {
+  allowClosed?: boolean;  // Allow access even if workspace is closed (for results with resultsPublicAfterClose)
+  requireOpen?: boolean;  // Require workspace to be open
+}) {
+  return async (req: ExpressRequest, res: ExpressResponse, next: NextFunction) => {
+    try {
+      const spaceId = req.params.spaceId || req.params.space || (req.body as any)?.spaceId;
+      if (!spaceId) {
+        return res.status(400).json({ error: "Workspace ID required" });
+      }
+
+      const space = await storage.getSpace(spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      // Check if user is authenticated (admin/facilitator)
+      const currentUser = req.user as User | undefined;
+      let isAdmin = false;
+      let isFacilitator = false;
+
+      if (currentUser) {
+        if (currentUser.role === 'global_admin') {
+          isAdmin = true;
+        } else if (currentUser.role === 'company_admin' && currentUser.organizationId === space.organizationId) {
+          isAdmin = true;
+        } else {
+          const facilitators = await storage.getSpaceFacilitatorsBySpace(spaceId);
+          isFacilitator = facilitators.some(f => f.userId === currentUser.id);
+        }
+      }
+
+      // Admins and facilitators bypass all restrictions
+      if (isAdmin || isFacilitator) {
+        return next();
+      }
+
+      // Check workspace status
+      if (space.status === 'closed') {
+        // If workspace is closed, check if results are allowed to be public
+        if (options.allowClosed && space.resultsPublicAfterClose) {
+          // Allow access to results even when closed
+          return next();
+        }
+        // Otherwise block access
+        return res.status(403).json({ 
+          error: "This workspace is closed",
+          code: "WORKSPACE_CLOSED"
+        });
+      }
+
+      if (options.requireOpen && space.status !== 'open') {
+        return res.status(403).json({ 
+          error: "This workspace is not currently open for participation",
+          code: "WORKSPACE_NOT_OPEN"
+        });
+      }
+
+      // Check guest access
+      const participantId = req.session?.participantId;
+      if (!participantId) {
+        // No participant session - check if guest access is allowed
+        if (!space.guestAllowed) {
+          return res.status(403).json({ 
+            error: "Guest access is not allowed for this workspace",
+            code: "GUEST_ACCESS_DISABLED"
+          });
+        }
+      } else {
+        // Has participant session - verify they're in this workspace
+        const participant = await storage.getParticipant(participantId);
+        if (!participant || participant.spaceId !== spaceId) {
+          return res.status(403).json({ 
+            error: "You do not have access to this workspace",
+            code: "NO_ACCESS"
+          });
+        }
+
+        // Check if guest user trying to access workspace where guests aren't allowed
+        if (participant.isGuest && !space.guestAllowed) {
+          return res.status(403).json({ 
+            error: "Guest access has been disabled for this workspace",
+            code: "GUEST_ACCESS_REVOKED"
+          });
+        }
+      }
+
+      next();
+    } catch (error) {
+      console.error("Workspace access check failed:", error);
+      res.status(500).json({ error: "Failed to verify workspace access" });
+    }
+  };
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
