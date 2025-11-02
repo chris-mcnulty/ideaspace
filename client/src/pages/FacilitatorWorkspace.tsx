@@ -58,6 +58,7 @@ import {
 import type { Organization, Space, Note, Participant, Category, User } from "@shared/schema";
 import { Leaderboard } from "@/components/Leaderboard";
 import { KnowledgeBaseManager } from "@/components/KnowledgeBaseManager";
+import { ShareLinksDialog } from "@/components/ShareLinksDialog";
 import { generateCohortResultsPDF } from "@/lib/pdfGenerator";
 
 // Comprehensive Results Table Component
@@ -1158,6 +1159,10 @@ export default function FacilitatorWorkspace() {
                 <FileStack className="mr-2 h-4 w-4" />
                 Save as Template
               </Button>
+              <ShareLinksDialog
+                orgSlug={params.org}
+                spaceCode={params.space}
+              />
             </div>
           </div>
         </div>
