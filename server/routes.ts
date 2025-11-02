@@ -2010,13 +2010,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertParticipantSchema.parse(req.body);
       
+      // Resolve workspace code to UUID if needed
+      const spaceId = await resolveWorkspaceId(data.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Space not found" });
+      }
+      
       // Verify that the space exists
-      const space = await storage.getSpace(data.spaceId);
+      const space = await storage.getSpace(spaceId);
       if (!space) {
         return res.status(404).json({ error: "Space not found" });
       }
       
-      const participant = await storage.createParticipant(data);
+      const participant = await storage.createParticipant({
+        ...data,
+        spaceId, // Use resolved UUID
+      });
       
       // Store participant ID in session for authentication
       if (req.session) {
