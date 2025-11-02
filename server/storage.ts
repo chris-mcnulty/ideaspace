@@ -104,6 +104,7 @@ export interface IStorage {
   }>;
   
   // Template Management (snapshot-based system using isTemplate flag)
+  getAllTemplates(): Promise<Space[]>; // Get all templates (for global admins)
   getTemplates(organizationId?: string): Promise<Space[]>; // Get system + org templates
   createTemplateSnapshot(sourceWorkspaceId: string, templateScope: 'system' | 'organization'): Promise<Space>;
   markWorkspaceAsTemplate(id: string, templateScope: 'system' | 'organization'): Promise<Space | undefined>;
@@ -309,7 +310,13 @@ export class DbStorage implements IStorage {
   }
 
   async getSpacesByOrganization(organizationId: string): Promise<Space[]> {
-    return db.select().from(spaces).where(eq(spaces.organizationId, organizationId)).orderBy(desc(spaces.createdAt));
+    // Exclude templates from workspace listings (templates appear in Templates tab only)
+    return db.select().from(spaces).where(
+      and(
+        eq(spaces.organizationId, organizationId),
+        eq(spaces.isTemplate, false)
+      )
+    ).orderBy(desc(spaces.createdAt));
   }
 
   async createSpace(space: InsertSpace): Promise<Space> {
@@ -384,6 +391,13 @@ export class DbStorage implements IStorage {
   }
 
   // Template Management (simplified system using isTemplate flag)
+  async getAllTemplates(): Promise<Space[]> {
+    // Get ALL templates (system + organization) - for global admins only
+    return db.select().from(spaces).where(
+      eq(spaces.isTemplate, true)
+    ).orderBy(desc(spaces.createdAt));
+  }
+
   async getTemplates(organizationId?: string): Promise<Space[]> {
     // Get system templates (isTemplate=true, templateScope='system') + org templates if specified
     if (organizationId) {
@@ -400,7 +414,7 @@ export class DbStorage implements IStorage {
         )
       ).orderBy(desc(spaces.createdAt));
     }
-    // Get only system templates
+    // Get only system templates (when no organizationId provided)
     return db.select().from(spaces).where(
       and(
         eq(spaces.isTemplate, true),

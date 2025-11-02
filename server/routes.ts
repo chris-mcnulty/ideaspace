@@ -1744,9 +1744,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/templates/spaces", requireAuth, async (req, res) => {
     try {
       const currentUser = req.user as User;
-      const organizationId = currentUser.organizationId || undefined;
       
-      const templates = await storage.getTemplates(organizationId);
+      let templates: Space[];
+      
+      if (currentUser.role === 'global_admin') {
+        // Global admins see ALL templates (system + all organization templates)
+        templates = await storage.getAllTemplates();
+      } else {
+        // Other users see system templates + their organization's templates
+        templates = await storage.getTemplates(currentUser.organizationId || undefined);
+      }
+      
       res.json(templates);
     } catch (error) {
       console.error("Failed to fetch workspace templates:", error);
