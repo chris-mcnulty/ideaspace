@@ -1096,7 +1096,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           phase = "ideation"; // Active ideation phase
         }
         
-        broadcast({
+        broadcastToSpace(req.params.id, {
           type: "phase_change",
           data: {
             spaceId: req.params.id,
@@ -1159,8 +1159,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateSpace(req.params.id, updates);
       }
       
-      // Broadcast navigation command to all participants
-      broadcast({
+      // Broadcast navigation command to participants in this workspace only
+      broadcastToSpace(req.params.id, {
         type: "navigate_to_phase",
         data: {
           spaceId: req.params.id,
@@ -2160,8 +2160,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Note not found" });
       }
       
-      // Broadcast to WebSocket clients
-      broadcast({ type: "note_updated", data: note });
+      // Broadcast to WebSocket clients in this workspace only
+      broadcastToSpace(note.spaceId, { type: "note_updated", data: note });
       
       res.json(note);
     } catch (error) {
@@ -2206,8 +2206,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Note not found" });
       }
       
-      // Broadcast to WebSocket clients
-      broadcast({ type: "note_deleted", data: { id: req.params.id } });
+      // Broadcast to WebSocket clients in this workspace only
+      broadcastToSpace(existingNote.spaceId, { type: "note_deleted", data: { id: req.params.id } });
       
       res.status(204).send();
     } catch (error) {
@@ -2224,13 +2224,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid note IDs" });
       }
       
+      // Get first note to determine workspace for broadcast
+      const firstNote = await storage.getNote(ids[0]);
+      const spaceId = firstNote?.spaceId;
+      
       const deleted = await storage.deleteNotes(ids);
       if (!deleted) {
         return res.status(404).json({ error: "Notes not found" });
       }
       
-      // Broadcast to WebSocket clients
-      broadcast({ type: "notes_deleted", data: { ids } });
+      // Broadcast to WebSocket clients in this workspace only
+      if (spaceId) {
+        broadcastToSpace(spaceId, { type: "notes_deleted", data: { ids } });
+      }
       
       res.status(204).send();
     } catch (error) {
@@ -2261,8 +2267,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       const category = await storage.createCategory(data);
       
-      // Broadcast to WebSocket clients
-      broadcast({ type: "category_created", data: category });
+      // Broadcast to WebSocket clients in this workspace only
+      broadcastToSpace(category.spaceId, { type: "category_created", data: category });
       
       res.status(201).json(category);
     } catch (error) {
@@ -2282,8 +2288,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Category not found" });
       }
       
-      // Broadcast to WebSocket clients
-      broadcast({ type: "category_updated", data: category });
+      // Broadcast to WebSocket clients in this workspace only
+      broadcastToSpace(category.spaceId, { type: "category_updated", data: category });
       
       res.json(category);
     } catch (error) {
@@ -2297,13 +2303,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Protected: Facilitators can delete categories
   app.delete("/api/categories/:id", requireFacilitator, async (req, res) => {
     try {
+      // Get category first to determine workspace for broadcast
+      const category = await storage.getCategory(req.params.id);
+      const spaceId = category?.spaceId;
+      
       const deleted = await storage.deleteCategory(req.params.id);
       if (!deleted) {
         return res.status(404).json({ error: "Category not found" });
       }
       
-      // Broadcast to WebSocket clients
-      broadcast({ type: "category_deleted", data: { id: req.params.id } });
+      // Broadcast to WebSocket clients in this workspace only
+      if (spaceId) {
+        broadcastToSpace(spaceId, { type: "category_deleted", data: { id: req.params.id } });
+      }
       
       res.status(204).send();
     } catch (error) {
@@ -2471,8 +2483,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error(`${failedUpdates.length} note updates failed`);
       }
       
-      // Broadcast category updates to all connected clients
-      broadcast({ 
+      // Broadcast category updates to clients in this workspace only
+      broadcastToSpace(spaceId, { 
         type: "categories_updated", 
         data: { 
           spaceId, 
@@ -2520,8 +2532,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const data = insertVoteSchema.parse(req.body);
       const vote = await storage.createVote(data);
       
-      // Broadcast vote update to all connected clients
-      broadcast({
+      // Broadcast vote update to clients in this workspace only
+      broadcastToSpace(vote.spaceId, {
         type: "vote_recorded",
         data: {
           spaceId: vote.spaceId,
@@ -2632,8 +2644,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         )
       );
       
-      // Broadcast ranking update to all connected clients
-      broadcast({
+      // Broadcast ranking update to clients in this workspace only
+      broadcastToSpace(spaceId, {
         type: "ranking_submitted",
         data: {
           spaceId,
@@ -2769,8 +2781,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           )
       );
       
-      // Broadcast allocation update to all connected clients
-      broadcast({
+      // Broadcast allocation update to clients in this workspace only
+      broadcastToSpace(spaceId, {
         type: "marketplace_allocation_submitted",
         data: {
           spaceId,
