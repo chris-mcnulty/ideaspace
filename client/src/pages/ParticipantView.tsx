@@ -239,7 +239,7 @@ export default function ParticipantView() {
       "bg-cyan-100 dark:bg-cyan-900/40 text-cyan-900 dark:text-cyan-100 border border-cyan-300 dark:border-cyan-700",
     ];
     if (category === "Uncategorized") {
-      return "bg-gray-100 dark:bg-gray-800/40 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600";
+      return "bg-gray-100 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 border border-gray-300 dark:border-gray-700";
     }
     const index = category.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
     return colors[index % colors.length];

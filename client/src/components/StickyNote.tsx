@@ -54,9 +54,9 @@ export default function StickyNote({
       data-testid={`sticky-note-${content.substring(0, 10)}`}
     >
       <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-1 text-xs text-gray-700 dark:text-gray-100 opacity-80">
-          <User className="h-3 w-3" />
-          <span className="truncate">{author || "Anonymous"}</span>
+        <div className="flex items-center gap-1 text-xs text-gray-700 dark:text-gray-100">
+          <User className="h-3 w-3 opacity-80" />
+          <span className="truncate opacity-80">{author || "Anonymous"}</span>
         </div>
         <GripVertical className="h-4 w-4 text-gray-600 dark:text-gray-300 opacity-50" />
       </div>
