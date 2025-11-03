@@ -2107,8 +2107,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const note = await storage.createNote(data);
       
-      // Broadcast to WebSocket clients
-      broadcast({ type: "note_created", data: note });
+      // Broadcast to WebSocket clients in this workspace only
+      broadcastToSpace(note.spaceId, { type: "note_created", data: note });
       
       res.status(201).json(note);
     } catch (error) {
