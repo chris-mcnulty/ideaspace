@@ -228,18 +228,18 @@ export default function ParticipantView() {
     return a.localeCompare(b);
   });
 
-  // Generate consistent colors for category badges
+  // Generate consistent colors for category badges with dark mode support
   const getCategoryColor = (category: string): string => {
     const colors = [
-      "bg-blue-100 text-blue-800",
-      "bg-purple-100 text-purple-800",
-      "bg-green-100 text-green-800",
-      "bg-orange-100 text-orange-800",
-      "bg-pink-100 text-pink-800",
-      "bg-cyan-100 text-cyan-800",
+      "bg-blue-100 dark:bg-blue-900/40 text-blue-900 dark:text-blue-100 border border-blue-300 dark:border-blue-700",
+      "bg-purple-100 dark:bg-purple-900/40 text-purple-900 dark:text-purple-100 border border-purple-300 dark:border-purple-700",
+      "bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-100 border border-green-300 dark:border-green-700",
+      "bg-orange-100 dark:bg-orange-900/40 text-orange-900 dark:text-orange-100 border border-orange-300 dark:border-orange-700",
+      "bg-pink-100 dark:bg-pink-900/40 text-pink-900 dark:text-pink-100 border border-pink-300 dark:border-pink-700",
+      "bg-cyan-100 dark:bg-cyan-900/40 text-cyan-900 dark:text-cyan-100 border border-cyan-300 dark:border-cyan-700",
     ];
     if (category === "Uncategorized") {
-      return "bg-gray-100 text-gray-600";
+      return "bg-gray-100 dark:bg-gray-800/40 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600";
     }
     const index = category.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
     return colors[index % colors.length];

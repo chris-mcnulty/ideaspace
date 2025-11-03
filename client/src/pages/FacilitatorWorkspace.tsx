@@ -578,15 +578,11 @@ export default function FacilitatorWorkspace() {
   // Add note mutation
   const addNoteMutation = useMutation({
     mutationFn: async (content: string) => {
-      // Create a facilitator participant if needed, or use existing
-      // For MVP, we'll use the first participant or create a system one
-      let facilitatorParticipantId = participants.find(p => !p.isGuest)?.id;
+      // Always use or create a dedicated "Facilitator" participant for facilitator-created notes
+      // This ensures proper attribution instead of using other participants
+      let facilitatorParticipantId = participants.find(p => p.displayName === "Facilitator")?.id;
       
-      if (!facilitatorParticipantId && participants.length > 0) {
-        facilitatorParticipantId = participants[0].id;
-      }
-      
-      // If still no participant, create a system participant
+      // If no Facilitator participant exists, create one
       if (!facilitatorParticipantId) {
         const systemParticipantResponse = await apiRequest("POST", "/api/participants", {
           spaceId: params.space,
@@ -959,13 +955,10 @@ export default function FacilitatorWorkspace() {
   // Merge mutation - create merged note and delete originals
   const mergeNotesMutation = useMutation({
     mutationFn: async () => {
-      // Get facilitator participant ID
-      let facilitatorParticipantId = participants.find(p => !p.isGuest)?.id;
+      // Always use or create a dedicated "Facilitator" participant for merged notes
+      let facilitatorParticipantId = participants.find(p => p.displayName === "Facilitator")?.id;
       
-      if (!facilitatorParticipantId && participants.length > 0) {
-        facilitatorParticipantId = participants[0].id;
-      }
-      
+      // If no Facilitator participant exists, create one
       if (!facilitatorParticipantId) {
         const systemParticipantResponse = await apiRequest("POST", "/api/participants", {
           spaceId: params.space,
