@@ -412,19 +412,25 @@ export default function Results() {
           )}
 
           {/* Insights */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-primary" />
-                Personalized Insights
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="prose prose-sm max-w-none dark:prose-invert">
-                <p className="whitespace-pre-wrap">{personalizedResults.insights}</p>
-              </div>
-            </CardContent>
-          </Card>
+          {personalizedResults.insights && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                  Personalized Insights
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="prose prose-sm max-w-none dark:prose-invert space-y-4">
+                  {personalizedResults.insights.split('\n\n').filter(p => p.trim()).map((paragraph, index) => (
+                    <p key={index} className="whitespace-pre-wrap leading-relaxed">
+                      {paragraph}
+                    </p>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Recommendations */}
           {personalizedResults.recommendations && (
@@ -436,8 +442,12 @@ export default function Results() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="prose prose-sm max-w-none dark:prose-invert">
-                  <p className="whitespace-pre-wrap">{personalizedResults.recommendations}</p>
+                <div className="prose prose-sm max-w-none dark:prose-invert space-y-4">
+                  {personalizedResults.recommendations.split('\n\n').filter(p => p.trim()).map((paragraph, index) => (
+                    <p key={index} className="whitespace-pre-wrap leading-relaxed">
+                      {paragraph}
+                    </p>
+                  ))}
                 </div>
               </CardContent>
             </Card>
