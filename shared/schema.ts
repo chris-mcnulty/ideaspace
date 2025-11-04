@@ -62,6 +62,8 @@ export const spaces = pgTable("spaces", {
   marketplaceStartsAt: timestamp("marketplace_starts_at"),
   marketplaceEndsAt: timestamp("marketplace_ends_at"),
   marketplaceCoinBudget: integer("marketplace_coin_budget").notNull().default(100), // Number of coins each participant gets in marketplace
+  surveyStartsAt: timestamp("survey_starts_at"),
+  surveyEndsAt: timestamp("survey_ends_at"),
   aiResultsEnabled: boolean("ai_results_enabled").notNull().default(false), // Facilitator toggle for AI-generated personalized results
   resultsPublicAfterClose: boolean("results_public_after_close").notNull().default(false), // Allow read-only results access after workspace is closed
   isTemplate: boolean("is_template").notNull().default(false), // True if this workspace is a template
@@ -129,6 +131,26 @@ export const marketplaceAllocations = pgTable("marketplace_allocations", {
   participantId: varchar("participant_id").notNull().references(() => participants.id),
   noteId: varchar("note_id").notNull().references(() => notes.id),
   coinsAllocated: integer("coins_allocated").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Survey Questions: Customizable questions for participants to rate ideas
+export const surveyQuestions = pgTable("survey_questions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  spaceId: varchar("space_id").notNull().references(() => spaces.id),
+  questionText: text("question_text").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0), // Order of questions in the survey
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Survey Responses: Participant ratings for each idea on each survey question
+export const surveyResponses = pgTable("survey_responses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  spaceId: varchar("space_id").notNull().references(() => spaces.id),
+  participantId: varchar("participant_id").notNull().references(() => participants.id),
+  noteId: varchar("note_id").notNull().references(() => notes.id),
+  questionId: varchar("question_id").notNull().references(() => surveyQuestions.id),
+  score: integer("score").notNull(), // 1-5 rating
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -325,6 +347,16 @@ export const insertMarketplaceAllocationSchema = createInsertSchema(marketplaceA
   createdAt: true,
 });
 
+export const insertSurveyQuestionSchema = createInsertSchema(surveyQuestions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSurveyResponseSchema = createInsertSchema(surveyResponses).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertCompanyAdminSchema = createInsertSchema(companyAdmins).omit({
   id: true,
   createdAt: true,
@@ -422,6 +454,12 @@ export type InsertRanking = z.infer<typeof insertRankingSchema>;
 
 export type MarketplaceAllocation = typeof marketplaceAllocations.$inferSelect;
 export type InsertMarketplaceAllocation = z.infer<typeof insertMarketplaceAllocationSchema>;
+
+export type SurveyQuestion = typeof surveyQuestions.$inferSelect;
+export type InsertSurveyQuestion = z.infer<typeof insertSurveyQuestionSchema>;
+
+export type SurveyResponse = typeof surveyResponses.$inferSelect;
+export type InsertSurveyResponse = z.infer<typeof insertSurveyResponseSchema>;
 
 export type CompanyAdmin = typeof companyAdmins.$inferSelect;
 export type InsertCompanyAdmin = z.infer<typeof insertCompanyAdminSchema>;
