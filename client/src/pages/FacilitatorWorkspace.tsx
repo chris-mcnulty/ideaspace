@@ -56,11 +56,14 @@ import {
   EyeOff,
   Lock,
   Unlock,
+  ClipboardList,
 } from "lucide-react";
 import type { Organization, Space, Note, Participant, Category, User } from "@shared/schema";
 import { Leaderboard } from "@/components/Leaderboard";
 import { KnowledgeBaseManager } from "@/components/KnowledgeBaseManager";
 import { ShareLinksDialog } from "@/components/ShareLinksDialog";
+import { SurveyQuestionsManager } from "@/components/SurveyQuestionsManager";
+import { SurveyResultsGrid } from "@/components/SurveyResultsGrid";
 import { generateCohortResultsPDF } from "@/lib/pdfGenerator";
 
 // Comprehensive Results Table Component
@@ -1187,6 +1190,10 @@ export default function FacilitatorWorkspace() {
               <Coins className="mr-2 h-4 w-4" />
               Marketplace
             </TabsTrigger>
+            <TabsTrigger value="survey" data-testid="tab-survey">
+              <ClipboardList className="mr-2 h-4 w-4" />
+              Survey
+            </TabsTrigger>
             <TabsTrigger value="knowledge-base" data-testid="tab-knowledge-base">
               <BookOpen className="mr-2 h-4 w-4" />
               Knowledge Base
@@ -2165,6 +2172,31 @@ export default function FacilitatorWorkspace() {
                 </p>
               </div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="survey" className="mt-6 space-y-6">
+            {/* Survey Header */}
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">Survey</h2>
+                <p className="text-muted-foreground mt-1">
+                  Create questions and view participant responses
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                onClick={() => window.open(`/o/${params.org}/s/${params.space}/survey`, '_blank')}
+                data-testid="button-test-survey"
+              >
+                Test Survey View
+              </Button>
+            </div>
+
+            {/* Survey Questions Manager */}
+            <SurveyQuestionsManager spaceId={space.id} />
+
+            {/* Survey Results Grid */}
+            <SurveyResultsGrid spaceId={space.id} />
           </TabsContent>
 
           <TabsContent value="knowledge-base" className="mt-6">
