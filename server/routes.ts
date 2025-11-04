@@ -2926,6 +2926,198 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Survey Questions (Facilitator only)
+  // Get all survey questions for a workspace
+  app.get("/api/spaces/:spaceId/survey-questions", async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      
+      const questions = await storage.getSurveyQuestionsBySpace(spaceId);
+      res.json(questions);
+    } catch (error) {
+      console.error("Failed to fetch survey questions:", error);
+      res.status(500).json({ error: "Failed to fetch survey questions" });
+    }
+  });
+
+  // Create a survey question
+  app.post("/api/spaces/:spaceId/survey-questions", requireFacilitator, async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      
+      const { questionText, sortOrder } = req.body;
+      
+      if (!questionText || typeof questionText !== 'string' || questionText.trim().length === 0) {
+        return res.status(400).json({ error: "Question text is required" });
+      }
+      
+      const question = await storage.createSurveyQuestion({
+        spaceId,
+        questionText: questionText.trim(),
+        sortOrder: sortOrder || 0,
+      });
+      
+      // Broadcast to WebSocket clients in this workspace only
+      broadcastToSpace(spaceId, { type: "survey_question_created", data: question });
+      
+      res.status(201).json(question);
+    } catch (error) {
+      console.error("Failed to create survey question:", error);
+      res.status(500).json({ error: "Failed to create survey question" });
+    }
+  });
+
+  // Update a survey question
+  app.patch("/api/survey-questions/:id", requireFacilitator, async (req, res) => {
+    try {
+      const { questionText, sortOrder } = req.body;
+      
+      const updates: any = {};
+      if (questionText !== undefined) {
+        if (typeof questionText !== 'string' || questionText.trim().length === 0) {
+          return res.status(400).json({ error: "Question text cannot be empty" });
+        }
+        updates.questionText = questionText.trim();
+      }
+      if (sortOrder !== undefined) {
+        updates.sortOrder = sortOrder;
+      }
+      
+      const question = await storage.updateSurveyQuestion(req.params.id, updates);
+      if (!question) {
+        return res.status(404).json({ error: "Survey question not found" });
+      }
+      
+      // Broadcast to WebSocket clients in this workspace only
+      broadcastToSpace(question.spaceId, { type: "survey_question_updated", data: question });
+      
+      res.json(question);
+    } catch (error) {
+      console.error("Failed to update survey question:", error);
+      res.status(500).json({ error: "Failed to update survey question" });
+    }
+  });
+
+  // Delete a survey question
+  app.delete("/api/survey-questions/:id", requireFacilitator, async (req, res) => {
+    try {
+      // Get question first to determine workspace for broadcast
+      const question = await storage.getSurveyQuestion(req.params.id);
+      const spaceId = question?.spaceId;
+      
+      const deleted = await storage.deleteSurveyQuestion(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Survey question not found" });
+      }
+      
+      // Broadcast to WebSocket clients in this workspace only
+      if (spaceId) {
+        broadcastToSpace(spaceId, { type: "survey_question_deleted", data: { id: req.params.id } });
+      }
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error("Failed to delete survey question:", error);
+      res.status(500).json({ error: "Failed to delete survey question" });
+    }
+  });
+
+  // Survey Responses
+  // Get all survey responses for a workspace (for results grid)
+  app.get("/api/spaces/:spaceId/survey-responses", async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      
+      const responses = await storage.getSurveyResponsesBySpace(spaceId);
+      res.json(responses);
+    } catch (error) {
+      console.error("Failed to fetch survey responses:", error);
+      res.status(500).json({ error: "Failed to fetch survey responses" });
+    }
+  });
+
+  // Get participant's survey responses
+  app.get("/api/spaces/:spaceId/participants/:participantId/survey-responses", async (req, res) => {
+    try {
+      const { participantId: requestedParticipantId, spaceId } = req.params;
+      
+      // SECURITY: Verify session participant matches requested participant to prevent IDOR
+      const sessionParticipantId = req.session?.participantId;
+      if (!sessionParticipantId) {
+        return res.status(401).json({ error: "No participant session found. Please rejoin the workspace." });
+      }
+      
+      if (sessionParticipantId !== requestedParticipantId) {
+        return res.status(403).json({ error: "Cannot access another participant's responses" });
+      }
+      
+      const responses = await storage.getSurveyResponsesByParticipant(sessionParticipantId, spaceId);
+      res.json(responses);
+    } catch (error) {
+      console.error("Failed to fetch survey responses:", error);
+      res.status(500).json({ error: "Failed to fetch survey responses" });
+    }
+  });
+
+  // Submit survey response (create or update)
+  app.post("/api/survey-responses", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
+    try {
+      const { spaceId, questionId, noteId, score } = req.body;
+      
+      // Validate score is 1-5
+      if (!score || score < 1 || score > 5) {
+        return res.status(400).json({ error: "Score must be between 1 and 5" });
+      }
+      
+      const participantId = req.session?.participantId;
+      if (!participantId) {
+        return res.status(401).json({ error: "No participant session found. Please rejoin the workspace." });
+      }
+      
+      // Check if response already exists
+      const existingResponses = await storage.getSurveyResponsesByParticipant(participantId, spaceId);
+      const existingResponse = existingResponses.find(r => r.questionId === questionId && r.noteId === noteId);
+      
+      let response;
+      if (existingResponse) {
+        // Update existing response
+        response = await storage.updateSurveyResponse(existingResponse.id, { score });
+      } else {
+        // Create new response
+        response = await storage.createSurveyResponse({
+          spaceId,
+          participantId,
+          questionId,
+          noteId,
+          score,
+        });
+      }
+      
+      // Broadcast to WebSocket clients in this workspace only
+      broadcastToSpace(spaceId, {
+        type: "survey_response_submitted",
+        data: {
+          spaceId,
+          participantId,
+        }
+      });
+      
+      res.status(201).json(response);
+    } catch (error) {
+      console.error("Failed to submit survey response:", error);
+      res.status(500).json({ error: "Failed to submit survey response" });
+    }
+  });
+
   // Export Endpoints (Facilitator/Admin only)
   // Export pairwise voting results
   app.get("/api/spaces/:spaceId/export/pairwise", requireAuth, async (req, res) => {
