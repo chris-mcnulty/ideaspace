@@ -51,7 +51,7 @@ export default function Survey() {
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               <div>
-                <BrandHeader organization={space?.organizationName} />
+                <BrandHeader />
                 {space && (
                   <h1 className="text-xl font-bold mt-2">{space.name} - Survey</h1>
                 )}

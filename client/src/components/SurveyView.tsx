@@ -56,15 +56,11 @@ export function SurveyView({ spaceId, participantId }: SurveyViewProps) {
   // Submit response mutation
   const submitResponseMutation = useMutation({
     mutationFn: async ({ noteId, questionId, score }: { noteId: string; questionId: string; score: number }) => {
-      return apiRequest("/api/survey-responses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          spaceId,
-          questionId,
-          noteId,
-          score,
-        }),
+      return apiRequest("POST", "/api/survey-responses", {
+        spaceId,
+        questionId,
+        noteId,
+        score,
       });
     },
     onSuccess: () => {

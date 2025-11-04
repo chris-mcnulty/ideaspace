@@ -26,13 +26,9 @@ export function SurveyQuestionsManager({ spaceId }: SurveyQuestionsManagerProps)
   // Create question mutation
   const createQuestionMutation = useMutation({
     mutationFn: async (questionText: string) => {
-      return apiRequest(`/api/spaces/${spaceId}/survey-questions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          questionText,
-          sortOrder: questions.length,
-        }),
+      return apiRequest("POST", `/api/spaces/${spaceId}/survey-questions`, {
+        questionText,
+        sortOrder: questions.length,
       });
     },
     onSuccess: () => {
@@ -55,11 +51,7 @@ export function SurveyQuestionsManager({ spaceId }: SurveyQuestionsManagerProps)
   // Update question mutation
   const updateQuestionMutation = useMutation({
     mutationFn: async ({ id, questionText }: { id: string; questionText: string }) => {
-      return apiRequest(`/api/survey-questions/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ questionText }),
-      });
+      return apiRequest("PATCH", `/api/survey-questions/${id}`, { questionText });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/spaces", spaceId, "survey-questions"] });
@@ -82,9 +74,7 @@ export function SurveyQuestionsManager({ spaceId }: SurveyQuestionsManagerProps)
   // Delete question mutation
   const deleteQuestionMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest(`/api/survey-questions/${id}`, {
-        method: "DELETE",
-      });
+      return apiRequest("DELETE", `/api/survey-questions/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/spaces", spaceId, "survey-questions"] });
@@ -159,16 +149,14 @@ export function SurveyQuestionsManager({ spaceId }: SurveyQuestionsManagerProps)
             <Button
               size="sm"
               variant="outline"
-              onClick={() => {
-                defaultQuestions.forEach((q, i) => {
-                  apiRequest(`/api/spaces/${spaceId}/survey-questions`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ questionText: q, sortOrder: i }),
-                  }).then(() => {
-                    queryClient.invalidateQueries({ queryKey: ["/api/spaces", spaceId, "survey-questions"] });
+              onClick={async () => {
+                for (let i = 0; i < defaultQuestions.length; i++) {
+                  await apiRequest("POST", `/api/spaces/${spaceId}/survey-questions`, {
+                    questionText: defaultQuestions[i],
+                    sortOrder: i,
                   });
-                });
+                }
+                queryClient.invalidateQueries({ queryKey: ["/api/spaces", spaceId, "survey-questions"] });
                 toast({
                   title: "Default Questions Added",
                   description: "Default survey questions have been created.",
