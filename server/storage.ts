@@ -18,6 +18,10 @@ import {
   type InsertRanking,
   type MarketplaceAllocation,
   type InsertMarketplaceAllocation,
+  type SurveyQuestion,
+  type InsertSurveyQuestion,
+  type SurveyResponse,
+  type InsertSurveyResponse,
   type CompanyAdmin,
   type InsertCompanyAdmin,
   type SpaceFacilitator,
@@ -52,6 +56,8 @@ import {
   votes,
   rankings,
   marketplaceAllocations,
+  surveyQuestions,
+  surveyResponses,
   companyAdmins,
   spaceFacilitators,
   accessRequests,
@@ -164,6 +170,21 @@ export interface IStorage {
   getMarketplaceAllocationsByParticipant(participantId: string): Promise<MarketplaceAllocation[]>;
   createMarketplaceAllocation(allocation: InsertMarketplaceAllocation): Promise<MarketplaceAllocation>;
   deleteMarketplaceAllocationsByParticipant(participantId: string, spaceId: string): Promise<boolean>;
+
+  // Survey Questions
+  getSurveyQuestion(id: string): Promise<SurveyQuestion | undefined>;
+  getSurveyQuestionsBySpace(spaceId: string): Promise<SurveyQuestion[]>;
+  createSurveyQuestion(question: InsertSurveyQuestion): Promise<SurveyQuestion>;
+  updateSurveyQuestion(id: string, question: Partial<InsertSurveyQuestion>): Promise<SurveyQuestion | undefined>;
+  deleteSurveyQuestion(id: string): Promise<boolean>;
+
+  // Survey Responses
+  getSurveyResponsesBySpace(spaceId: string): Promise<SurveyResponse[]>;
+  getSurveyResponsesByParticipant(participantId: string, spaceId: string): Promise<SurveyResponse[]>;
+  getSurveyResponsesByNote(noteId: string): Promise<SurveyResponse[]>;
+  createSurveyResponse(response: InsertSurveyResponse): Promise<SurveyResponse>;
+  updateSurveyResponse(id: string, response: Partial<InsertSurveyResponse>): Promise<SurveyResponse | undefined>;
+  deleteSurveyResponsesByParticipant(participantId: string, spaceId: string): Promise<boolean>;
 
   // Access Requests
   getAccessRequest(id: string): Promise<AccessRequest | undefined>;
@@ -779,6 +800,71 @@ export class DbStorage implements IStorage {
   async deleteMarketplaceAllocationsByParticipant(participantId: string, spaceId: string): Promise<boolean> {
     const result = await db.delete(marketplaceAllocations).where(
       and(eq(marketplaceAllocations.participantId, participantId), eq(marketplaceAllocations.spaceId, spaceId))
+    );
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Survey Questions
+  async getSurveyQuestion(id: string): Promise<SurveyQuestion | undefined> {
+    const [question] = await db.select().from(surveyQuestions).where(eq(surveyQuestions.id, id)).limit(1);
+    return question;
+  }
+
+  async getSurveyQuestionsBySpace(spaceId: string): Promise<SurveyQuestion[]> {
+    return db.select().from(surveyQuestions)
+      .where(eq(surveyQuestions.spaceId, spaceId))
+      .orderBy(surveyQuestions.sortOrder);
+  }
+
+  async createSurveyQuestion(question: InsertSurveyQuestion): Promise<SurveyQuestion> {
+    const [created] = await db.insert(surveyQuestions).values(question).returning();
+    return created;
+  }
+
+  async updateSurveyQuestion(id: string, question: Partial<InsertSurveyQuestion>): Promise<SurveyQuestion | undefined> {
+    const [updated] = await db.update(surveyQuestions)
+      .set(question)
+      .where(eq(surveyQuestions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteSurveyQuestion(id: string): Promise<boolean> {
+    const result = await db.delete(surveyQuestions).where(eq(surveyQuestions.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Survey Responses
+  async getSurveyResponsesBySpace(spaceId: string): Promise<SurveyResponse[]> {
+    return db.select().from(surveyResponses).where(eq(surveyResponses.spaceId, spaceId));
+  }
+
+  async getSurveyResponsesByParticipant(participantId: string, spaceId: string): Promise<SurveyResponse[]> {
+    return db.select().from(surveyResponses).where(
+      and(eq(surveyResponses.participantId, participantId), eq(surveyResponses.spaceId, spaceId))
+    );
+  }
+
+  async getSurveyResponsesByNote(noteId: string): Promise<SurveyResponse[]> {
+    return db.select().from(surveyResponses).where(eq(surveyResponses.noteId, noteId));
+  }
+
+  async createSurveyResponse(response: InsertSurveyResponse): Promise<SurveyResponse> {
+    const [created] = await db.insert(surveyResponses).values(response).returning();
+    return created;
+  }
+
+  async updateSurveyResponse(id: string, response: Partial<InsertSurveyResponse>): Promise<SurveyResponse | undefined> {
+    const [updated] = await db.update(surveyResponses)
+      .set(response)
+      .where(eq(surveyResponses.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteSurveyResponsesByParticipant(participantId: string, spaceId: string): Promise<boolean> {
+    const result = await db.delete(surveyResponses).where(
+      and(eq(surveyResponses.participantId, participantId), eq(surveyResponses.spaceId, spaceId))
     );
     return result.rowCount ? result.rowCount > 0 : false;
   }
