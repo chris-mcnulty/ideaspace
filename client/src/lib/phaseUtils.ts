@@ -1,6 +1,6 @@
 import type { Space } from "@shared/schema";
 
-export type PhaseType = "ideation" | "voting" | "ranking" | "marketplace";
+export type PhaseType = "ideation" | "voting" | "ranking" | "marketplace" | "survey";
 
 export type PhaseStatus = "not-scheduled" | "upcoming" | "active" | "ended";
 
@@ -77,6 +77,11 @@ export function getPhaseTimeWindow(
       return {
         startsAt: space.marketplaceStartsAt,
         endsAt: space.marketplaceEndsAt,
+      };
+    case "survey":
+      return {
+        startsAt: space.surveyStartsAt,
+        endsAt: space.surveyEndsAt,
       };
   }
 }

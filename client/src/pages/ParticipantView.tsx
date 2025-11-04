@@ -15,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Users, User, Clock, Vote, ListOrdered, Coins } from "lucide-react";
+import { Plus, Users, User, Clock, Vote, ListOrdered, Coins, ClipboardList } from "lucide-react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -476,6 +476,18 @@ export default function ParticipantView() {
               >
                 <Coins className="h-4 w-4" />
                 Marketplace
+              </Button>
+            )}
+            {space && isPhaseActive(space, "survey") && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/o/${params.org}/s/${params.space}/survey`)}
+                className="gap-2"
+                data-testid="button-go-to-survey"
+              >
+                <ClipboardList className="h-4 w-4" />
+                Survey
               </Button>
             )}
           </div>

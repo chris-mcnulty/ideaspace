@@ -32,6 +32,7 @@ const WORKSPACE_SECTIONS = [
   { value: "vote", label: "Pairwise Voting", path: "/vote" },
   { value: "rank", label: "Stack Ranking", path: "/rank" },
   { value: "marketplace", label: "Marketplace Allocation", path: "/marketplace" },
+  { value: "survey", label: "Survey", path: "/survey" },
   { value: "results", label: "Results", path: "/results" },
 ] as const;
 

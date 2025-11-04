@@ -21,6 +21,7 @@ import FacilitatorWorkspace from "@/pages/FacilitatorWorkspace";
 import PairwiseVoting from "@/pages/PairwiseVoting";
 import StackRanking from "@/pages/StackRanking";
 import Marketplace from "@/pages/Marketplace";
+import Survey from "@/pages/Survey";
 import JoinPage from "@/pages/JoinPage";
 import Results from "@/pages/Results";
 
@@ -60,6 +61,7 @@ function Router() {
       <Route path="/o/:org/s/:space/vote" component={PairwiseVoting} />
       <Route path="/o/:org/s/:space/rank" component={StackRanking} />
       <Route path="/o/:org/s/:space/marketplace" component={Marketplace} />
+      <Route path="/o/:org/s/:space/survey" component={Survey} />
       <Route path="/o/:org/s/:space/results" component={Results} />
       <Route path="/o/:org/s/:space/facilitate" component={FacilitatorWorkspace} />
       
