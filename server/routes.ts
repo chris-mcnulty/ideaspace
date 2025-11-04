@@ -946,24 +946,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/spaces/:id", async (req, res) => {
     try {
       const identifier = req.params.id;
+      console.log(`[DEBUG] GET /api/spaces/:id - identifier: ${identifier}`);
       // Check if identifier looks like a workspace code (nnnn-nnnn format: 9 chars, single hyphen at position 4)
       // vs a UUID (36 chars with hyphens) or serial integer
       let space;
       const isWorkspaceCode = /^\d{4}-\d{4}$/.test(identifier);
+      console.log(`[DEBUG] isWorkspaceCode: ${isWorkspaceCode}`);
       
       if (isWorkspaceCode) {
         // Lookup by code (e.g., "1234-6133")
+        console.log(`[DEBUG] Looking up by code`);
         space = await storage.getSpaceByCode(identifier);
       } else {
         // Lookup by ID (UUID or serial integer)
+        console.log(`[DEBUG] Looking up by ID`);
         space = await storage.getSpace(identifier);
       }
       
+      console.log(`[DEBUG] Space found:`, space ? 'yes' : 'no');
       if (!space) {
         return res.status(404).json({ error: "Space not found" });
       }
       res.json(space);
     } catch (error) {
+      console.error(`[ERROR] GET /api/spaces/:id failed:`, error);
       res.status(500).json({ error: "Failed to fetch space" });
     }
   });
