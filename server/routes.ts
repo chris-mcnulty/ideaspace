@@ -5,7 +5,9 @@ import passport from "passport";
 import multer from "multer";
 import { storage } from "./storage";
 import { db } from "./db";
-import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, type Space, organizations, users, companyAdmins, knowledgeBaseDocuments, workspaceTemplates, aiUsageLog } from "@shared/schema";
+import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, type Space, organizations, users, companyAdmins, knowledgeBaseDocuments, workspaceTemplates, aiUsageLog, insertIdeaSchema, insertWorkspaceModuleSchema, insertWorkspaceModuleRunSchema, insertPriorityMatrixSchema, insertPriorityMatrixPositionSchema } from "@shared/schema";
+import { uploadImage, validateImageFile, cleanupTempFile } from "./middleware/uploadMiddleware";
+import { processImageUpload } from "./utils/contentUtils";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { categorizeNotes, rewriteCard } from "./services/openai";
@@ -2516,6 +2518,428 @@ export async function registerRoutes(app: Express): Promise<Server> {
         error: "Failed to categorize notes",
         details: errorMessage
       });
+    }
+  });
+
+  // ============================================
+  // Ideas Management API Routes
+  // ============================================
+  
+  // Get all ideas for a workspace
+  app.get("/api/spaces/:spaceId/ideas", async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      
+      const includeContributions = req.query.includeContributions === 'true';
+      const ideas = await storage.getIdeasBySpace(spaceId, includeContributions);
+      res.json(ideas);
+    } catch (error) {
+      console.error("Failed to fetch ideas:", error);
+      res.status(500).json({ error: "Failed to fetch ideas" });
+    }
+  });
+  
+  // Create a new idea
+  app.post("/api/ideas", requireFacilitator, async (req, res) => {
+    try {
+      const ideaData = insertIdeaSchema.parse(req.body);
+      const user = req.user as User;
+      
+      // Set createdBy to current user
+      ideaData.createdBy = user.id;
+      
+      const idea = await storage.createIdea(ideaData);
+      
+      // Broadcast to WebSocket clients
+      broadcastToSpace(idea.spaceId, { 
+        type: "idea_created", 
+        data: idea 
+      });
+      
+      res.status(201).json(idea);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Failed to create idea:", error);
+      res.status(500).json({ error: "Failed to create idea" });
+    }
+  });
+  
+  // Update an idea
+  app.patch("/api/ideas/:id", requireFacilitator, async (req, res) => {
+    try {
+      const updated = await storage.updateIdea(req.params.id, req.body);
+      if (!updated) {
+        return res.status(404).json({ error: "Idea not found" });
+      }
+      
+      // Broadcast to WebSocket clients
+      broadcastToSpace(updated.spaceId, { 
+        type: "idea_updated", 
+        data: updated 
+      });
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Failed to update idea:", error);
+      res.status(500).json({ error: "Failed to update idea" });
+    }
+  });
+  
+  // Delete an idea
+  app.delete("/api/ideas/:id", requireFacilitator, async (req, res) => {
+    try {
+      const idea = await storage.getIdea(req.params.id);
+      if (!idea) {
+        return res.status(404).json({ error: "Idea not found" });
+      }
+      
+      const deleted = await storage.deleteIdea(req.params.id);
+      if (!deleted) {
+        return res.status(500).json({ error: "Failed to delete idea" });
+      }
+      
+      // Broadcast to WebSocket clients
+      broadcastToSpace(idea.spaceId, { 
+        type: "idea_deleted", 
+        data: { id: req.params.id } 
+      });
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error("Failed to delete idea:", error);
+      res.status(500).json({ error: "Failed to delete idea" });
+    }
+  });
+  
+  // Bulk import ideas (CSV/JSON)
+  app.post("/api/spaces/:spaceId/ideas/import", requireFacilitator, async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      
+      const { ideas, format = 'json' } = req.body as { 
+        ideas: Array<{ content: string; category?: string; source?: string }>;
+        format?: 'json' | 'csv';
+      };
+      
+      if (!Array.isArray(ideas)) {
+        return res.status(400).json({ error: "Ideas must be an array" });
+      }
+      
+      const user = req.user as User;
+      const createdIdeas = [];
+      
+      for (const ideaData of ideas) {
+        const idea = await storage.createIdea({
+          spaceId,
+          content: ideaData.content,
+          contentType: 'text',
+          category: ideaData.category || null,
+          source: ideaData.source || 'import',
+          createdBy: user.id
+        });
+        createdIdeas.push(idea);
+      }
+      
+      // Broadcast bulk import
+      broadcastToSpace(spaceId, { 
+        type: "ideas_imported", 
+        data: { count: createdIdeas.length } 
+      });
+      
+      res.json({ 
+        success: true, 
+        imported: createdIdeas.length,
+        ideas: createdIdeas 
+      });
+    } catch (error) {
+      console.error("Failed to import ideas:", error);
+      res.status(500).json({ error: "Failed to import ideas" });
+    }
+  });
+  
+  // Upload image for an idea
+  app.post("/api/ideas/upload-image", 
+    requireFacilitator, 
+    uploadImage.single('image'),
+    async (req, res) => {
+      try {
+        if (!req.file) {
+          return res.status(400).json({ error: "No file uploaded" });
+        }
+        
+        const { spaceId } = req.body;
+        if (!spaceId) {
+          await cleanupTempFile(req.file.path);
+          return res.status(400).json({ error: "Workspace ID required" });
+        }
+        
+        // Validate file
+        const isValid = await validateImageFile(req.file.path);
+        if (!isValid) {
+          await cleanupTempFile(req.file.path);
+          return res.status(400).json({ error: "Invalid or malicious file detected" });
+        }
+        
+        // Process and save image
+        const imageData = await processImageUpload(req.file.path, req.file.originalname);
+        
+        // Clean up temp file
+        await cleanupTempFile(req.file.path);
+        
+        const user = req.user as User;
+        
+        // Create idea with image
+        const idea = await storage.createIdea({
+          spaceId,
+          content: imageData.originalName,
+          contentType: 'image',
+          assetUrl: imageData.url,
+          assetMetadata: imageData.metadata,
+          source: 'upload',
+          createdBy: user.id
+        });
+        
+        res.json(idea);
+      } catch (error) {
+        // Clean up on error
+        if (req.file) {
+          await cleanupTempFile(req.file.path);
+        }
+        console.error("Failed to upload image:", error);
+        res.status(500).json({ error: "Failed to upload image" });
+      }
+    }
+  );
+  
+  // ============================================
+  // Module Configuration API Routes
+  // ============================================
+  
+  // Get workspace modules configuration
+  app.get("/api/spaces/:spaceId/modules", async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      
+      const modules = await storage.getWorkspaceModules(spaceId);
+      res.json(modules);
+    } catch (error) {
+      console.error("Failed to fetch modules:", error);
+      res.status(500).json({ error: "Failed to fetch modules configuration" });
+    }
+  });
+  
+  // Create or update workspace module configuration
+  app.post("/api/workspace-modules", requireFacilitator, async (req, res) => {
+    try {
+      const moduleData = insertWorkspaceModuleSchema.parse(req.body);
+      const module = await storage.upsertWorkspaceModule(moduleData);
+      
+      // Broadcast module configuration change
+      broadcastToSpace(module.spaceId, { 
+        type: "module_configured", 
+        data: module 
+      });
+      
+      res.json(module);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Failed to configure module:", error);
+      res.status(500).json({ error: "Failed to configure module" });
+    }
+  });
+  
+  // Update module order/settings
+  app.patch("/api/workspace-modules/:id", requireFacilitator, async (req, res) => {
+    try {
+      const { enabled, displayOrder, config } = req.body;
+      
+      const updated = await storage.updateWorkspaceModule(req.params.id, {
+        enabled,
+        displayOrder,
+        config
+      });
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Module not found" });
+      }
+      
+      // Broadcast module update
+      broadcastToSpace(updated.spaceId, { 
+        type: "module_updated", 
+        data: updated 
+      });
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Failed to update module:", error);
+      res.status(500).json({ error: "Failed to update module configuration" });
+    }
+  });
+  
+  // Start a module run (for repeatable sessions)
+  app.post("/api/module-runs", requireFacilitator, async (req, res) => {
+    try {
+      const runData = insertWorkspaceModuleRunSchema.parse(req.body);
+      const run = await storage.createModuleRun(runData);
+      
+      // Broadcast run started
+      broadcastToSpace(run.spaceId, { 
+        type: "module_run_started", 
+        data: run 
+      });
+      
+      res.status(201).json(run);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Failed to start module run:", error);
+      res.status(500).json({ error: "Failed to start module run" });
+    }
+  });
+  
+  // Complete a module run
+  app.patch("/api/module-runs/:id/complete", requireFacilitator, async (req, res) => {
+    try {
+      const completed = await storage.completeModuleRun(req.params.id);
+      if (!completed) {
+        return res.status(404).json({ error: "Module run not found" });
+      }
+      
+      // Broadcast run completed
+      broadcastToSpace(completed.spaceId, { 
+        type: "module_run_completed", 
+        data: completed 
+      });
+      
+      res.json(completed);
+    } catch (error) {
+      console.error("Failed to complete module run:", error);
+      res.status(500).json({ error: "Failed to complete module run" });
+    }
+  });
+  
+  // ============================================
+  // 2x2 Priority Matrix API Routes
+  // ============================================
+  
+  // Get priority matrix configuration
+  app.get("/api/spaces/:spaceId/priority-matrix", async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      
+      const matrix = await storage.getPriorityMatrix(spaceId);
+      if (!matrix) {
+        // Return default configuration if none exists
+        return res.json({
+          xAxisLabel: "Impact",
+          yAxisLabel: "Effort",
+          xMin: "Low",
+          xMax: "High",
+          yMin: "Low",
+          yMax: "High",
+          snapToGrid: false,
+          gridSize: 4
+        });
+      }
+      
+      res.json(matrix);
+    } catch (error) {
+      console.error("Failed to fetch priority matrix:", error);
+      res.status(500).json({ error: "Failed to fetch priority matrix configuration" });
+    }
+  });
+  
+  // Create or update priority matrix configuration
+  app.post("/api/priority-matrices", requireFacilitator, async (req, res) => {
+    try {
+      const matrixData = insertPriorityMatrixSchema.parse(req.body);
+      const matrix = await storage.createPriorityMatrix(matrixData);
+      
+      // Broadcast configuration
+      broadcastToSpace(matrix.spaceId, { 
+        type: "priority_matrix_configured", 
+        data: matrix 
+      });
+      
+      res.status(201).json(matrix);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Failed to create priority matrix:", error);
+      res.status(500).json({ error: "Failed to create priority matrix" });
+    }
+  });
+  
+  // Get all idea positions in the matrix
+  app.get("/api/priority-matrices/:matrixId/positions", async (req, res) => {
+    try {
+      const positions = await storage.getPriorityMatrixPositions(req.params.matrixId);
+      res.json(positions);
+    } catch (error) {
+      console.error("Failed to fetch positions:", error);
+      res.status(500).json({ error: "Failed to fetch matrix positions" });
+    }
+  });
+  
+  // Update idea position (upsert)
+  app.post("/api/priority-matrix-positions", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
+    try {
+      const positionData = insertPriorityMatrixPositionSchema.parse(req.body);
+      
+      // Validate coordinates are within bounds
+      if (positionData.xCoord < 0 || positionData.xCoord > 1 || 
+          positionData.yCoord < 0 || positionData.yCoord > 1) {
+        return res.status(400).json({ error: "Coordinates must be between 0 and 1" });
+      }
+      
+      // Use session participant if not facilitator
+      const user = req.user as User | undefined;
+      if (!user || !["facilitator", "company_admin", "global_admin"].includes(user.role)) {
+        const participantId = req.session?.participantId;
+        if (!participantId) {
+          return res.status(401).json({ error: "No participant session found" });
+        }
+        positionData.participantId = participantId;
+      }
+      
+      const position = await storage.upsertPriorityMatrixPosition(positionData);
+      
+      // Broadcast position update for real-time collaboration
+      if (position.matrixId) {
+        const matrix = await storage.getPriorityMatrix(position.matrixId);
+        if (matrix) {
+          broadcastToSpace(matrix.spaceId, { 
+            type: "matrix_position_updated", 
+            data: position 
+          });
+        }
+      }
+      
+      res.json(position);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Failed to update position:", error);
+      res.status(500).json({ error: "Failed to update matrix position" });
     }
   });
 
