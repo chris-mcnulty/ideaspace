@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, boolean, integer, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, boolean, integer, jsonb, real, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -293,6 +293,100 @@ export const personalizedResults = pgTable("personalized_results", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// IDEAS-CENTRIC ARCHITECTURE: Core idea entities independent of modules
+
+// Ideas: Core idea entity that exists independently of modules
+export const ideas = pgTable("ideas", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  spaceId: varchar("space_id").notNull().references(() => spaces.id),
+  content: text("content").notNull(), // Plain text or HTML content
+  sourceType: text("source_type").notNull().default("participant"), // 'participant', 'facilitator', 'preloaded', 'imported', 'image'
+  assetUrl: text("asset_url"), // For image-based ideas
+  createdByUserId: varchar("created_by_user_id").references(() => users.id), // Nullable: facilitator or preloaded source
+  createdByParticipantId: varchar("created_by_participant_id").references(() => participants.id), // Nullable: participant source
+  manualCategoryId: varchar("manual_category_id").references(() => categories.id), // Category assignment (AI or manual)
+  isManualOverride: boolean("is_manual_override").notNull().default(false), // True when facilitator manually assigns category
+  metadata: jsonb("metadata"), // Flexible storage for source provenance, import details, etc.
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Idea Contributions: Track participant contributions and revisions to ideas
+export const ideaContributions = pgTable("idea_contributions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ideaId: varchar("idea_id").notNull().references(() => ideas.id, { onDelete: "cascade" }),
+  participantId: varchar("participant_id").notNull().references(() => participants.id),
+  contributionType: text("contribution_type").notNull().default("create"), // 'create', 'edit', 'merge'
+  revisionData: jsonb("revision_data"), // Stores old/new content for tracking changes
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Workspace Modules: Configure which modules are enabled for a workspace
+export const workspaceModules = pgTable("workspace_modules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  spaceId: varchar("space_id").notNull().references(() => spaces.id),
+  moduleType: text("module_type").notNull(), // 'ideation', 'pairwise', 'ranking', 'marketplace', 'survey', 'priority_matrix'
+  enabled: boolean("enabled").notNull().default(true),
+  orderIndex: integer("order_index").notNull().default(0), // Determines module sequence in journey
+  config: jsonb("config"), // Module-specific configuration (e.g., axis labels for 2x2, coin budget for marketplace)
+  startsAt: timestamp("starts_at"), // When this module phase starts (optional for async)
+  endsAt: timestamp("ends_at"), // When this module phase ends (optional for async)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  uniqueSpaceModule: unique().on(table.spaceId, table.moduleType),
+}));
+
+// Workspace Module Runs: Track individual executions of a module (for repeatable sessions)
+export const workspaceModuleRuns = pgTable("workspace_module_runs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  moduleId: varchar("module_id").notNull().references(() => workspaceModules.id, { onDelete: "cascade" }),
+  spaceId: varchar("space_id").notNull().references(() => spaces.id),
+  status: text("status").notNull().default("active"), // 'active', 'completed', 'archived'
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+  metadata: jsonb("metadata"), // Run-specific data (participant count, completion stats, etc.)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Priority Matrices (2x2 Grid): Configuration for priority matrix module
+export const priorityMatrices = pgTable("priority_matrices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  spaceId: varchar("space_id").notNull().references(() => spaces.id),
+  moduleRunId: varchar("module_run_id").references(() => workspaceModuleRuns.id, { onDelete: "cascade" }), // Optional: link to specific run
+  xAxisLabel: text("x_axis_label").notNull().default("Impact"), // X-axis label (e.g., "Impact", "Difficulty")
+  yAxisLabel: text("y_axis_label").notNull().default("Effort"), // Y-axis label (e.g., "Effort", "Cost")
+  xMin: text("x_min").notNull().default("Low"), // Min label for X axis
+  xMax: text("x_max").notNull().default("High"), // Max label for X axis
+  yMin: text("y_min").notNull().default("Low"), // Min label for Y axis
+  yMax: text("y_max").notNull().default("High"), // Max label for Y axis
+  snapToGrid: boolean("snap_to_grid").notNull().default(false), // Whether to snap positions to grid
+  gridSize: integer("grid_size").default(4), // Grid divisions (e.g., 4x4 grid)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Priority Matrix Positions: Track idea positions in 2x2 grid
+export const priorityMatrixPositions = pgTable("priority_matrix_positions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  matrixId: varchar("matrix_id").notNull().references(() => priorityMatrices.id, { onDelete: "cascade" }),
+  ideaId: varchar("idea_id").notNull().references(() => ideas.id, { onDelete: "cascade" }),
+  moduleRunId: varchar("module_run_id").references(() => workspaceModuleRuns.id, { onDelete: "cascade" }), // Optional: scope to run
+  xCoord: real("x_coord").notNull(), // Normalized float (0.0 - 1.0)
+  yCoord: real("y_coord").notNull(), // Normalized float (0.0 - 1.0)
+  lockedBy: varchar("locked_by").references(() => participants.id), // For collaborative drag locking
+  lockedAt: timestamp("locked_at"),
+  participantId: varchar("participant_id").references(() => participants.id), // Who positioned this idea
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  // Ensure one position per idea per matrix (or per module run if specified)
+  uniqueMatrixIdea: unique().on(table.matrixId, table.ideaId, table.moduleRunId),
+  // CHECK constraints for coordinate ranges (0.0 - 1.0)
+  checkXCoord: sql`CHECK (x_coord >= 0 AND x_coord <= 1)`,
+  checkYCoord: sql`CHECK (y_coord >= 0 AND y_coord <= 1)`,
+}));
+
 // Insert schemas
 export const insertOrganizationSchema = createInsertSchema(organizations).omit({
   id: true,
@@ -427,6 +521,40 @@ export const insertPersonalizedResultSchema = createInsertSchema(personalizedRes
   updatedAt: true,
 });
 
+export const insertIdeaSchema = createInsertSchema(ideas).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertIdeaContributionSchema = createInsertSchema(ideaContributions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertWorkspaceModuleSchema = createInsertSchema(workspaceModules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertWorkspaceModuleRunSchema = createInsertSchema(workspaceModuleRuns).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertPriorityMatrixSchema = createInsertSchema(priorityMatrices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPriorityMatrixPositionSchema = createInsertSchema(priorityMatrixPositions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type Organization = typeof organizations.$inferSelect;
 export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
@@ -499,3 +627,21 @@ export type InsertCohortResult = z.infer<typeof insertCohortResultSchema>;
 
 export type PersonalizedResult = typeof personalizedResults.$inferSelect;
 export type InsertPersonalizedResult = z.infer<typeof insertPersonalizedResultSchema>;
+
+export type Idea = typeof ideas.$inferSelect;
+export type InsertIdea = z.infer<typeof insertIdeaSchema>;
+
+export type IdeaContribution = typeof ideaContributions.$inferSelect;
+export type InsertIdeaContribution = z.infer<typeof insertIdeaContributionSchema>;
+
+export type WorkspaceModule = typeof workspaceModules.$inferSelect;
+export type InsertWorkspaceModule = z.infer<typeof insertWorkspaceModuleSchema>;
+
+export type WorkspaceModuleRun = typeof workspaceModuleRuns.$inferSelect;
+export type InsertWorkspaceModuleRun = z.infer<typeof insertWorkspaceModuleRunSchema>;
+
+export type PriorityMatrix = typeof priorityMatrices.$inferSelect;
+export type InsertPriorityMatrix = z.infer<typeof insertPriorityMatrixSchema>;
+
+export type PriorityMatrixPosition = typeof priorityMatrixPositions.$inferSelect;
+export type InsertPriorityMatrixPosition = z.infer<typeof insertPriorityMatrixPositionSchema>;

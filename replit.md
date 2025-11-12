@@ -15,7 +15,15 @@ Nebula is a multi-tenant web application designed for structured collaborative e
   - Dark mode support
 
 ## System Architecture
-Nebula is a multi-tenant web application with a clear separation of concerns between frontend and backend.
+Nebula is a multi-tenant web application with an ideas-centric architecture that supports flexible, non-linear module journeys.
+
+### Ideas-Centric Architecture (Nov 2025)
+The platform has been refactored to treat **ideas** as first-class entities independent of any specific module:
+- **Ideas Table**: Core entity storing all ideas (participant-generated, facilitator-entered, preloaded, or imported)
+- **Workspace Modules**: Configurable modules per workspace with enable/disable, ordering, and JSONB config
+- **Module Runs**: Track individual executions of modules for repeatable sessions
+- **Flexible Journeys**: Facilitators can create custom module sequences (e.g., preload ideas → 2x2 grid → marketplace → results)
+- **Smart Results**: Only display data from actually-used modules
 
 ### UI/UX Decisions
 The design system features a dark mode with a primary purple accent, dark blue-black backgrounds, and a custom font (Avenir Next LT Pro). Branding includes Synozur logos and a favicon. The UI incorporates gradient text effects, automatic elevation on hover states, and organization-specific branding in headers. Navigation includes a consistent sticky header with a theme toggle and user profile menu.
@@ -41,6 +49,8 @@ The design system features a dark mode with a primary purple accent, dark blue-b
 - **Facilitator Dashboard**: Central dashboard for managing accessible workspaces.
 - **Admin Panel UI**: Comprehensive CRUD operations for organizations and workspaces.
 - **Workspace Template System**: Snapshot-based template architecture for system and organization-scoped templates.
+- **2x2 Priority Matrix Module**: Collaborative drag-and-drop grid for positioning ideas along configurable axes (e.g., Impact vs. Effort), with real-time WebSocket updates for multi-user collaboration.
+- **Survey Module**: Customizable 1-5 scale rating system for evaluating ideas across multiple questions.
 
 ### System Design Choices
 - **Frontend**: React, Wouter, TanStack Query, Tailwind CSS, Shadcn UI.
