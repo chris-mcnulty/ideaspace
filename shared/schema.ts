@@ -299,14 +299,19 @@ export const personalizedResults = pgTable("personalized_results", {
 export const ideas = pgTable("ideas", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   spaceId: varchar("space_id").notNull().references(() => spaces.id),
-  content: text("content").notNull(), // Plain text or HTML content
-  sourceType: text("source_type").notNull().default("participant"), // 'participant', 'facilitator', 'preloaded', 'imported', 'image'
-  assetUrl: text("asset_url"), // For image-based ideas
+  content: text("content").notNull(), // Rich text (HTML/Markdown) or plain text content
+  contentPlain: text("content_plain"), // Plain text version for search/export (auto-extracted)
+  contentType: text("content_type").notNull().default("text"), // 'text', 'markdown', 'html', 'image', 'mixed'
+  sourceType: text("source_type").notNull().default("participant"), // 'participant', 'facilitator', 'preloaded', 'imported'
+  assetUrl: text("asset_url"), // Primary asset URL (for image ideas or attachments)
+  assetType: text("asset_type"), // 'image/png', 'image/jpeg', 'image/gif', 'image/svg+xml'
+  thumbnailUrl: text("thumbnail_url"), // Thumbnail for performance (auto-generated)
+  assetMetadata: jsonb("asset_metadata"), // { width, height, size, originalName, mimeType }
   createdByUserId: varchar("created_by_user_id").references(() => users.id), // Nullable: facilitator or preloaded source
   createdByParticipantId: varchar("created_by_participant_id").references(() => participants.id), // Nullable: participant source
   manualCategoryId: varchar("manual_category_id").references(() => categories.id), // Category assignment (AI or manual)
   isManualOverride: boolean("is_manual_override").notNull().default(false), // True when facilitator manually assigns category
-  metadata: jsonb("metadata"), // Flexible storage for source provenance, import details, etc.
+  metadata: jsonb("metadata"), // Flexible storage for source provenance, import details, formatting options
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

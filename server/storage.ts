@@ -47,6 +47,18 @@ import {
   type InsertCohortResult,
   type PersonalizedResult,
   type InsertPersonalizedResult,
+  type Idea,
+  type InsertIdea,
+  type IdeaContribution,
+  type InsertIdeaContribution,
+  type WorkspaceModule,
+  type InsertWorkspaceModule,
+  type WorkspaceModuleRun,
+  type InsertWorkspaceModuleRun,
+  type PriorityMatrix,
+  type InsertPriorityMatrix,
+  type PriorityMatrixPosition,
+  type InsertPriorityMatrixPosition,
   organizations,
   users,
   spaces,
@@ -71,6 +83,12 @@ import {
   aiUsageLog,
   cohortResults,
   personalizedResults,
+  ideas,
+  ideaContributions,
+  workspaceModules,
+  workspaceModuleRuns,
+  priorityMatrices,
+  priorityMatrixPositions,
 } from "@shared/schema";
 import { eq, and, desc, or, isNull, gte, lte } from "drizzle-orm";
 
@@ -248,6 +266,45 @@ export interface IStorage {
   createPersonalizedResult(result: InsertPersonalizedResult): Promise<PersonalizedResult>;
   updatePersonalizedResult(id: string, result: Partial<InsertPersonalizedResult>): Promise<PersonalizedResult | undefined>;
   deletePersonalizedResult(id: string): Promise<boolean>;
+
+  // IDEAS-CENTRIC ARCHITECTURE
+
+  // Ideas Management
+  getIdea(id: string): Promise<Idea | undefined>;
+  getIdeasBySpace(spaceId: string): Promise<Idea[]>;
+  getIdeasByCategory(spaceId: string, categoryId: string): Promise<Idea[]>;
+  createIdea(idea: InsertIdea): Promise<Idea>;
+  updateIdea(id: string, idea: Partial<InsertIdea>): Promise<Idea | undefined>;
+  deleteIdea(id: string): Promise<boolean>;
+  bulkCreateIdeas(ideas: InsertIdea[]): Promise<Idea[]>;
+  
+  // Idea Contributions
+  getIdeaContributions(ideaId: string): Promise<IdeaContribution[]>;
+  createIdeaContribution(contribution: InsertIdeaContribution): Promise<IdeaContribution>;
+  
+  // Workspace Modules
+  getWorkspaceModules(spaceId: string): Promise<WorkspaceModule[]>;
+  getWorkspaceModule(id: string): Promise<WorkspaceModule | undefined>;
+  createWorkspaceModule(module: InsertWorkspaceModule): Promise<WorkspaceModule>;
+  updateWorkspaceModule(id: string, module: Partial<InsertWorkspaceModule>): Promise<WorkspaceModule | undefined>;
+  deleteWorkspaceModule(id: string): Promise<boolean>;
+  
+  // Workspace Module Runs
+  getActiveModuleRun(moduleId: string): Promise<WorkspaceModuleRun | undefined>;
+  getModuleRuns(moduleId: string): Promise<WorkspaceModuleRun[]>;
+  createModuleRun(run: InsertWorkspaceModuleRun): Promise<WorkspaceModuleRun>;
+  completeModuleRun(id: string): Promise<WorkspaceModuleRun | undefined>;
+  
+  // Priority Matrices (2x2 Grid)
+  getPriorityMatrix(spaceId: string): Promise<PriorityMatrix | undefined>;
+  createPriorityMatrix(matrix: InsertPriorityMatrix): Promise<PriorityMatrix>;
+  updatePriorityMatrix(id: string, matrix: Partial<InsertPriorityMatrix>): Promise<PriorityMatrix | undefined>;
+  
+  // Priority Matrix Positions
+  getPriorityMatrixPositions(matrixId: string): Promise<PriorityMatrixPosition[]>;
+  upsertPriorityMatrixPosition(position: InsertPriorityMatrixPosition): Promise<PriorityMatrixPosition>;
+  lockPriorityMatrixPosition(id: string, participantId: string): Promise<boolean>;
+  unlockPriorityMatrixPosition(id: string): Promise<boolean>;
 }
 
 export class DbStorage implements IStorage {
@@ -1317,6 +1374,193 @@ export class DbStorage implements IStorage {
 
   async deletePersonalizedResult(id: string): Promise<boolean> {
     const result = await db.delete(personalizedResults).where(eq(personalizedResults.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // IDEAS-CENTRIC ARCHITECTURE IMPLEMENTATION
+
+  // Ideas Management
+  async getIdea(id: string): Promise<Idea | undefined> {
+    const [idea] = await db.select().from(ideas).where(eq(ideas.id, id)).limit(1);
+    return idea;
+  }
+
+  async getIdeasBySpace(spaceId: string): Promise<Idea[]> {
+    return db.select().from(ideas)
+      .where(eq(ideas.spaceId, spaceId))
+      .orderBy(desc(ideas.createdAt));
+  }
+
+  async getIdeasByCategory(spaceId: string, categoryId: string): Promise<Idea[]> {
+    return db.select().from(ideas)
+      .where(and(
+        eq(ideas.spaceId, spaceId),
+        eq(ideas.manualCategoryId, categoryId)
+      ))
+      .orderBy(desc(ideas.createdAt));
+  }
+
+  async createIdea(idea: InsertIdea): Promise<Idea> {
+    const [created] = await db.insert(ideas).values(idea).returning();
+    return created;
+  }
+
+  async updateIdea(id: string, idea: Partial<InsertIdea>): Promise<Idea | undefined> {
+    const [updated] = await db.update(ideas)
+      .set({ ...idea, updatedAt: new Date() })
+      .where(eq(ideas.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteIdea(id: string): Promise<boolean> {
+    const result = await db.delete(ideas).where(eq(ideas.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async bulkCreateIdeas(ideaList: InsertIdea[]): Promise<Idea[]> {
+    if (ideaList.length === 0) return [];
+    return db.insert(ideas).values(ideaList).returning();
+  }
+
+  // Idea Contributions
+  async getIdeaContributions(ideaId: string): Promise<IdeaContribution[]> {
+    return db.select().from(ideaContributions)
+      .where(eq(ideaContributions.ideaId, ideaId))
+      .orderBy(desc(ideaContributions.createdAt));
+  }
+
+  async createIdeaContribution(contribution: InsertIdeaContribution): Promise<IdeaContribution> {
+    const [created] = await db.insert(ideaContributions).values(contribution).returning();
+    return created;
+  }
+
+  // Workspace Modules
+  async getWorkspaceModules(spaceId: string): Promise<WorkspaceModule[]> {
+    return db.select().from(workspaceModules)
+      .where(eq(workspaceModules.spaceId, spaceId))
+      .orderBy(workspaceModules.orderIndex);
+  }
+
+  async getWorkspaceModule(id: string): Promise<WorkspaceModule | undefined> {
+    const [module] = await db.select().from(workspaceModules)
+      .where(eq(workspaceModules.id, id))
+      .limit(1);
+    return module;
+  }
+
+  async createWorkspaceModule(module: InsertWorkspaceModule): Promise<WorkspaceModule> {
+    const [created] = await db.insert(workspaceModules).values(module).returning();
+    return created;
+  }
+
+  async updateWorkspaceModule(id: string, module: Partial<InsertWorkspaceModule>): Promise<WorkspaceModule | undefined> {
+    const [updated] = await db.update(workspaceModules)
+      .set({ ...module, updatedAt: new Date() })
+      .where(eq(workspaceModules.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteWorkspaceModule(id: string): Promise<boolean> {
+    const result = await db.delete(workspaceModules).where(eq(workspaceModules.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Workspace Module Runs
+  async getActiveModuleRun(moduleId: string): Promise<WorkspaceModuleRun | undefined> {
+    const [run] = await db.select().from(workspaceModuleRuns)
+      .where(and(
+        eq(workspaceModuleRuns.moduleId, moduleId),
+        eq(workspaceModuleRuns.status, 'active')
+      ))
+      .orderBy(desc(workspaceModuleRuns.startedAt))
+      .limit(1);
+    return run;
+  }
+
+  async getModuleRuns(moduleId: string): Promise<WorkspaceModuleRun[]> {
+    return db.select().from(workspaceModuleRuns)
+      .where(eq(workspaceModuleRuns.moduleId, moduleId))
+      .orderBy(desc(workspaceModuleRuns.startedAt));
+  }
+
+  async createModuleRun(run: InsertWorkspaceModuleRun): Promise<WorkspaceModuleRun> {
+    const [created] = await db.insert(workspaceModuleRuns).values(run).returning();
+    return created;
+  }
+
+  async completeModuleRun(id: string): Promise<WorkspaceModuleRun | undefined> {
+    const [updated] = await db.update(workspaceModuleRuns)
+      .set({ status: 'completed', completedAt: new Date() })
+      .where(eq(workspaceModuleRuns.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Priority Matrices (2x2 Grid)
+  async getPriorityMatrix(spaceId: string): Promise<PriorityMatrix | undefined> {
+    const [matrix] = await db.select().from(priorityMatrices)
+      .where(eq(priorityMatrices.spaceId, spaceId))
+      .orderBy(desc(priorityMatrices.createdAt))
+      .limit(1);
+    return matrix;
+  }
+
+  async createPriorityMatrix(matrix: InsertPriorityMatrix): Promise<PriorityMatrix> {
+    const [created] = await db.insert(priorityMatrices).values(matrix).returning();
+    return created;
+  }
+
+  async updatePriorityMatrix(id: string, matrix: Partial<InsertPriorityMatrix>): Promise<PriorityMatrix | undefined> {
+    const [updated] = await db.update(priorityMatrices)
+      .set({ ...matrix, updatedAt: new Date() })
+      .where(eq(priorityMatrices.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Priority Matrix Positions
+  async getPriorityMatrixPositions(matrixId: string): Promise<PriorityMatrixPosition[]> {
+    return db.select().from(priorityMatrixPositions)
+      .where(eq(priorityMatrixPositions.matrixId, matrixId));
+  }
+
+  async upsertPriorityMatrixPosition(position: InsertPriorityMatrixPosition): Promise<PriorityMatrixPosition> {
+    // Use proper Drizzle upsert with onConflictDoUpdate
+    const [upsertedPosition] = await db.insert(priorityMatrixPositions)
+      .values(position)
+      .onConflictDoUpdate({
+        target: [
+          priorityMatrixPositions.matrixId,
+          priorityMatrixPositions.ideaId,
+          priorityMatrixPositions.moduleRunId
+        ],
+        set: {
+          xCoord: sql`excluded.x_coord`,
+          yCoord: sql`excluded.y_coord`,
+          lockedBy: sql`excluded.locked_by`,
+          lockedAt: sql`excluded.locked_at`,
+          participantId: sql`excluded.participant_id`,
+          updatedAt: sql`now()`
+        }
+      })
+      .returning();
+    
+    return upsertedPosition;
+  }
+
+  async lockPriorityMatrixPosition(id: string, participantId: string): Promise<boolean> {
+    const result = await db.update(priorityMatrixPositions)
+      .set({ lockedBy: participantId, lockedAt: new Date() })
+      .where(eq(priorityMatrixPositions.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async unlockPriorityMatrixPosition(id: string): Promise<boolean> {
+    const result = await db.update(priorityMatrixPositions)
+      .set({ lockedBy: null, lockedAt: null })
+      .where(eq(priorityMatrixPositions.id, id));
     return result.rowCount ? result.rowCount > 0 : false;
   }
 }
