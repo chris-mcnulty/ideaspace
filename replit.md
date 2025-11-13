@@ -49,9 +49,10 @@ The design system features a dark mode with a primary purple accent, dark blue-b
 - **Facilitator Dashboard**: Central dashboard for managing accessible workspaces.
 - **Admin Panel UI**: Comprehensive CRUD operations for organizations and workspaces.
 - **Workspace Template System**: Snapshot-based template architecture for system and organization-scoped templates.
-- **2x2 Priority Matrix Module**: Collaborative drag-and-drop grid for positioning ideas along configurable axes (e.g., Impact vs. Effort), with real-time WebSocket updates for multi-user collaboration.
-- **Staircase Module**: Diagonal rating grid (0-10 scale) for visual assessment of ideas with drag-and-drop positioning, SVG-based visualization, configurable labels, real-time WebSocket synchronization, and optional score distribution histogram.
+- **2x2 Priority Matrix Module**: Collaborative drag-and-drop grid for positioning ideas along configurable axes (e.g., Impact vs. Effort), with real-time WebSocket updates for multi-user collaboration and facilitator-controlled participant navigation.
+- **Staircase Module**: Diagonal rating grid (0-10 scale) for visual assessment of ideas with drag-and-drop positioning, SVG-based visualization, configurable labels, real-time WebSocket synchronization, optional score distribution histogram, and facilitator-controlled participant navigation.
 - **Survey Module**: Customizable 1-5 scale rating system for evaluating ideas across multiple questions.
+- **Collaborative Module Navigation**: Facilitators can send participants to specific modules (Priority Matrix, Staircase, Survey, Voting, Ranking, Marketplace, Ideation, Results) via "Bring Participants Here" buttons with real-time WebSocket broadcasts and toast notifications.
 
 ### System Design Choices
 - **Frontend**: React, Wouter, TanStack Query, Tailwind CSS, Shadcn UI.
