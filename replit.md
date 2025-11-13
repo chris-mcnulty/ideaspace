@@ -50,6 +50,7 @@ The design system features a dark mode with a primary purple accent, dark blue-b
 - **Admin Panel UI**: Comprehensive CRUD operations for organizations and workspaces.
 - **Workspace Template System**: Snapshot-based template architecture for system and organization-scoped templates.
 - **2x2 Priority Matrix Module**: Collaborative drag-and-drop grid for positioning ideas along configurable axes (e.g., Impact vs. Effort), with real-time WebSocket updates for multi-user collaboration.
+- **Staircase Module**: Diagonal rating grid (0-10 scale) for visual assessment of ideas with drag-and-drop positioning, SVG-based visualization, configurable labels, real-time WebSocket synchronization, and optional score distribution histogram.
 - **Survey Module**: Customizable 1-5 scale rating system for evaluating ideas across multiple questions.
 
 ### System Design Choices
