@@ -98,6 +98,9 @@ export default function ParticipantView() {
             vote: `/o/${params.org}/s/${params.space}/vote`,
             rank: `/o/${params.org}/s/${params.space}/rank`,
             marketplace: `/o/${params.org}/s/${params.space}/marketplace`,
+            survey: `/o/${params.org}/s/${params.space}/survey`,
+            'priority-matrix': `/o/${params.org}/s/${params.space}/priority-matrix`,
+            staircase: `/o/${params.org}/s/${params.space}/staircase`,
             ideate: `/o/${params.org}/s/${params.space}/participate`,
             results: `/o/${params.org}/s/${params.space}/results`,
           };
@@ -105,7 +108,7 @@ export default function ParticipantView() {
           if (phaseRoutes[phase as keyof typeof phaseRoutes]) {
             toast({
               title: "Phase Change",
-              description: `Navigating to ${phase === 'results' ? 'results page' : phase + ' phase'}...`,
+              description: `Navigating to ${phase === 'results' ? 'results page' : phase.replace('-', ' ') + ' phase'}...`,
             });
             navigate(phaseRoutes[phase as keyof typeof phaseRoutes]);
           }

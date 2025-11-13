@@ -1126,10 +1126,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Protected: Navigate all participants to a specific phase
   app.post("/api/spaces/:id/navigate-participants", requireFacilitator, async (req, res) => {
     try {
-      const { phase } = req.body as { phase: "vote" | "rank" | "marketplace" | "ideate" | "results" };
+      const { phase } = req.body as { phase: "vote" | "rank" | "marketplace" | "ideate" | "results" | "priority-matrix" | "staircase" | "survey" };
       
-      if (!phase || !["vote", "rank", "marketplace", "ideate", "results"].includes(phase)) {
-        return res.status(400).json({ error: "Invalid phase. Must be one of: vote, rank, marketplace, ideate, results" });
+      if (!phase || !["vote", "rank", "marketplace", "ideate", "results", "priority-matrix", "staircase", "survey"].includes(phase)) {
+        return res.status(400).json({ error: "Invalid phase. Must be one of: vote, rank, marketplace, ideate, results, priority-matrix, staircase, survey" });
       }
       
       // Automatically enable the phase by setting time windows
@@ -1156,8 +1156,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           updates.marketplaceStartsAt = now;
           updates.marketplaceEndsAt = farFuture;
           break;
+        case "survey":
+          updates.surveyStartsAt = now;
+          updates.surveyEndsAt = farFuture;
+          break;
+        case "priority-matrix":
+        case "staircase":
         case "results":
-          // Results page doesn't need time window updates
+          // These modules don't need time window updates
           // Just broadcast the navigation
           break;
       }

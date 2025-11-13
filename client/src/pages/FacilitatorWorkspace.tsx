@@ -537,7 +537,7 @@ export default function FacilitatorWorkspace() {
 
   // Navigate participants mutation
   const navigateParticipantsMutation = useMutation({
-    mutationFn: async (phase: "vote" | "rank" | "marketplace" | "ideate" | "results") => {
+    mutationFn: async (phase: "vote" | "rank" | "marketplace" | "ideate" | "results" | "priority-matrix" | "staircase" | "survey") => {
       const response = await apiRequest("POST", `/api/spaces/${params.space}/navigate-participants`, {
         phase,
       });
@@ -1185,7 +1185,7 @@ export default function FacilitatorWorkspace() {
       </section>
 
       <main className="container mx-auto px-6 py-8">
-        <Tabs defaultValue="notes" className="w-full">
+        <Tabs defaultValue="ideas" className="w-full">
           <TabsList>
             <TabsTrigger value="ideas" data-testid="tab-ideas">
               <FolderPlus className="mr-2 h-4 w-4" />
@@ -1239,12 +1239,46 @@ export default function FacilitatorWorkspace() {
           </TabsContent>
 
           <TabsContent value="priority-matrix" className="mt-6">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">2x2 Priority Matrix</h2>
+                <p className="text-muted-foreground mt-1">
+                  Collaborative drag-and-drop grid for positioning ideas
+                </p>
+              </div>
+              <Button
+                variant="default"
+                onClick={() => navigateParticipantsMutation.mutate("priority-matrix")}
+                disabled={navigateParticipantsMutation.isPending}
+                data-testid="button-navigate-to-priority-matrix"
+              >
+                <Users className="mr-2 h-4 w-4" />
+                Bring Participants Here
+              </Button>
+            </div>
             <PriorityMatrix 
               spaceId={space.id}
             />
           </TabsContent>
 
           <TabsContent value="staircase" className="mt-6">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">Staircase Rating</h2>
+                <p className="text-muted-foreground mt-1">
+                  Diagonal 0-10 scale for visual idea assessment
+                </p>
+              </div>
+              <Button
+                variant="default"
+                onClick={() => navigateParticipantsMutation.mutate("staircase")}
+                disabled={navigateParticipantsMutation.isPending}
+                data-testid="button-navigate-to-staircase"
+              >
+                <Users className="mr-2 h-4 w-4" />
+                Bring Participants Here
+              </Button>
+            </div>
             <StaircaseModule 
               spaceId={space.id}
             />
