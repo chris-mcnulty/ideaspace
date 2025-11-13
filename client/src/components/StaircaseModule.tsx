@@ -121,9 +121,11 @@ export default function StaircaseModule({
     if (typeof window === 'undefined' || !spaceId) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}`);
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws?spaceId=${spaceId}`);
     
     ws.onopen = () => {
+      console.log('[StaircaseModule] WebSocket connected');
+      // Send join message to register this connection with the space
       ws.send(JSON.stringify({ type: 'join', data: { spaceId } }));
     };
 
@@ -135,8 +137,26 @@ export default function StaircaseModule({
           queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/staircase-positions`] });
         }
       } catch (error) {
-        console.error('WebSocket message error:', error);
+        console.error('[StaircaseModule] WebSocket message error:', error);
+        toast({
+          title: 'Real-time Update Error',
+          description: 'Failed to process real-time update. Please refresh the page.',
+          variant: 'destructive',
+        });
       }
+    };
+
+    ws.onerror = (error) => {
+      console.error('[StaircaseModule] WebSocket error:', error);
+      toast({
+        title: 'Connection Error',
+        description: 'Real-time collaboration may not be working. Changes will still be saved.',
+        variant: 'destructive',
+      });
+    };
+
+    ws.onclose = () => {
+      console.log('[StaircaseModule] WebSocket disconnected');
     };
 
     setWsConnection(ws);
@@ -144,7 +164,7 @@ export default function StaircaseModule({
     return () => {
       ws.close();
     };
-  }, [spaceId]);
+  }, [spaceId, toast]);
 
   // Calculate staircase dimensions and positions
   const canvasWidth = 800;
@@ -163,8 +183,9 @@ export default function StaircaseModule({
     positionsByScore.get(score)?.push(pos);
   });
 
-  // Get category color
-  const getCategoryColor = (categoryId?: string | null) => {
+  // Get category color with fallback to AI category
+  const getCategoryColor = (manualCategoryId?: string | null, aiCategoryId?: string | null) => {
+    const categoryId = manualCategoryId || aiCategoryId;
     if (!categoryId) return 'hsl(var(--muted))';
     const category = categories.find(c => c.id === categoryId);
     return category?.color || 'hsl(var(--muted))';
@@ -373,10 +394,10 @@ export default function StaircaseModule({
                   
                   return (
                     <g
-                      key={position.id}
+                      key={position?.id || idea.id}
                       transform={`translate(${x}, ${isDragging ? dragY : y})`}
-                      onPointerDown={(e) => handleDragStart(e, position)}
-                      className={`cursor-${isReadOnly ? 'default' : 'grab'} ${isDragging ? 'opacity-70' : ''}`}
+                      onPointerDown={(e) => position ? handleDragStart(e, position) : undefined}
+                      className={`cursor-${isReadOnly || !position ? 'default' : 'grab'} ${isDragging ? 'opacity-70' : ''}`}
                       data-testid={`staircase-idea-${idea.id}`}
                     >
                       <rect
@@ -385,7 +406,7 @@ export default function StaircaseModule({
                         width={60}
                         height={30}
                         rx={4}
-                        fill={getCategoryColor(idea.manualCategoryId || idea.aiCategoryId)}
+                        fill={getCategoryColor(idea.manualCategoryId, idea.aiCategoryId)}
                         stroke="hsl(var(--border))"
                         strokeWidth="1"
                       />
@@ -396,7 +417,7 @@ export default function StaircaseModule({
                         className="fill-foreground text-xs font-medium"
                         style={{ pointerEvents: 'none' }}
                       >
-                        {idea.title.substring(0, 8)}...
+                        {(idea.content || '').substring(0, 8)}...
                       </text>
                     </g>
                   );
@@ -416,18 +437,21 @@ export default function StaircaseModule({
                 <CardContent className="space-y-2">
                   {Array.from(scoreDistribution.entries())
                     .sort((a, b) => b[0] - a[0])
-                    .map(([score, count]) => (
-                      <div key={score} className="flex items-center gap-2">
-                        <span className="text-sm w-12 text-right">{score}</span>
-                        <div className="flex-1 bg-muted rounded-full h-4 relative">
-                          <div
-                            className="absolute inset-y-0 left-0 bg-primary rounded-full transition-all"
-                            style={{ width: `${(count / Math.max(...scoreDistribution.values())) * 100}%` }}
-                          />
+                    .map(([score, count]) => {
+                      const maxCount = Math.max(...Array.from(scoreDistribution.values()));
+                      return (
+                        <div key={score} className="flex items-center gap-2">
+                          <span className="text-sm w-12 text-right">{score}</span>
+                          <div className="flex-1 bg-muted rounded-full h-4 relative">
+                            <div
+                              className="absolute inset-y-0 left-0 bg-primary rounded-full transition-all"
+                              style={{ width: `${(count / maxCount) * 100}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-muted-foreground w-8">{count}</span>
                         </div>
-                        <span className="text-xs text-muted-foreground w-8">{count}</span>
-                      </div>
-                    ))}
+                      );
+                    })}
                 </CardContent>
               </Card>
             )}

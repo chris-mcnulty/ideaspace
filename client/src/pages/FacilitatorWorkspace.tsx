@@ -60,6 +60,7 @@ import {
   FolderPlus,
   Settings,
   Grid3x3,
+  TrendingUp,
 } from "lucide-react";
 import type { Organization, Space, Note, Participant, Category, User, Idea } from "@shared/schema";
 import { Leaderboard } from "@/components/Leaderboard";
@@ -1240,7 +1241,6 @@ export default function FacilitatorWorkspace() {
           <TabsContent value="priority-matrix" className="mt-6">
             <PriorityMatrix 
               spaceId={space.id}
-              ideas={ideas} 
             />
           </TabsContent>
 
