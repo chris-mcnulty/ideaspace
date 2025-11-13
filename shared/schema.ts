@@ -326,14 +326,79 @@ export const ideaContributions = pgTable("idea_contributions", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Module type and config definitions
+export const MODULE_TYPES = [
+  "ideation",
+  "pairwise-voting", 
+  "stack-ranking",
+  "marketplace",
+  "priority-matrix",
+  "survey"
+] as const;
+export type ModuleType = typeof MODULE_TYPES[number];
+
+// Module config schemas
+const ideationConfigSchema = z.object({
+  maxIdeasPerParticipant: z.number().int().min(1).max(100).default(10),
+  allowAnonymous: z.boolean().default(false),
+  requireCategory: z.boolean().default(false)
+});
+
+const pairwiseVotingConfigSchema = z.object({
+  roundsPerParticipant: z.number().int().min(1).max(100).default(20),
+  showProgress: z.boolean().default(true),
+  allowSkip: z.boolean().default(true)
+});
+
+const stackRankingConfigSchema = z.object({
+  maxRankings: z.number().int().min(1).max(50).default(10),
+  showScores: z.boolean().default(false),
+  allowTies: z.boolean().default(false)
+});
+
+const marketplaceConfigSchema = z.object({
+  coinsPerParticipant: z.number().int().min(1).max(1000).default(100),
+  maxCoinsPerIdea: z.number().int().min(1).max(500).default(50),
+  showLeaderboard: z.boolean().default(true)
+});
+
+const priorityMatrixConfigSchema = z.object({
+  xAxisLabel: z.string().default("Impact"),
+  yAxisLabel: z.string().default("Effort"),
+  collaborative: z.boolean().default(true)
+});
+
+const surveyConfigSchema = z.object({
+  questionsPerIdea: z.number().int().min(1).max(10).default(3),
+  randomizeOrder: z.boolean().default(false),
+  showAverage: z.boolean().default(true)
+});
+
+export const moduleConfigSchemas = {
+  "ideation": ideationConfigSchema,
+  "pairwise-voting": pairwiseVotingConfigSchema,
+  "stack-ranking": stackRankingConfigSchema,
+  "marketplace": marketplaceConfigSchema,
+  "priority-matrix": priorityMatrixConfigSchema,
+  "survey": surveyConfigSchema
+} satisfies Record<ModuleType, z.ZodTypeAny>;
+
+export type ModuleConfigMap = {
+  [K in ModuleType]: z.infer<typeof moduleConfigSchemas[K]>
+};
+
+export type ModuleConfigUnion = {
+  [K in ModuleType]: { moduleType: K; config: ModuleConfigMap[K] }
+}[ModuleType];
+
 // Workspace Modules: Configure which modules are enabled for a workspace
 export const workspaceModules = pgTable("workspace_modules", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   spaceId: varchar("space_id").notNull().references(() => spaces.id),
-  moduleType: text("module_type").notNull(), // 'ideation', 'pairwise', 'ranking', 'marketplace', 'survey', 'priority_matrix'
+  moduleType: text("module_type").notNull().$type<ModuleType>(),
   enabled: boolean("enabled").notNull().default(true),
   orderIndex: integer("order_index").notNull().default(0), // Determines module sequence in journey
-  config: jsonb("config"), // Module-specific configuration (e.g., axis labels for 2x2, coin budget for marketplace)
+  config: jsonb("config").notNull().default(sql`'{}'::jsonb`).$type<ModuleConfigMap[ModuleType]>(), // Typed module-specific configuration
   startsAt: timestamp("starts_at"), // When this module phase starts (optional for async)
   endsAt: timestamp("ends_at"), // When this module phase ends (optional for async)
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -537,11 +602,49 @@ export const insertIdeaContributionSchema = createInsertSchema(ideaContributions
   createdAt: true,
 });
 
-export const insertWorkspaceModuleSchema = createInsertSchema(workspaceModules).omit({
+// Base insert schema
+const baseInsertWorkspaceModuleSchema = createInsertSchema(workspaceModules, {
+  config: z.any() // Will be overridden by discriminated union
+}).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
+
+// Create discriminated union for module types with their configs
+// We need to create a proper tuple type for the discriminated union
+const moduleInsertVariants = [
+  z.object({
+    moduleType: z.literal("ideation" as const),
+    config: moduleConfigSchemas["ideation"]
+  }),
+  z.object({
+    moduleType: z.literal("pairwise-voting" as const),
+    config: moduleConfigSchemas["pairwise-voting"]
+  }),
+  z.object({
+    moduleType: z.literal("stack-ranking" as const),
+    config: moduleConfigSchemas["stack-ranking"]
+  }),
+  z.object({
+    moduleType: z.literal("marketplace" as const),
+    config: moduleConfigSchemas["marketplace"]
+  }),
+  z.object({
+    moduleType: z.literal("priority-matrix" as const),
+    config: moduleConfigSchemas["priority-matrix"]
+  }),
+  z.object({
+    moduleType: z.literal("survey" as const),
+    config: moduleConfigSchemas["survey"]
+  })
+] as const;
+
+// Final insert schema with discriminated union
+export const insertWorkspaceModuleSchema = z.intersection(
+  baseInsertWorkspaceModuleSchema.omit({ config: true, moduleType: true }),
+  z.discriminatedUnion("moduleType", moduleInsertVariants)
+);
 
 export const insertWorkspaceModuleRunSchema = createInsertSchema(workspaceModuleRuns).omit({
   id: true,

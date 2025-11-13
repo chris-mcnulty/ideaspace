@@ -47,20 +47,14 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import type { WorkspaceModule } from '@shared/schema';
+import type { WorkspaceModule, ModuleType, ModuleConfigMap } from '@shared/schema';
 
 interface ModuleConfigurationProps {
   spaceId: string;
 }
 
 // Module metadata with icons and descriptions
-const MODULE_METADATA: Record<string, {
-  name: string;
-  icon: React.ComponentType<any>;
-  description: string;
-  configurable: boolean;
-  config?: Record<string, any>;
-}> = {
+const MODULE_METADATA = {
   'ideation': {
     name: 'Ideation',
     icon: FileText,
@@ -127,7 +121,13 @@ const MODULE_METADATA: Record<string, {
       showAverage: true
     }
   }
-};
+} as const satisfies Record<ModuleType, {
+  name: string;
+  icon: React.ComponentType<any>;
+  description: string;
+  configurable: boolean;
+  config: any;  // Will be properly typed via inference
+}>;
 
 // Sortable module item component
 function SortableModuleItem({ 
@@ -248,7 +248,7 @@ function SortableModuleItem({
 export default function ModuleConfiguration({ spaceId }: ModuleConfigurationProps) {
   const { toast } = useToast();
   const [configuringModule, setConfiguringModule] = useState<WorkspaceModule | null>(null);
-  const [moduleConfig, setModuleConfig] = useState<Record<string, any>>({});
+  const [moduleConfig, setModuleConfig] = useState<any>({});
   const [hasChanges, setHasChanges] = useState(false);
   
   const sensors = useSensors(
@@ -352,14 +352,14 @@ export default function ModuleConfiguration({ spaceId }: ModuleConfigurationProp
   };
   
   // Add missing modules
-  const handleAddMissingModule = (moduleId: string) => {
+  const handleAddMissingModule = (moduleType: ModuleType) => {
     createModuleMutation.mutate({
       spaceId,
-      moduleType: moduleId,  // Map the moduleId to moduleType for the API
+      moduleType: moduleType,
       enabled: false,
       orderIndex: modules.length,
-      config: MODULE_METADATA[moduleId]?.config || {}
-    });
+      config: MODULE_METADATA[moduleType].config
+    } as any);
   };
   
   // Check for missing modules
@@ -500,7 +500,7 @@ export default function ModuleConfiguration({ spaceId }: ModuleConfigurationProp
                             
                             <Button
                               size="sm"
-                              onClick={() => handleAddMissingModule(moduleId)}
+                              onClick={() => handleAddMissingModule(moduleId as ModuleType)}
                               data-testid={`button-add-${moduleId}`}
                             >
                               Add to Workspace
