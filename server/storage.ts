@@ -59,6 +59,10 @@ import {
   type InsertPriorityMatrix,
   type PriorityMatrixPosition,
   type InsertPriorityMatrixPosition,
+  type StaircaseModule,
+  type InsertStaircaseModule,
+  type StaircasePosition,
+  type InsertStaircasePosition,
   organizations,
   users,
   spaces,
@@ -89,8 +93,10 @@ import {
   workspaceModuleRuns,
   priorityMatrices,
   priorityMatrixPositions,
+  staircaseModules,
+  staircasePositions,
 } from "@shared/schema";
-import { eq, and, desc, or, isNull, gte, lte } from "drizzle-orm";
+import { eq, and, desc, or, isNull, gte, lte, sql } from "drizzle-orm";
 
 export interface IStorage {
   // Organizations
@@ -305,6 +311,17 @@ export interface IStorage {
   upsertPriorityMatrixPosition(position: InsertPriorityMatrixPosition): Promise<PriorityMatrixPosition>;
   lockPriorityMatrixPosition(id: string, participantId: string): Promise<boolean>;
   unlockPriorityMatrixPosition(id: string): Promise<boolean>;
+
+  // Staircase Modules
+  getStaircaseModule(spaceId: string): Promise<StaircaseModule | undefined>;
+  createStaircaseModule(module: InsertStaircaseModule): Promise<StaircaseModule>;
+  updateStaircaseModule(id: string, module: Partial<InsertStaircaseModule>): Promise<StaircaseModule | undefined>;
+  
+  // Staircase Positions
+  getStaircasePositions(staircaseId: string): Promise<StaircasePosition[]>;
+  upsertStaircasePosition(position: InsertStaircasePosition): Promise<StaircasePosition>;
+  lockStaircasePosition(id: string, participantId: string): Promise<boolean>;
+  unlockStaircasePosition(id: string): Promise<boolean>;
 }
 
 export class DbStorage implements IStorage {
@@ -1561,6 +1578,79 @@ export class DbStorage implements IStorage {
     const result = await db.update(priorityMatrixPositions)
       .set({ lockedBy: null, lockedAt: null })
       .where(eq(priorityMatrixPositions.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Staircase Modules
+  async getStaircaseModule(spaceId: string): Promise<StaircaseModule | undefined> {
+    const [module] = await db.select().from(staircaseModules)
+      .where(eq(staircaseModules.spaceId, spaceId))
+      .orderBy(desc(staircaseModules.createdAt))
+      .limit(1);
+    return module;
+  }
+
+  async createStaircaseModule(module: InsertStaircaseModule): Promise<StaircaseModule> {
+    const [created] = await db.insert(staircaseModules).values(module).returning();
+    return created;
+  }
+
+  async updateStaircaseModule(id: string, module: Partial<InsertStaircaseModule>): Promise<StaircaseModule | undefined> {
+    const [updated] = await db.update(staircaseModules)
+      .set({ ...module, updatedAt: new Date() })
+      .where(eq(staircaseModules.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Staircase Positions
+  async getStaircasePositions(staircaseId: string): Promise<StaircasePosition[]> {
+    return db.select().from(staircasePositions)
+      .where(eq(staircasePositions.staircaseId, staircaseId))
+      .orderBy(staircasePositions.score);
+  }
+
+  async upsertStaircasePosition(position: InsertStaircasePosition): Promise<StaircasePosition> {
+    // Build update set with only defined values
+    const updateSet: any = {
+      score: position.score,
+    };
+    
+    if (position.slotOffset !== undefined) {
+      updateSet.slotOffset = position.slotOffset;
+    }
+    
+    if (position.participantId !== undefined) {
+      updateSet.participantId = position.participantId;
+    }
+    
+    // Use proper Drizzle upsert with onConflictDoUpdate
+    const [upsertedPosition] = await db.insert(staircasePositions)
+      .values(position)
+      .onConflictDoUpdate({
+        target: [
+          staircasePositions.staircaseId,
+          staircasePositions.ideaId,
+          staircasePositions.moduleRunId,
+        ],
+        set: updateSet,
+      })
+      .returning();
+
+    return upsertedPosition;
+  }
+
+  async lockStaircasePosition(id: string, participantId: string): Promise<boolean> {
+    const result = await db.update(staircasePositions)
+      .set({ lockedBy: participantId, lockedAt: new Date() })
+      .where(eq(staircasePositions.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async unlockStaircasePosition(id: string): Promise<boolean> {
+    const result = await db.update(staircasePositions)
+      .set({ lockedBy: null, lockedAt: null })
+      .where(eq(staircasePositions.id, id));
     return result.rowCount ? result.rowCount > 0 : false;
   }
 }

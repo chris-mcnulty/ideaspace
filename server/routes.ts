@@ -5,7 +5,7 @@ import passport from "passport";
 import multer from "multer";
 import { storage } from "./storage";
 import { db } from "./db";
-import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, type Space, organizations, users, companyAdmins, knowledgeBaseDocuments, workspaceTemplates, aiUsageLog, insertIdeaSchema, insertWorkspaceModuleSchema, insertWorkspaceModuleRunSchema, insertPriorityMatrixSchema, insertPriorityMatrixPositionSchema } from "@shared/schema";
+import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, type Space, organizations, users, companyAdmins, knowledgeBaseDocuments, workspaceTemplates, aiUsageLog, insertIdeaSchema, insertWorkspaceModuleSchema, insertWorkspaceModuleRunSchema, insertPriorityMatrixSchema, insertPriorityMatrixPositionSchema, insertStaircaseModuleSchema, insertStaircasePositionSchema } from "@shared/schema";
 import { uploadImage, validateImageFile, cleanupTempFile } from "./middleware/uploadMiddleware";
 import { processUploadedImage } from "./utils/contentUtils";
 import { z } from "zod";
@@ -2943,6 +2943,206 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error("Failed to update position:", error);
       res.status(500).json({ error: "Failed to update matrix position" });
+    }
+  });
+
+  // ============================================
+  // Staircase Module API Routes
+  // ============================================
+  
+  // Get staircase configuration
+  app.get("/api/spaces/:spaceId/staircase", createWorkspaceAccessMiddleware({}), async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      
+      const staircase = await storage.getStaircaseModule(spaceId);
+      if (!staircase) {
+        // Return default configuration if none exists
+        return res.json({
+          minScore: 0,
+          maxScore: 10,
+          stepCount: 11,
+          allowDecimals: false,
+          minLabel: "Lowest",
+          maxLabel: "Highest",
+          showDistribution: true
+        });
+      }
+      
+      res.json(staircase);
+    } catch (error) {
+      console.error("Failed to fetch staircase config:", error);
+      res.status(500).json({ error: "Failed to fetch staircase configuration" });
+    }
+  });
+  
+  // Create or update staircase configuration
+  app.put("/api/spaces/:spaceId/staircase", requireFacilitator, async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      
+      const staircaseData = insertStaircaseModuleSchema.parse({
+        ...req.body,
+        spaceId
+      });
+      
+      // Check if staircase already exists
+      const existing = await storage.getStaircaseModule(spaceId);
+      
+      let staircase;
+      if (existing) {
+        staircase = await storage.updateStaircaseModule(existing.id, staircaseData);
+      } else {
+        staircase = await storage.createStaircaseModule(staircaseData);
+      }
+      
+      res.json(staircase);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Failed to update staircase config:", error);
+      res.status(500).json({ error: "Failed to update staircase configuration" });
+    }
+  });
+  
+  // Get all staircase positions
+  app.get("/api/spaces/:spaceId/staircase-positions", createWorkspaceAccessMiddleware({}), async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      
+      const staircase = await storage.getStaircaseModule(spaceId);
+      if (!staircase) {
+        return res.json([]);
+      }
+      
+      const positions = await storage.getStaircasePositions(staircase.id);
+      res.json(positions);
+    } catch (error) {
+      console.error("Failed to fetch staircase positions:", error);
+      res.status(500).json({ error: "Failed to fetch staircase positions" });
+    }
+  });
+  
+  // Update idea position on staircase (upsert)
+  app.post("/api/spaces/:spaceId/staircase-positions", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      
+      // Get staircase for this workspace
+      const staircase = await storage.getStaircaseModule(spaceId);
+      if (!staircase) {
+        return res.status(404).json({ error: "Staircase module not configured for this workspace" });
+      }
+      
+      const positionData = insertStaircasePositionSchema.parse({
+        ...req.body,
+        staircaseId: staircase.id
+      });
+      
+      // Validate score is within configured bounds
+      if (positionData.score < staircase.minScore || positionData.score > staircase.maxScore) {
+        return res.status(400).json({ 
+          error: `Score must be between ${staircase.minScore} and ${staircase.maxScore}` 
+        });
+      }
+      
+      // Use session participant if not facilitator
+      const user = req.user as User | undefined;
+      if (!user || !["facilitator", "company_admin", "global_admin"].includes(user.role)) {
+        const participantId = req.session?.participantId;
+        if (!participantId) {
+          return res.status(401).json({ error: "No participant session found" });
+        }
+        positionData.participantId = participantId;
+      }
+      
+      const position = await storage.upsertStaircasePosition(positionData);
+      
+      // Broadcast position update for real-time collaboration
+      broadcastToSpace(spaceId, { 
+        type: "staircase_position_updated", 
+        data: position 
+      });
+      
+      res.json(position);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Failed to update staircase position:", error);
+      res.status(500).json({ error: "Failed to update staircase position" });
+    }
+  });
+  
+  // Lock staircase position for dragging
+  app.patch("/api/spaces/:spaceId/staircase-positions/:id/lock", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      
+      const { id } = req.params;
+      const participantId = req.session?.participantId || req.body.participantId;
+      
+      if (!participantId) {
+        return res.status(401).json({ error: "No participant session found" });
+      }
+      
+      const success = await storage.lockStaircasePosition(id, participantId);
+      
+      if (success) {
+        // Broadcast lock update
+        broadcastToSpace(spaceId, {
+          type: "staircase_position_locked",
+          data: { positionId: id, lockedBy: participantId }
+        });
+      }
+      
+      res.json({ success });
+    } catch (error) {
+      console.error("Failed to lock position:", error);
+      res.status(500).json({ error: "Failed to lock position" });
+    }
+  });
+  
+  // Unlock staircase position
+  app.patch("/api/spaces/:spaceId/staircase-positions/:id/unlock", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      
+      const { id } = req.params;
+      
+      const success = await storage.unlockStaircasePosition(id);
+      
+      if (success) {
+        // Broadcast unlock update
+        broadcastToSpace(spaceId, {
+          type: "staircase_position_unlocked",
+          data: { positionId: id }
+        });
+      }
+      
+      res.json({ success });
+    } catch (error) {
+      console.error("Failed to unlock position:", error);
+      res.status(500).json({ error: "Failed to unlock position" });
     }
   });
 

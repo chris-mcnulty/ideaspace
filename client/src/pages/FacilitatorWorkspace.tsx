@@ -71,6 +71,7 @@ import { generateCohortResultsPDF } from "@/lib/pdfGenerator";
 import IdeasHub from "@/components/IdeasHub";
 import ModuleConfiguration from "@/components/ModuleConfiguration";
 import PriorityMatrix from "@/components/PriorityMatrix";
+import StaircaseModule from "@/components/StaircaseModule";
 
 // Comprehensive Results Table Component
 function ComprehensiveResultsTable({
@@ -1193,6 +1194,10 @@ export default function FacilitatorWorkspace() {
               <Grid3x3 className="mr-2 h-4 w-4" />
               Priority Matrix
             </TabsTrigger>
+            <TabsTrigger value="staircase" data-testid="tab-staircase">
+              <TrendingUp className="mr-2 h-4 w-4" />
+              Staircase
+            </TabsTrigger>
             <TabsTrigger value="modules" data-testid="tab-modules">
               <Settings className="mr-2 h-4 w-4" />
               Modules
@@ -1236,6 +1241,12 @@ export default function FacilitatorWorkspace() {
             <PriorityMatrix 
               spaceId={space.id}
               ideas={ideas} 
+            />
+          </TabsContent>
+
+          <TabsContent value="staircase" className="mt-6">
+            <StaircaseModule 
+              spaceId={space.id}
             />
           </TabsContent>
 

@@ -333,7 +333,8 @@ export const MODULE_TYPES = [
   "stack-ranking",
   "marketplace",
   "priority-matrix",
-  "survey"
+  "survey",
+  "staircase"
 ] as const;
 export type ModuleType = typeof MODULE_TYPES[number];
 
@@ -374,13 +375,23 @@ const surveyConfigSchema = z.object({
   showAverage: z.boolean().default(true)
 });
 
+const staircaseConfigSchema = z.object({
+  minLabel: z.string().default("Lowest"),
+  maxLabel: z.string().default("Highest"),
+  stepCount: z.number().int().min(5).max(21).default(11), // Default 0-10 = 11 steps
+  allowDecimals: z.boolean().default(false),
+  collaborative: z.boolean().default(true),
+  showDistribution: z.boolean().default(true)
+});
+
 export const moduleConfigSchemas = {
   "ideation": ideationConfigSchema,
   "pairwise-voting": pairwiseVotingConfigSchema,
   "stack-ranking": stackRankingConfigSchema,
   "marketplace": marketplaceConfigSchema,
   "priority-matrix": priorityMatrixConfigSchema,
-  "survey": surveyConfigSchema
+  "survey": surveyConfigSchema,
+  "staircase": staircaseConfigSchema
 } satisfies Record<ModuleType, z.ZodTypeAny>;
 
 export type ModuleConfigMap = {
@@ -455,6 +466,40 @@ export const priorityMatrixPositions = pgTable("priority_matrix_positions", {
   // CHECK constraints for coordinate ranges (0.0 - 1.0)
   checkXCoord: sql`CHECK (x_coord >= 0 AND x_coord <= 1)`,
   checkYCoord: sql`CHECK (y_coord >= 0 AND y_coord <= 1)`,
+}));
+
+// Staircase Modules: Configuration for staircase rating module
+export const staircaseModules = pgTable("staircase_modules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  spaceId: varchar("space_id").notNull().references(() => spaces.id),
+  moduleRunId: varchar("module_run_id").references(() => workspaceModuleRuns.id, { onDelete: "cascade" }),
+  minScore: real("min_score").notNull().default(0), // Minimum score (e.g., 0)
+  maxScore: real("max_score").notNull().default(10), // Maximum score (e.g., 10)
+  stepCount: integer("step_count").notNull().default(11), // Number of steps (11 for 0-10 scale)
+  allowDecimals: boolean("allow_decimals").notNull().default(false),
+  minLabel: text("min_label").notNull().default("Lowest"),
+  maxLabel: text("max_label").notNull().default("Highest"),
+  showDistribution: boolean("show_distribution").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Staircase Positions: Track idea positions on the staircase
+export const staircasePositions = pgTable("staircase_positions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  staircaseId: varchar("staircase_id").notNull().references(() => staircaseModules.id, { onDelete: "cascade" }),
+  ideaId: varchar("idea_id").notNull().references(() => ideas.id, { onDelete: "cascade" }),
+  moduleRunId: varchar("module_run_id").references(() => workspaceModuleRuns.id, { onDelete: "cascade" }),
+  participantId: varchar("participant_id").references(() => participants.id),
+  score: real("score").notNull(), // Score value (e.g., 0.0 - 10.0)
+  slotOffset: integer("slot_offset").default(0), // For handling multiple ideas at same score
+  lockedBy: varchar("locked_by").references(() => participants.id),
+  lockedAt: timestamp("locked_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  // Ensure one position per idea per staircase (or per module run)
+  uniqueStaircaseIdea: unique().on(table.staircaseId, table.ideaId, table.moduleRunId),
 }));
 
 // Insert schemas
@@ -637,6 +682,10 @@ const moduleInsertVariants = [
   z.object({
     moduleType: z.literal("survey" as const),
     config: moduleConfigSchemas["survey"]
+  }),
+  z.object({
+    moduleType: z.literal("staircase" as const),
+    config: moduleConfigSchemas["staircase"]
   })
 ] as const;
 
@@ -658,6 +707,18 @@ export const insertPriorityMatrixSchema = createInsertSchema(priorityMatrices).o
 });
 
 export const insertPriorityMatrixPositionSchema = createInsertSchema(priorityMatrixPositions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertStaircaseModuleSchema = createInsertSchema(staircaseModules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertStaircasePositionSchema = createInsertSchema(staircasePositions).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -753,3 +814,9 @@ export type InsertPriorityMatrix = z.infer<typeof insertPriorityMatrixSchema>;
 
 export type PriorityMatrixPosition = typeof priorityMatrixPositions.$inferSelect;
 export type InsertPriorityMatrixPosition = z.infer<typeof insertPriorityMatrixPositionSchema>;
+
+export type StaircaseModule = typeof staircaseModules.$inferSelect;
+export type InsertStaircaseModule = z.infer<typeof insertStaircaseModuleSchema>;
+
+export type StaircasePosition = typeof staircasePositions.$inferSelect;
+export type InsertStaircasePosition = z.infer<typeof insertStaircasePositionSchema>;
