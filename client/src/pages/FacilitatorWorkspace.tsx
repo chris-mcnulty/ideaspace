@@ -59,8 +59,9 @@ import {
   ClipboardList,
   FolderPlus,
   Settings,
+  Grid3x3,
 } from "lucide-react";
-import type { Organization, Space, Note, Participant, Category, User } from "@shared/schema";
+import type { Organization, Space, Note, Participant, Category, User, Idea } from "@shared/schema";
 import { Leaderboard } from "@/components/Leaderboard";
 import { KnowledgeBaseManager } from "@/components/KnowledgeBaseManager";
 import { ShareLinksDialog } from "@/components/ShareLinksDialog";
@@ -69,6 +70,7 @@ import { SurveyResultsGrid } from "@/components/SurveyResultsGrid";
 import { generateCohortResultsPDF } from "@/lib/pdfGenerator";
 import IdeasHub from "@/components/IdeasHub";
 import ModuleConfiguration from "@/components/ModuleConfiguration";
+import PriorityMatrix from "@/components/PriorityMatrix";
 
 // Comprehensive Results Table Component
 function ComprehensiveResultsTable({
@@ -380,6 +382,12 @@ export default function FacilitatorWorkspace() {
   // Fetch notes
   const { data: notes = [], isLoading: notesLoading } = useQuery<Note[]>({
     queryKey: [`/api/spaces/${params.space}/notes`],
+    enabled: !!params.space,
+  });
+
+  // Fetch ideas
+  const { data: ideas = [] } = useQuery<Idea[]>({
+    queryKey: [`/api/spaces/${params.space}/ideas`],
     enabled: !!params.space,
   });
 
@@ -1181,6 +1189,10 @@ export default function FacilitatorWorkspace() {
               <FolderPlus className="mr-2 h-4 w-4" />
               Ideas Hub
             </TabsTrigger>
+            <TabsTrigger value="priority-matrix" data-testid="tab-priority-matrix">
+              <Grid3x3 className="mr-2 h-4 w-4" />
+              Priority Matrix
+            </TabsTrigger>
             <TabsTrigger value="modules" data-testid="tab-modules">
               <Settings className="mr-2 h-4 w-4" />
               Modules
@@ -1218,6 +1230,13 @@ export default function FacilitatorWorkspace() {
 
           <TabsContent value="ideas" className="mt-6">
             <IdeasHub spaceId={space.id} categories={manualCategories} />
+          </TabsContent>
+
+          <TabsContent value="priority-matrix" className="mt-6">
+            <PriorityMatrix 
+              spaceId={space.id}
+              ideas={ideas} 
+            />
           </TabsContent>
 
           <TabsContent value="modules" className="mt-6">
