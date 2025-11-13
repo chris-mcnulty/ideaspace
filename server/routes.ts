@@ -7,7 +7,7 @@ import { storage } from "./storage";
 import { db } from "./db";
 import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, type Space, organizations, users, companyAdmins, knowledgeBaseDocuments, workspaceTemplates, aiUsageLog, insertIdeaSchema, insertWorkspaceModuleSchema, insertWorkspaceModuleRunSchema, insertPriorityMatrixSchema, insertPriorityMatrixPositionSchema } from "@shared/schema";
 import { uploadImage, validateImageFile, cleanupTempFile } from "./middleware/uploadMiddleware";
-import { processImageUpload } from "./utils/contentUtils";
+import { processUploadedImage } from "./utils/contentUtils";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { categorizeNotes, rewriteCard } from "./services/openai";
@@ -2533,8 +2533,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Workspace not found" });
       }
       
-      const includeContributions = req.query.includeContributions === 'true';
-      const ideas = await storage.getIdeasBySpace(spaceId, includeContributions);
+      const ideas = await storage.getIdeasBySpace(spaceId);
+      // TODO: Add support for includeContributions if needed
       res.json(ideas);
     } catch (error) {
       console.error("Failed to fetch ideas:", error);
@@ -2548,8 +2548,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const ideaData = insertIdeaSchema.parse(req.body);
       const user = req.user as User;
       
-      // Set createdBy to current user
-      ideaData.createdBy = user.id;
+      // Set createdByUserId to current user
+      ideaData.createdByUserId = user.id;
       
       const idea = await storage.createIdea(ideaData);
       
@@ -2641,9 +2641,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           spaceId,
           content: ideaData.content,
           contentType: 'text',
-          category: ideaData.category || null,
-          source: ideaData.source || 'import',
-          createdBy: user.id
+          manualCategoryId: ideaData.category || null,
+          sourceType: ideaData.source || 'imported',
+          createdByUserId: user.id
         });
         createdIdeas.push(idea);
       }
@@ -2689,7 +2689,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         // Process and save image
-        const imageData = await processImageUpload(req.file.path, req.file.originalname);
+        const imageData = await processUploadedImage(req.file.path, req.file.originalname);
         
         // Clean up temp file
         await cleanupTempFile(req.file.path);
@@ -2699,12 +2699,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Create idea with image
         const idea = await storage.createIdea({
           spaceId,
-          content: imageData.originalName,
+          content: req.file.originalname,
           contentType: 'image',
-          assetUrl: imageData.url,
-          assetMetadata: imageData.metadata,
-          source: 'upload',
-          createdBy: user.id
+          assetUrl: imageData.mainUrl,
+          assetMetadata: {
+            ...imageData.metadata,
+            thumbnailUrl: imageData.thumbnailUrl
+          },
+          sourceType: 'facilitator',
+          createdByUserId: user.id
         });
         
         res.json(idea);
@@ -2731,7 +2734,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Workspace not found" });
       }
       
-      const modules = await storage.getWorkspaceModules(spaceId);
+      const modules = await storage.getWorkspaceModulesBySpace(spaceId);
       res.json(modules);
     } catch (error) {
       console.error("Failed to fetch modules:", error);
@@ -2743,7 +2746,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/workspace-modules", requireFacilitator, async (req, res) => {
     try {
       const moduleData = insertWorkspaceModuleSchema.parse(req.body);
-      const module = await storage.upsertWorkspaceModule(moduleData);
+      const module = await storage.createWorkspaceModule(moduleData);
       
       // Broadcast module configuration change
       broadcastToSpace(module.spaceId, { 
@@ -2764,11 +2767,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update module order/settings
   app.patch("/api/workspace-modules/:id", requireFacilitator, async (req, res) => {
     try {
-      const { enabled, displayOrder, config } = req.body;
+      const { enabled, orderIndex, config } = req.body;
       
       const updated = await storage.updateWorkspaceModule(req.params.id, {
         enabled,
-        displayOrder,
+        orderIndex,
         config
       });
       
