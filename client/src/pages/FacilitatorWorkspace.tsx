@@ -58,6 +58,7 @@ import {
   Unlock,
   ClipboardList,
   FolderPlus,
+  Settings,
 } from "lucide-react";
 import type { Organization, Space, Note, Participant, Category, User } from "@shared/schema";
 import { Leaderboard } from "@/components/Leaderboard";
@@ -67,6 +68,7 @@ import { SurveyQuestionsManager } from "@/components/SurveyQuestionsManager";
 import { SurveyResultsGrid } from "@/components/SurveyResultsGrid";
 import { generateCohortResultsPDF } from "@/lib/pdfGenerator";
 import IdeasHub from "@/components/IdeasHub";
+import ModuleConfiguration from "@/components/ModuleConfiguration";
 
 // Comprehensive Results Table Component
 function ComprehensiveResultsTable({
@@ -1179,6 +1181,10 @@ export default function FacilitatorWorkspace() {
               <FolderPlus className="mr-2 h-4 w-4" />
               Ideas Hub
             </TabsTrigger>
+            <TabsTrigger value="modules" data-testid="tab-modules">
+              <Settings className="mr-2 h-4 w-4" />
+              Modules
+            </TabsTrigger>
             <TabsTrigger value="notes" data-testid="tab-notes">
               Notes ({notes.length})
             </TabsTrigger>
@@ -1212,6 +1218,10 @@ export default function FacilitatorWorkspace() {
 
           <TabsContent value="ideas" className="mt-6">
             <IdeasHub spaceId={space.id} categories={manualCategories} />
+          </TabsContent>
+
+          <TabsContent value="modules" className="mt-6">
+            <ModuleConfiguration spaceId={space.id} />
           </TabsContent>
 
           <TabsContent value="notes" className="mt-6 space-y-6">
