@@ -218,15 +218,19 @@ export default function PriorityMatrix({
 
     const handleMouseUp = () => {
       if (draggedIdea) {
-        const finalPos = localPositions.get(draggedIdea.id);
-        if (finalPos) {
-          // Save to backend
-          updatePositionMutation.mutate({
-            ideaId: draggedIdea.id,
-            xCoord: finalPos.x,
-            yCoord: finalPos.y,
-          });
-        }
+        // Get the final position using a callback to ensure we have the latest state
+        setLocalPositions(prev => {
+          const finalPos = prev.get(draggedIdea.id);
+          if (finalPos) {
+            // Save to backend
+            updatePositionMutation.mutate({
+              ideaId: draggedIdea.id,
+              xCoord: finalPos.x,
+              yCoord: finalPos.y,
+            });
+          }
+          return prev;
+        });
       }
       setDraggedIdea(null);
     };
@@ -238,7 +242,7 @@ export default function PriorityMatrix({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [draggedIdea, wsConnection, spaceId, updatePositionMutation, localPositions]);
+  }, [draggedIdea, wsConnection, spaceId]);
 
   // Handle settings save
   const handleSaveSettings = () => {
