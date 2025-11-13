@@ -70,3 +70,38 @@ The design system features a dark mode with a primary purple accent, dark blue-b
 - **State Management/Data Fetching**: TanStack Query
 - **Styling**: Tailwind CSS, Shadcn UI
 - **WebSocket**: `ws` library
+
+## Test Accounts (Development Environment)
+
+### Password for all test accounts: `TestPass123!`
+
+### Organizations and Users
+
+#### Cascadia Oceanic
+- **Organization**: Cascadia Oceanic (ID: bdc84450-e2a4-4a5d-8771-ef538ee412aa)
+- **Workspace**: Cascadia Vision 2030 (Code: `12345678`)
+- **Admin**: admin@cascadia.test / TestPass123!
+- **Facilitator**: facilitator@cascadia.test / TestPass123!
+
+#### Contoso
+- **Organization**: Contoso (ID: a4208ed6-d134-463a-b9e3-a51b574accbb)
+- **Workspace**: Contoso Innovation Lab (Code: `87654321`)
+- **Admin**: admin@contoso.test / TestPass123!
+- **Facilitator**: facilitator@contoso.test / TestPass123!
+
+#### Fabrikam
+- **Organization**: Fabrikam (ID: 288e53de-94a1-4c92-960b-1de7591cbe27)
+- **Workspace**: Fabrikam Future Factory (Code: `11223344`)
+- **Admin**: admin@fabrikam.test / TestPass123!
+- **Facilitator**: facilitator@fabrikam.test / TestPass123!
+
+#### Global Admin
+- **Email**: admin@nebula.test
+- **Password**: TestPass123!
+- **Role**: Global Admin (no organization)
+
+### Test Data Setup
+- Each workspace has 5 preloaded test ideas
+- Modules enabled: Ideation, Priority Matrix, Pairwise Voting, Marketplace
+- All workspaces are in 'ideation' status
+- Guest access is enabled for all test workspaces

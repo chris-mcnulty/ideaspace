@@ -141,48 +141,131 @@ async function seed() {
 
   console.log("✓ Created 4 participants");
 
-  // Create some notes
-  await storage.createNote({
-    spaceId: productSpace.id,
-    participantId: alice.id,
-    content: "Improve customer onboarding with personalized tutorials and step-by-step guidance",
-    category: "User Experience",
-    isAiCategory: false,
-  });
+  // Create 5 ocean-themed ideas for Cascadia Oceanic workspace
+  const oceanIdeas = [
+    {
+      spaceId: cascadiaSpace.id,
+      content: "Establish Marine Protected Areas covering 30% of coastal waters by 2030",
+      contentType: "text" as const,
+      sourceType: "preloaded" as const,
+      createdByUserId: cascadiaAdmin.id,
+    },
+    {
+      spaceId: cascadiaSpace.id,
+      content: "Deploy AI-powered ocean monitoring systems to track ecosystem health in real-time",
+      contentType: "text" as const,
+      sourceType: "preloaded" as const,
+      createdByUserId: cascadiaAdmin.id,
+    },
+    {
+      spaceId: cascadiaSpace.id,
+      content: "Implement blockchain-based plastic waste tracking from source to recycling",
+      contentType: "text" as const,
+      sourceType: "preloaded" as const,
+      createdByUserId: cascadiaAdmin.id,
+    },
+    {
+      spaceId: cascadiaSpace.id,
+      content: "Create community coral restoration programs with local dive operators",
+      contentType: "text" as const,
+      sourceType: "preloaded" as const,
+      createdByUserId: cascadiaAdmin.id,
+    },
+    {
+      spaceId: cascadiaSpace.id,
+      content: "Develop sustainable aquaculture alternatives to reduce wild fish harvesting",
+      contentType: "text" as const,
+      sourceType: "preloaded" as const,
+      createdByUserId: cascadiaAdmin.id,
+    }
+  ];
 
-  await storage.createNote({
-    spaceId: productSpace.id,
-    participantId: bob.id,
-    content: "Implement real-time collaboration features for remote teams",
-    category: "Product Features",
-    isAiCategory: true,
-  });
+  await storage.bulkCreateIdeas(oceanIdeas);
+  console.log("✓ Created 5 ocean-themed ideas for Cascadia workspace");
 
-  await storage.createNote({
-    spaceId: productSpace.id,
-    participantId: guest1.id,
-    content: "Optimize application performance and reduce page load times",
-    category: "Technical",
-    isAiCategory: false,
-  });
+  // Create 5 tech ideas for Contoso workspace
+  const techIdeas = [
+    {
+      spaceId: contosoSpace.id,
+      content: "Migrate legacy infrastructure to cloud-native architecture",
+      contentType: "text" as const,
+      sourceType: "preloaded" as const,
+      createdByUserId: contosoAdmin.id,
+    },
+    {
+      spaceId: contosoSpace.id,
+      content: "Implement zero-trust security model across all systems",
+      contentType: "text" as const,
+      sourceType: "preloaded" as const,
+      createdByUserId: contosoAdmin.id,
+    },
+    {
+      spaceId: contosoSpace.id,
+      content: "Deploy AI-powered customer service chatbots",
+      contentType: "text" as const,
+      sourceType: "preloaded" as const,
+      createdByUserId: contosoAdmin.id,
+    },
+    {
+      spaceId: contosoSpace.id,
+      content: "Build real-time data analytics dashboard for executives",
+      contentType: "text" as const,
+      sourceType: "preloaded" as const,
+      createdByUserId: contosoAdmin.id,
+    },
+    {
+      spaceId: contosoSpace.id,
+      content: "Create employee wellness app with mental health resources",
+      contentType: "text" as const,
+      sourceType: "preloaded" as const,
+      createdByUserId: contosoAdmin.id,
+    }
+  ];
 
-  await storage.createNote({
-    spaceId: productSpace.id,
-    participantId: guest2.id,
-    content: "Add mobile app support for iOS and Android platforms",
-    category: "Product Features",
-    isAiCategory: true,
-  });
+  await storage.bulkCreateIdeas(techIdeas);
+  console.log("✓ Created 5 innovation ideas for Contoso workspace");
 
-  await storage.createNote({
-    spaceId: productSpace.id,
-    participantId: alice.id,
-    content: "Enhance data security and implement advanced privacy controls",
-    category: "Security",
-    isAiCategory: false,
-  });
+  // Create 5 manufacturing ideas for Fabrikam workspace
+  const manufacturingIdeas = [
+    {
+      spaceId: fabrikamSpace.id,
+      content: "Implement IoT sensors for predictive maintenance across all equipment",
+      contentType: "text" as const,
+      sourceType: "preloaded" as const,
+      createdByUserId: fabrikamAdmin.id,
+    },
+    {
+      spaceId: fabrikamSpace.id,
+      content: "Deploy robotic automation for high-risk manufacturing processes",
+      contentType: "text" as const,
+      sourceType: "preloaded" as const,
+      createdByUserId: fabrikamAdmin.id,
+    },
+    {
+      spaceId: fabrikamSpace.id,
+      content: "Create digital twin simulations for production optimization",
+      contentType: "text" as const,
+      sourceType: "preloaded" as const,
+      createdByUserId: fabrikamAdmin.id,
+    },
+    {
+      spaceId: fabrikamSpace.id,
+      content: "Establish carbon-neutral manufacturing processes by 2025",
+      contentType: "text" as const,
+      sourceType: "preloaded" as const,
+      createdByUserId: fabrikamAdmin.id,
+    },
+    {
+      spaceId: fabrikamSpace.id,
+      content: "Build augmented reality training programs for factory workers",
+      contentType: "text" as const,
+      sourceType: "preloaded" as const,
+      createdByUserId: fabrikamAdmin.id,
+    }
+  ];
 
-  console.log("✓ Created 5 notes");
+  await storage.bulkCreateIdeas(manufacturingIdeas);
+  console.log("✓ Created 5 manufacturing ideas for Fabrikam workspace");
 
   console.log("🎉 Seeding complete!");
   process.exit(0);

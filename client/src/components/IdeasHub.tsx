@@ -65,18 +65,18 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
   
   // Fetch ideas
   const { data: ideas = [], isLoading, refetch } = useQuery<Idea[]>({
-    queryKey: ['/api/ideas', spaceId],
+    queryKey: [`/api/spaces/${spaceId}/ideas`],
     enabled: !!spaceId
   });
   
   // Mutations
   const createIdeaMutation = useMutation({
     mutationFn: async (ideaData: any) => {
-      const response = await apiRequest('POST', '/api/ideas', { spaceId, ...ideaData });
+      const response = await apiRequest('POST', `/api/spaces/${spaceId}/ideas`, ideaData);
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ideas', spaceId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/ideas`] });
       setNewIdea({ content: '', contentType: 'text', category: '' });
       setShowAddDialog(false);
       toast({ title: "Idea added successfully" });
@@ -92,7 +92,7 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ideas', spaceId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/ideas`] });
       setEditingIdea(null);
       toast({ title: "Idea updated successfully" });
     },
@@ -107,7 +107,7 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ideas', spaceId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/ideas`] });
       toast({ title: "Idea deleted successfully" });
     },
     onError: () => {
@@ -121,7 +121,7 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ideas', spaceId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/ideas`] });
       setSelectedIdeas(new Set());
       setBulkAction(null);
       toast({ title: `${selectedIdeas.size} ideas deleted successfully` });
@@ -137,7 +137,7 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ideas', spaceId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/ideas`] });
       setSelectedIdeas(new Set());
       setBulkAction(null);
       setBulkCategoryId('');
@@ -154,7 +154,7 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
       return response.json();
     },
     onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ideas', spaceId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/ideas`] });
       setImportData('');
       setShowImportDialog(false);
       toast({ title: `${data.length} ideas imported successfully` });
@@ -181,7 +181,7 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/ideas', spaceId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/ideas`] });
       setShowAddDialog(false);
       toast({ title: "Image uploaded successfully" });
     },

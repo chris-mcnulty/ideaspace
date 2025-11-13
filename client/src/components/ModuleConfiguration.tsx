@@ -260,7 +260,7 @@ export default function ModuleConfiguration({ spaceId }: ModuleConfigurationProp
   
   // Fetch workspace modules
   const { data: modules = [], isLoading, refetch } = useQuery<WorkspaceModule[]>({
-    queryKey: ['/api/workspace-modules', spaceId],
+    queryKey: [`/api/spaces/${spaceId}/modules`],
     enabled: !!spaceId
   });
   
@@ -271,7 +271,7 @@ export default function ModuleConfiguration({ spaceId }: ModuleConfigurationProp
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/workspace-modules', spaceId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/modules`] });
       setHasChanges(false);
       toast({ title: "Module configuration updated" });
     },
@@ -287,7 +287,7 @@ export default function ModuleConfiguration({ spaceId }: ModuleConfigurationProp
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/workspace-modules', spaceId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/modules`] });
       toast({ title: "Module added to workspace" });
     },
     onError: () => {

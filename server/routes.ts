@@ -949,14 +949,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const identifier = req.params.id;
       console.log(`[DEBUG] GET /api/spaces/:id - identifier: ${identifier}`);
-      // Check if identifier looks like a workspace code (nnnn-nnnn format: 9 chars, single hyphen at position 4)
+      // Check if identifier looks like a workspace code (8 digits with or without hyphen)
       // vs a UUID (36 chars with hyphens) or serial integer
       let space;
-      const isWorkspaceCode = /^\d{4}-\d{4}$/.test(identifier);
+      const isWorkspaceCode = /^\d{8}$/.test(identifier) || /^\d{4}-\d{4}$/.test(identifier);
       console.log(`[DEBUG] isWorkspaceCode: ${isWorkspaceCode}`);
       
       if (isWorkspaceCode) {
-        // Lookup by code (e.g., "1234-6133")
+        // Lookup by code (e.g., "12345678" or "1234-5678")
         console.log(`[DEBUG] Looking up by code`);
         space = await storage.getSpaceByCode(identifier);
       } else {
@@ -2734,7 +2734,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Workspace not found" });
       }
       
-      const modules = await storage.getWorkspaceModulesBySpace(spaceId);
+      const modules = await storage.getWorkspaceModules(spaceId);
       res.json(modules);
     } catch (error) {
       console.error("Failed to fetch modules:", error);
