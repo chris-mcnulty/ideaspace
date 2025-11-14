@@ -2298,6 +2298,3 @@ export default function FacilitatorWorkspace() {
     </div>
   );
 }
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-2xl font-bold">Pairwise Voting</h2>
