@@ -120,6 +120,20 @@ const MODULE_METADATA = {
       randomizeOrder: false,
       showAverage: true
     }
+  },
+  'staircase': {
+    name: 'Staircase',
+    icon: TrendingUp,
+    description: 'Diagonal 0-10 rating grid with visual assessment',
+    configurable: true,
+    config: {
+      minLabel: 'Lowest',
+      maxLabel: 'Highest',
+      stepCount: 11,
+      allowDecimals: false,
+      collaborative: true,
+      showDistribution: true
+    }
   }
 } as const satisfies Record<ModuleType, {
   name: string;
