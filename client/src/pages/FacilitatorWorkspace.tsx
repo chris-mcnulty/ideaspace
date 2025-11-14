@@ -337,6 +337,12 @@ export default function FacilitatorWorkspace() {
         // Invalidate participants query
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/participants`] });
         break;
+      case 'module_configured':
+      case 'module_updated':
+        // Invalidate modules query to refetch and update tabs
+        queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/modules`] });
+        console.log('[FacilitatorWorkspace] Module configuration updated, invalidating modules query');
+        break;
     }
   }, [params.space, toast]);
 
