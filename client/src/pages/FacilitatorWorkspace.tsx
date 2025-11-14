@@ -1127,19 +1127,37 @@ export default function FacilitatorWorkspace() {
     },
   });
 
-  // Helper render functions for tab content
+  if (spaceLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-muted-foreground">Loading workspace...</p>
+      </div>
+    );
+  }
+
+  if (!space || !org) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-lg font-medium">Space not found</p>
+      </div>
+    );
+  }
+
+  const onlineParticipants = participants.filter((p) => p.isOnline);
+
+  // Helper render functions for tabs (placed after space null check)
   const renderModulesTab = () => (
-    <ModuleConfiguration spaceId={space!.id} />
+    <ModuleConfiguration spaceId={space.id} />
   );
 
   const renderIdeasTab = () => (
-    <IdeasHub spaceId={space!.id} categories={manualCategories} />
+    <IdeasHub spaceId={space.id} categories={manualCategories} />
   );
 
   const renderKnowledgeBaseTab = () => (
     <KnowledgeBaseManager 
       scope="workspace" 
-      scopeId={space!.id}
+      scopeId={space.id}
       title="Workspace Knowledge Base"
       description="Documents available to AI for this workspace"
     />
@@ -1184,11 +1202,49 @@ export default function FacilitatorWorkspace() {
   );
 
   const renderPriorityMatrixTab = () => (
-    <PriorityMatrix spaceId={space!.id} />
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">2x2 Priority Matrix</h2>
+          <p className="text-muted-foreground mt-1">
+            Collaborative drag-and-drop grid for positioning ideas
+          </p>
+        </div>
+        <Button
+          variant="default"
+          onClick={() => navigateParticipantsMutation.mutate("priority-matrix")}
+          disabled={navigateParticipantsMutation.isPending}
+          data-testid="button-navigate-to-priority-matrix"
+        >
+          <Users className="mr-2 h-4 w-4" />
+          Bring Participants Here
+        </Button>
+      </div>
+      <PriorityMatrix spaceId={space.id} />
+    </div>
   );
 
   const renderStaircaseTab = () => (
-    <StaircaseModule spaceId={space!.id} />
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Staircase Rating</h2>
+          <p className="text-muted-foreground mt-1">
+            Diagonal 0-10 scale for visual idea assessment
+          </p>
+        </div>
+        <Button
+          variant="default"
+          onClick={() => navigateParticipantsMutation.mutate("staircase")}
+          disabled={navigateParticipantsMutation.isPending}
+          data-testid="button-navigate-to-staircase"
+        >
+          <Users className="mr-2 h-4 w-4" />
+          Bring Participants Here
+        </Button>
+      </div>
+      <StaircaseModule spaceId={space.id} />
+    </div>
   );
 
   const renderSurveyTab = () => (
@@ -1208,12 +1264,731 @@ export default function FacilitatorWorkspace() {
           Test Survey View
         </Button>
       </div>
-      <SurveyQuestionsManager spaceId={space!.id} />
-      <SurveyResultsGrid spaceId={space!.id} />
+      <SurveyQuestionsManager spaceId={space.id} />
+      <SurveyResultsGrid spaceId={space.id} />
     </div>
   );
 
-  // Map tab values to their render functions
+  const renderVotingTab = () => (
+    <div className="space-y-6">
+      {/* Voting Header */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Pairwise Voting</h2>
+          <p className="text-muted-foreground mt-1">
+            Track participant voting progress
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="default"
+            onClick={() => navigateParticipantsMutation.mutate("vote")}
+            data-testid="button-navigate-to-voting"
+          >
+            <Users className="mr-2 h-4 w-4" />
+            Send to Voting
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              window.location.href = `/api/spaces/${params.space}/export/pairwise`;
+            }}
+            data-testid="button-export-voting"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export Results
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => window.open(`/o/${params.org}/s/${params.space}/vote`, '_blank')}
+            data-testid="button-test-voting"
+          >
+            Test Voting View
+          </Button>
+        </div>
+      </div>
+
+      {/* Voting Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Voting Configuration</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <Label htmlFor="pairwise-scope">Comparison Scope</Label>
+            <Select
+              value={space?.pairwiseScope || "all"}
+              onValueChange={(value: "all" | "within_categories") => {
+                updatePairwiseScopeMutation.mutate(value);
+              }}
+              data-testid="select-pairwise-scope"
+            >
+              <SelectTrigger id="pairwise-scope" className="w-full md:w-[400px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" data-testid="option-scope-all">
+                  Compare all ideas (cross-category voting)
+                </SelectItem>
+                <SelectItem value="within_categories" data-testid="option-scope-within-categories">
+                  Compare within categories only
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-sm text-muted-foreground">
+              {space?.pairwiseScope === "within_categories"
+                ? "Participants will only compare ideas within the same category"
+                : "Participants will compare all ideas regardless of category"}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Voting Statistics */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Total Votes Cast</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">{votes.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Across all participants
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Possible Pairs</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">
+              {notes.length >= 2 ? (notes.length * (notes.length - 1)) / 2 : 0}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {notes.length} notes to compare
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Active Voters</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">
+              {new Set(votes.map((v: any) => v.participantId)).size}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Of {participants.length} participants
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Participant Voting Progress */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Participant Progress</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {participants.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No participants have joined yet
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {participants.map((participant) => {
+                const participantVotes = votes.filter((v: any) => v.participantId === participant.id);
+                const totalPairs = notes.length >= 2 ? (notes.length * (notes.length - 1)) / 2 : 0;
+                const progress = totalPairs > 0 ? Math.round((participantVotes.length / totalPairs) * 100) : 0;
+                const isComplete = participantVotes.length >= totalPairs && totalPairs > 0;
+
+                return (
+                  <div key={participant.id} className="space-y-2" data-testid={`voting-progress-${participant.id}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`h-2 w-2 rounded-full ${
+                            participant.isOnline ? "bg-green-500" : "bg-gray-300"
+                          }`}
+                        />
+                        <span className="font-medium">{participant.displayName}</span>
+                        {isComplete && (
+                          <Badge variant="default" className="ml-2">Complete</Badge>
+                        )}
+                      </div>
+                      <span className="text-sm text-muted-foreground">
+                        {participantVotes.length} / {totalPairs} votes
+                      </span>
+                    </div>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-primary transition-all"
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Vote Winners Leaderboard */}
+      {votes.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Most Preferred Ideas</CardTitle>
+            <p className="text-sm text-muted-foreground">Based on pairwise comparisons</p>
+          </CardHeader>
+          <CardContent>
+            {(() => {
+              // Calculate win counts for each note
+              const winCounts = new Map<string, number>();
+              notes.forEach(note => winCounts.set(note.id, 0));
+              votes.forEach((vote: any) => {
+                const currentWins = winCounts.get(vote.winnerNoteId) || 0;
+                winCounts.set(vote.winnerNoteId, currentWins + 1);
+              });
+
+              // Sort notes by win count
+              const sortedNotes = [...notes]
+                .map(note => ({ note, wins: winCounts.get(note.id) || 0 }))
+                .sort((a, b) => b.wins - a.wins)
+                .slice(0, 10);
+
+              return (
+                <div className="space-y-3">
+                  {sortedNotes.map(({ note, wins }, index) => (
+                    <div key={note.id} className="flex items-start gap-3" data-testid={`leaderboard-item-${index}`}>
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-sm">
+                        {index + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm leading-relaxed">{note.content}</p>
+                        {note.category && (
+                          <Badge variant="secondary" className="mt-1 text-xs">
+                            {note.category}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex-shrink-0 text-right">
+                        <div className="text-lg font-bold">{wins}</div>
+                        <div className="text-xs text-muted-foreground">wins</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Empty State */}
+      {votes.length === 0 && (
+        <div className="flex min-h-[400px] items-center justify-center rounded-lg border-2 border-dashed">
+          <div className="text-center">
+            <Users className="mx-auto h-12 w-12 text-muted-foreground" />
+            <p className="mt-4 text-lg font-medium">No votes yet</p>
+            <p className="mt-2 text-sm text-muted-foreground max-w-md">
+              Participants can start voting once they navigate to the voting page
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderRankingTab = () => (
+    <div className="space-y-6">
+      {/* Ranking Header */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Stack Ranking</h2>
+          <p className="text-muted-foreground mt-1">
+            Track participant ranking progress and view Borda count results
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="default"
+            onClick={() => navigateParticipantsMutation.mutate("rank")}
+            data-testid="button-navigate-to-ranking"
+          >
+            <ListOrdered className="mr-2 h-4 w-4" />
+            Send to Ranking
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              window.location.href = `/api/spaces/${params.space}/export/ranking`;
+            }}
+            data-testid="button-export-ranking"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export Results
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => window.open(`/o/${params.org}/s/${params.space}/rank`, '_blank')}
+            data-testid="button-test-ranking"
+          >
+            Test Ranking View
+          </Button>
+        </div>
+      </div>
+
+      {/* Ranking Statistics */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Participants Completed</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">
+              {rankingProgress?.participantsCompleted || 0}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Of {rankingProgress?.totalParticipants || participants.length} participants
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Completion Rate</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">
+              {rankingProgress?.percentComplete || 0}%
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {rankingProgress?.participantsCompleted || 0} / {rankingProgress?.totalParticipants || participants.length} completed
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Ideas to Rank</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">
+              {notes.length}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Notes available for ranking
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Leaderboard */}
+      {leaderboard.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Borda Count Leaderboard</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              Ideas ranked by Borda count scoring (higher is better)
+            </p>
+          </CardHeader>
+          <CardContent>
+            <Leaderboard scores={leaderboard} />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Empty State */}
+      {leaderboard.length === 0 && (
+        <div className="flex min-h-[400px] items-center justify-center rounded-lg border-2 border-dashed">
+          <div className="text-center">
+            <ListOrdered className="mx-auto h-12 w-12 text-muted-foreground" />
+            <p className="mt-4 text-lg font-medium">No rankings yet</p>
+            <p className="mt-2 text-sm text-muted-foreground max-w-md">
+              Participants can start ranking once they navigate to the ranking page
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderMarketplaceTab = () => (
+    <div className="space-y-6">
+      {/* Marketplace Header */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Marketplace Allocation</h2>
+          <p className="text-muted-foreground mt-1">
+            Configure coin budget and send participants to marketplace voting
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="default"
+            onClick={() => navigateParticipantsMutation.mutate("marketplace")}
+            data-testid="button-navigate-to-marketplace"
+          >
+            <Coins className="mr-2 h-4 w-4" />
+            Send to Marketplace
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              window.location.href = `/api/spaces/${params.space}/export/marketplace`;
+            }}
+            data-testid="button-export-marketplace"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export Results
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => window.open(`/o/${params.org}/s/${params.space}/marketplace`, '_blank')}
+            data-testid="button-test-marketplace"
+          >
+            Test Marketplace View
+          </Button>
+        </div>
+      </div>
+
+      {/* Marketplace Coin Budget Configuration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Coins className="h-5 w-5 text-primary" />
+            Coin Budget Configuration
+          </CardTitle>
+          <CardDescription>
+            Configure how many coins each participant receives to allocate in the marketplace phase
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <label htmlFor="coin-budget" className="text-sm font-medium mb-2 block">
+                Coins per Participant
+              </label>
+              <input
+                id="coin-budget"
+                type="number"
+                min="1"
+                max="1000"
+                defaultValue={space.marketplaceCoinBudget}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                onBlur={(e) => {
+                  const value = parseInt(e.target.value);
+                  if (value && value !== space.marketplaceCoinBudget && value > 0 && value <= 1000) {
+                    updateWorkspaceSettings.mutate({ marketplaceCoinBudget: value });
+                  }
+                }}
+                data-testid="input-marketplace-coin-budget"
+              />
+            </div>
+            <div className="text-sm text-muted-foreground mt-6">
+              Current: <Badge variant="outline">{space.marketplaceCoinBudget} coins</Badge>
+            </div>
+          </div>
+          <p className="text-sm text-muted-foreground mt-3">
+            Participants will use their coin budget to vote on ideas by allocating coins to their preferred options
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Empty State - Marketplace stats could be added here in the future */}
+      <div className="flex min-h-[400px] items-center justify-center rounded-lg border-2 border-dashed">
+        <div className="text-center">
+          <Coins className="mx-auto h-12 w-12 text-muted-foreground" />
+          <p className="mt-4 text-lg font-medium">Marketplace Allocation</p>
+          <p className="mt-2 text-sm text-muted-foreground max-w-md">
+            Send participants to the marketplace to allocate their {space.marketplaceCoinBudget} coins across ideas
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderResultsTab = () => (
+    <div className="space-y-6">
+      {/* Comprehensive Voting Results Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Trophy className="h-5 w-5 text-primary" />
+            Comprehensive Voting Results
+          </CardTitle>
+          <CardDescription>
+            All ideas with results from pairwise voting, stack ranking (Borda count), and marketplace allocation
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ComprehensiveResultsTable
+            notes={notes}
+            votes={votes}
+            bordaLeaderboard={leaderboard}
+            marketplaceLeaderboard={marketplaceLeaderboard}
+            categories={manualCategories}
+          />
+        </CardContent>
+      </Card>
+
+      {cohortResultsLoading ? (
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span>Loading cohort results...</span>
+          </div>
+        </div>
+      ) : !cohortResults ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-primary" />
+              Generate Cohort Results
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-muted-foreground">
+              Generate AI-powered cohort results based on all voting data, rankings, and marketplace allocations.
+              This will create a comprehensive summary of the session's key themes, top ideas, and insights.
+            </p>
+            <Button
+              onClick={() => generateCohortResultsMutation.mutate()}
+              disabled={generateCohortResultsMutation.isPending}
+              size="lg"
+              data-testid="button-generate-cohort-results"
+            >
+              {generateCohortResultsMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Generating Results...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Generate Cohort Results
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Trophy className="h-5 w-5 text-primary" />
+                Cohort Summary
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="prose prose-sm max-w-none dark:prose-invert">
+                <p className="whitespace-pre-wrap">{cohortResults.summary}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {cohortResults.topIdeas && cohortResults.topIdeas.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  Top Ideas
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {cohortResults.topIdeas.map((idea: { rank: number; content: string; rationale: string }, index: number) => (
+                  <div key={index} className="space-y-2">
+                    <div className="flex items-start gap-3">
+                      <Badge variant="outline" className="mt-1">
+                        #{idea.rank}
+                      </Badge>
+                      <div className="flex-1">
+                        <p className="font-medium">{idea.content}</p>
+                        <p className="text-sm text-muted-foreground mt-1">{idea.rationale}</p>
+                      </div>
+                    </div>
+                    {index < cohortResults.topIdeas.length - 1 && <div className="border-t" />}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {cohortResults.keyThemes && cohortResults.keyThemes.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ListOrdered className="h-5 w-5 text-primary" />
+                  Key Themes
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {cohortResults.keyThemes.map((theme: string, index: number) => (
+                    <Badge key={index} variant="secondary">
+                      {theme}
+                    </Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {cohortResults.insights && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  Key Insights
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="prose prose-sm max-w-none dark:prose-invert">
+                  <p className="whitespace-pre-wrap">{cohortResults.insights}</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="flex flex-col gap-4">
+            {/* AI Results Toggle */}
+            <Card className="bg-muted/30">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  AI-Powered Personalized Results
+                </CardTitle>
+                <CardDescription>
+                  Enable AI-generated personalized results for verified participants. Participants must be logged in and email verified to access their personalized insights.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-muted-foreground">
+                    Status: {space.aiResultsEnabled ? (
+                      <Badge variant="default" className="ml-2">Enabled</Badge>
+                    ) : (
+                      <Badge variant="secondary" className="ml-2">Disabled</Badge>
+                    )}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      // Toggle AI results
+                      updateWorkspaceSettings.mutate({ aiResultsEnabled: !space.aiResultsEnabled });
+                    }}
+                    disabled={updateWorkspaceSettings.isPending}
+                    data-testid="button-toggle-ai-results"
+                  >
+                    {updateWorkspaceSettings.isPending ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                        {space.aiResultsEnabled ? "Disabling..." : "Enabling..."}
+                      </>
+                    ) : (
+                      <>{space.aiResultsEnabled ? "Disable" : "Enable"} AI Results</>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Results Public After Close Toggle */}
+            <Card className="bg-muted/30">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  {space.resultsPublicAfterClose ? (
+                    <Unlock className="h-4 w-4 text-primary" />
+                  ) : (
+                    <Lock className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  Results Access After Workspace Closure
+                </CardTitle>
+                <CardDescription>
+                  When enabled, participants can still view results even after the workspace is closed. When disabled, results become inaccessible once the workspace closes.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-muted-foreground">
+                    Status: {space.resultsPublicAfterClose ? (
+                      <Badge variant="default" className="ml-2">Accessible</Badge>
+                    ) : (
+                      <Badge variant="secondary" className="ml-2">Restricted</Badge>
+                    )}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      updateWorkspaceSettings.mutate({ resultsPublicAfterClose: !space.resultsPublicAfterClose });
+                    }}
+                    disabled={updateWorkspaceSettings.isPending}
+                    data-testid="button-toggle-results-public-after-close"
+                  >
+                    {updateWorkspaceSettings.isPending ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                        {space.resultsPublicAfterClose ? "Restricting..." : "Allowing..."}
+                      </>
+                    ) : (
+                      <>{space.resultsPublicAfterClose ? "Restrict Access" : "Allow Access"}</>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <div className="flex gap-3">
+              <Button
+                variant="default"
+                onClick={() => navigateParticipantsMutation.mutate("results")}
+                disabled={navigateParticipantsMutation.isPending}
+                data-testid="button-navigate-to-results"
+              >
+                <Users className="mr-2 h-4 w-4" />
+                Send to Results
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => generateCohortResultsMutation.mutate()}
+                disabled={generateCohortResultsMutation.isPending}
+                data-testid="button-regenerate-results"
+              >
+                {generateCohortResultsMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Regenerating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Regenerate Cohort Results
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleDownloadCohortPDF}
+                data-testid="button-download-cohort-pdf"
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Download PDF
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Create map of render functions
   const tabContentByValue: Record<string, () => React.ReactNode> = {
     "modules": renderModulesTab,
     "ideas": renderIdeasTab,
@@ -1222,25 +1997,11 @@ export default function FacilitatorWorkspace() {
     "priority-matrix": renderPriorityMatrixTab,
     "staircase": renderStaircaseTab,
     "survey": renderSurveyTab,
+    "voting": renderVotingTab,
+    "ranking": renderRankingTab,
+    "marketplace": renderMarketplaceTab,
+    "results": renderResultsTab,
   };
-
-  if (spaceLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-muted-foreground">Loading workspace...</p>
-      </div>
-    );
-  }
-
-  if (!space || !org) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-lg font-medium">Space not found</p>
-      </div>
-    );
-  }
-
-  const onlineParticipants = participants.filter((p) => p.isOnline);
 
   return (
     <div className="min-h-screen bg-background">
@@ -1375,797 +2136,15 @@ export default function FacilitatorWorkspace() {
             })}
           </TabsList>
 
-          <TabsContent value="modules" className="mt-6">
-            <ModuleConfiguration spaceId={space.id} />
-          </TabsContent>
-
-          <TabsContent value="ideas" className="mt-6">
-            <IdeasHub spaceId={space.id} categories={manualCategories} />
-          </TabsContent>
-
-          <TabsContent value="knowledge-base" className="mt-6">
-            <KnowledgeBaseManager 
-              scope="workspace" 
-              scopeId={space.id}
-              title="Workspace Knowledge Base"
-              description="Documents available to AI for this workspace"
-            />
-          </TabsContent>
-
-          <TabsContent value="participants" className="mt-6">
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-2xl font-bold">Participants</h2>
-                  <p className="text-muted-foreground mt-1">
-                    {participants.length} participant{participants.length !== 1 ? 's' : ''} in this workspace
-                  </p>
+          {facilitatorTabs.map(tab => (
+            <TabsContent key={tab.value} value={tab.value} className="mt-6">
+              {tabContentByValue[tab.value]?.() || (
+                <div className="text-center text-muted-foreground py-8">
+                  Tab content not available: {tab.value}
                 </div>
-              </div>
-              {participants.length > 0 ? (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {participants.map(participant => (
-                    <Card key={participant.id} className="hover-elevate">
-                      <CardHeader>
-                        <CardTitle className="flex items-center justify-between">
-                          <span className="truncate">{participant.displayName}</span>
-                          {participant.isOnline && (
-                            <Badge variant="default" className="ml-2">Online</Badge>
-                          )}
-                        </CardTitle>
-                        {participant.isGuest && (
-                          <Badge variant="secondary">Guest</Badge>
-                        )}
-                      </CardHeader>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <Card>
-                  <CardContent className="py-8 text-center text-muted-foreground">
-                    No participants yet
-                  </CardContent>
-                </Card>
               )}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="voting" className="mt-6 space-y-6">
-            {/* Voting Header */}
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-2xl font-bold">Pairwise Voting</h2>
-                <p className="text-muted-foreground mt-1">
-                  Track participant voting progress
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="default"
-                  onClick={() => navigateParticipantsMutation.mutate("vote")}
-                  data-testid="button-navigate-to-voting"
-                >
-                  <Users className="mr-2 h-4 w-4" />
-                  Send to Voting
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    window.location.href = `/api/spaces/${params.space}/export/pairwise`;
-                  }}
-                  data-testid="button-export-voting"
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  Export Results
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => window.open(`/o/${params.org}/s/${params.space}/vote`, '_blank')}
-                  data-testid="button-test-voting"
-                >
-                  Test Voting View
-                </Button>
-              </div>
-            </div>
-
-            {/* Voting Settings */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Voting Configuration</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <Label htmlFor="pairwise-scope">Comparison Scope</Label>
-                  <Select
-                    value={space?.pairwiseScope || "all"}
-                    onValueChange={(value: "all" | "within_categories") => {
-                      updatePairwiseScopeMutation.mutate(value);
-                    }}
-                    data-testid="select-pairwise-scope"
-                  >
-                    <SelectTrigger id="pairwise-scope" className="w-full md:w-[400px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all" data-testid="option-scope-all">
-                        Compare all ideas (cross-category voting)
-                      </SelectItem>
-                      <SelectItem value="within_categories" data-testid="option-scope-within-categories">
-                        Compare within categories only
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-sm text-muted-foreground">
-                    {space?.pairwiseScope === "within_categories"
-                      ? "Participants will only compare ideas within the same category"
-                      : "Participants will compare all ideas regardless of category"}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Voting Statistics */}
-            <div className="grid gap-4 md:grid-cols-3">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm font-medium">Total Votes Cast</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold">{votes.length}</div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Across all participants
-                  </p>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm font-medium">Possible Pairs</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold">
-                    {notes.length >= 2 ? (notes.length * (notes.length - 1)) / 2 : 0}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {notes.length} notes to compare
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm font-medium">Active Voters</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold">
-                    {new Set(votes.map((v: any) => v.participantId)).size}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Of {participants.length} participants
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Participant Voting Progress */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Participant Progress</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {participants.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No participants have joined yet
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {participants.map((participant) => {
-                      const participantVotes = votes.filter((v: any) => v.participantId === participant.id);
-                      const totalPairs = notes.length >= 2 ? (notes.length * (notes.length - 1)) / 2 : 0;
-                      const progress = totalPairs > 0 ? Math.round((participantVotes.length / totalPairs) * 100) : 0;
-                      const isComplete = participantVotes.length >= totalPairs && totalPairs > 0;
-
-                      return (
-                        <div key={participant.id} className="space-y-2" data-testid={`voting-progress-${participant.id}`}>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <div
-                                className={`h-2 w-2 rounded-full ${
-                                  participant.isOnline ? "bg-green-500" : "bg-gray-300"
-                                }`}
-                              />
-                              <span className="font-medium">{participant.displayName}</span>
-                              {isComplete && (
-                                <Badge variant="default" className="ml-2">Complete</Badge>
-                              )}
-                            </div>
-                            <span className="text-sm text-muted-foreground">
-                              {participantVotes.length} / {totalPairs} votes
-                            </span>
-                          </div>
-                          <div className="h-2 bg-muted rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-primary transition-all"
-                              style={{ width: `${progress}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Vote Winners Leaderboard */}
-            {votes.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Most Preferred Ideas</CardTitle>
-                  <p className="text-sm text-muted-foreground">Based on pairwise comparisons</p>
-                </CardHeader>
-                <CardContent>
-                  {(() => {
-                    // Calculate win counts for each note
-                    const winCounts = new Map<string, number>();
-                    notes.forEach(note => winCounts.set(note.id, 0));
-                    votes.forEach((vote: any) => {
-                      const currentWins = winCounts.get(vote.winnerNoteId) || 0;
-                      winCounts.set(vote.winnerNoteId, currentWins + 1);
-                    });
-
-                    // Sort notes by win count
-                    const sortedNotes = [...notes]
-                      .map(note => ({ note, wins: winCounts.get(note.id) || 0 }))
-                      .sort((a, b) => b.wins - a.wins)
-                      .slice(0, 10);
-
-                    return (
-                      <div className="space-y-3">
-                        {sortedNotes.map(({ note, wins }, index) => (
-                          <div key={note.id} className="flex items-start gap-3" data-testid={`leaderboard-item-${index}`}>
-                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-sm">
-                              {index + 1}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm leading-relaxed">{note.content}</p>
-                              {note.category && (
-                                <Badge variant="secondary" className="mt-1 text-xs">
-                                  {note.category}
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="flex-shrink-0 text-right">
-                              <div className="text-lg font-bold">{wins}</div>
-                              <div className="text-xs text-muted-foreground">wins</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Empty State */}
-            {votes.length === 0 && (
-              <div className="flex min-h-[400px] items-center justify-center rounded-lg border-2 border-dashed">
-                <div className="text-center">
-                  <Users className="mx-auto h-12 w-12 text-muted-foreground" />
-                  <p className="mt-4 text-lg font-medium">No votes yet</p>
-                  <p className="mt-2 text-sm text-muted-foreground max-w-md">
-                    Participants can start voting once they navigate to the voting page
-                  </p>
-                </div>
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="ranking" className="mt-6 space-y-6">
-            {/* Ranking Header */}
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-2xl font-bold">Stack Ranking</h2>
-                <p className="text-muted-foreground mt-1">
-                  Track participant ranking progress and view Borda count results
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="default"
-                  onClick={() => navigateParticipantsMutation.mutate("rank")}
-                  data-testid="button-navigate-to-ranking"
-                >
-                  <ListOrdered className="mr-2 h-4 w-4" />
-                  Send to Ranking
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    window.location.href = `/api/spaces/${params.space}/export/ranking`;
-                  }}
-                  data-testid="button-export-ranking"
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  Export Results
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => window.open(`/o/${params.org}/s/${params.space}/rank`, '_blank')}
-                  data-testid="button-test-ranking"
-                >
-                  Test Ranking View
-                </Button>
-              </div>
-            </div>
-
-            {/* Ranking Statistics */}
-            <div className="grid gap-4 md:grid-cols-3">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm font-medium">Participants Completed</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold">
-                    {rankingProgress?.participantsCompleted || 0}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Of {rankingProgress?.totalParticipants || participants.length} participants
-                  </p>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm font-medium">Completion Rate</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold">
-                    {rankingProgress?.percentComplete || 0}%
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {rankingProgress?.participantsCompleted || 0} / {rankingProgress?.totalParticipants || participants.length} completed
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm font-medium">Ideas to Rank</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold">
-                    {notes.length}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Notes available for ranking
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Leaderboard */}
-            {leaderboard.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Borda Count Leaderboard</CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Ideas ranked by Borda count scoring (higher is better)
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  <Leaderboard scores={leaderboard} />
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Empty State */}
-            {leaderboard.length === 0 && (
-              <div className="flex min-h-[400px] items-center justify-center rounded-lg border-2 border-dashed">
-                <div className="text-center">
-                  <ListOrdered className="mx-auto h-12 w-12 text-muted-foreground" />
-                  <p className="mt-4 text-lg font-medium">No rankings yet</p>
-                  <p className="mt-2 text-sm text-muted-foreground max-w-md">
-                    Participants can start ranking once they navigate to the ranking page
-                  </p>
-                </div>
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="marketplace" className="mt-6 space-y-6">
-            {/* Marketplace Header */}
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-2xl font-bold">Marketplace Allocation</h2>
-                <p className="text-muted-foreground mt-1">
-                  Configure coin budget and send participants to marketplace voting
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="default"
-                  onClick={() => navigateParticipantsMutation.mutate("marketplace")}
-                  data-testid="button-navigate-to-marketplace"
-                >
-                  <Coins className="mr-2 h-4 w-4" />
-                  Send to Marketplace
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    window.location.href = `/api/spaces/${params.space}/export/marketplace`;
-                  }}
-                  data-testid="button-export-marketplace"
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  Export Results
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => window.open(`/o/${params.org}/s/${params.space}/marketplace`, '_blank')}
-                  data-testid="button-test-marketplace"
-                >
-                  Test Marketplace View
-                </Button>
-              </div>
-            </div>
-
-            {/* Marketplace Coin Budget Configuration */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Coins className="h-5 w-5 text-primary" />
-                  Coin Budget Configuration
-                </CardTitle>
-                <CardDescription>
-                  Configure how many coins each participant receives to allocate in the marketplace phase
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-4">
-                  <div className="flex-1">
-                    <label htmlFor="coin-budget" className="text-sm font-medium mb-2 block">
-                      Coins per Participant
-                    </label>
-                    <input
-                      id="coin-budget"
-                      type="number"
-                      min="1"
-                      max="1000"
-                      defaultValue={space.marketplaceCoinBudget}
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                      onBlur={(e) => {
-                        const value = parseInt(e.target.value);
-                        if (value && value !== space.marketplaceCoinBudget && value > 0 && value <= 1000) {
-                          updateWorkspaceSettings.mutate({ marketplaceCoinBudget: value });
-                        }
-                      }}
-                      data-testid="input-marketplace-coin-budget"
-                    />
-                  </div>
-                  <div className="text-sm text-muted-foreground mt-6">
-                    Current: <Badge variant="outline">{space.marketplaceCoinBudget} coins</Badge>
-                  </div>
-                </div>
-                <p className="text-sm text-muted-foreground mt-3">
-                  Participants will use their coin budget to vote on ideas by allocating coins to their preferred options
-                </p>
-              </CardContent>
-            </Card>
-
-            {/* Empty State - Marketplace stats could be added here in the future */}
-            <div className="flex min-h-[400px] items-center justify-center rounded-lg border-2 border-dashed">
-              <div className="text-center">
-                <Coins className="mx-auto h-12 w-12 text-muted-foreground" />
-                <p className="mt-4 text-lg font-medium">Marketplace Allocation</p>
-                <p className="mt-2 text-sm text-muted-foreground max-w-md">
-                  Send participants to the marketplace to allocate their {space.marketplaceCoinBudget} coins across ideas
-                </p>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="survey" className="mt-6 space-y-6">
-            {/* Survey Header */}
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-2xl font-bold">Survey</h2>
-                <p className="text-muted-foreground mt-1">
-                  Create questions and view participant responses
-                </p>
-              </div>
-              <Button
-                variant="ghost"
-                onClick={() => window.open(`/o/${params.org}/s/${params.space}/survey`, '_blank')}
-                data-testid="button-test-survey"
-              >
-                Test Survey View
-              </Button>
-            </div>
-
-            {/* Survey Questions Manager */}
-            <SurveyQuestionsManager spaceId={space.id} />
-
-            {/* Survey Results Grid */}
-            <SurveyResultsGrid spaceId={space.id} />
-          </TabsContent>
-
-
-          <TabsContent value="results" className="mt-6 space-y-6">
-            {/* Comprehensive Voting Results Table */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Trophy className="h-5 w-5 text-primary" />
-                  Comprehensive Voting Results
-                </CardTitle>
-                <CardDescription>
-                  All ideas with results from pairwise voting, stack ranking (Borda count), and marketplace allocation
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ComprehensiveResultsTable
-                  notes={notes}
-                  votes={votes}
-                  bordaLeaderboard={leaderboard}
-                  marketplaceLeaderboard={marketplaceLeaderboard}
-                  categories={manualCategories}
-                />
-              </CardContent>
-            </Card>
-
-            {cohortResultsLoading ? (
-              <div className="flex items-center justify-center min-h-[400px]">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  <span>Loading cohort results...</span>
-                </div>
-              </div>
-            ) : !cohortResults ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Trophy className="h-5 w-5 text-primary" />
-                    Generate Cohort Results
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-muted-foreground">
-                    Generate AI-powered cohort results based on all voting data, rankings, and marketplace allocations.
-                    This will create a comprehensive summary of the session's key themes, top ideas, and insights.
-                  </p>
-                  <Button
-                    onClick={() => generateCohortResultsMutation.mutate()}
-                    disabled={generateCohortResultsMutation.isPending}
-                    size="lg"
-                    data-testid="button-generate-cohort-results"
-                  >
-                    {generateCohortResultsMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Generating Results...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="h-4 w-4 mr-2" />
-                        Generate Cohort Results
-                      </>
-                    )}
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Trophy className="h-5 w-5 text-primary" />
-                      Cohort Summary
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="prose prose-sm max-w-none dark:prose-invert">
-                      <p className="whitespace-pre-wrap">{cohortResults.summary}</p>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {cohortResults.topIdeas && cohortResults.topIdeas.length > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Sparkles className="h-5 w-5 text-primary" />
-                        Top Ideas
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      {cohortResults.topIdeas.map((idea: { rank: number; content: string; rationale: string }, index: number) => (
-                        <div key={index} className="space-y-2">
-                          <div className="flex items-start gap-3">
-                            <Badge variant="outline" className="mt-1">
-                              #{idea.rank}
-                            </Badge>
-                            <div className="flex-1">
-                              <p className="font-medium">{idea.content}</p>
-                              <p className="text-sm text-muted-foreground mt-1">{idea.rationale}</p>
-                            </div>
-                          </div>
-                          {index < cohortResults.topIdeas.length - 1 && <div className="border-t" />}
-                        </div>
-                      ))}
-                    </CardContent>
-                  </Card>
-                )}
-
-                {cohortResults.keyThemes && cohortResults.keyThemes.length > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <ListOrdered className="h-5 w-5 text-primary" />
-                        Key Themes
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex flex-wrap gap-2">
-                        {cohortResults.keyThemes.map((theme: string, index: number) => (
-                          <Badge key={index} variant="secondary">
-                            {theme}
-                          </Badge>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {cohortResults.insights && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Sparkles className="h-5 w-5 text-primary" />
-                        Key Insights
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="prose prose-sm max-w-none dark:prose-invert">
-                        <p className="whitespace-pre-wrap">{cohortResults.insights}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                <div className="flex flex-col gap-4">
-                  {/* AI Results Toggle */}
-                  <Card className="bg-muted/30">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <Sparkles className="h-4 w-4 text-primary" />
-                        AI-Powered Personalized Results
-                      </CardTitle>
-                      <CardDescription>
-                        Enable AI-generated personalized results for verified participants. Participants must be logged in and email verified to access their personalized insights.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm text-muted-foreground">
-                          Status: {space.aiResultsEnabled ? (
-                            <Badge variant="default" className="ml-2">Enabled</Badge>
-                          ) : (
-                            <Badge variant="secondary" className="ml-2">Disabled</Badge>
-                          )}
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            // Toggle AI results
-                            updateWorkspaceSettings.mutate({ aiResultsEnabled: !space.aiResultsEnabled });
-                          }}
-                          disabled={updateWorkspaceSettings.isPending}
-                          data-testid="button-toggle-ai-results"
-                        >
-                          {updateWorkspaceSettings.isPending ? (
-                            <>
-                              <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-                              {space.aiResultsEnabled ? "Disabling..." : "Enabling..."}
-                            </>
-                          ) : (
-                            <>{space.aiResultsEnabled ? "Disable" : "Enable"} AI Results</>
-                          )}
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Results Public After Close Toggle */}
-                  <Card className="bg-muted/30">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        {space.resultsPublicAfterClose ? (
-                          <Unlock className="h-4 w-4 text-primary" />
-                        ) : (
-                          <Lock className="h-4 w-4 text-muted-foreground" />
-                        )}
-                        Results Access After Workspace Closure
-                      </CardTitle>
-                      <CardDescription>
-                        When enabled, participants can still view results even after the workspace is closed. When disabled, results become inaccessible once the workspace closes.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm text-muted-foreground">
-                          Status: {space.resultsPublicAfterClose ? (
-                            <Badge variant="default" className="ml-2">Accessible</Badge>
-                          ) : (
-                            <Badge variant="secondary" className="ml-2">Restricted</Badge>
-                          )}
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            updateWorkspaceSettings.mutate({ resultsPublicAfterClose: !space.resultsPublicAfterClose });
-                          }}
-                          disabled={updateWorkspaceSettings.isPending}
-                          data-testid="button-toggle-results-public-after-close"
-                        >
-                          {updateWorkspaceSettings.isPending ? (
-                            <>
-                              <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-                              {space.resultsPublicAfterClose ? "Restricting..." : "Allowing..."}
-                            </>
-                          ) : (
-                            <>{space.resultsPublicAfterClose ? "Restrict Access" : "Allow Access"}</>
-                          )}
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                  
-                  <div className="flex gap-3">
-                    <Button
-                      variant="default"
-                      onClick={() => navigateParticipantsMutation.mutate("results")}
-                      disabled={navigateParticipantsMutation.isPending}
-                      data-testid="button-navigate-to-results"
-                    >
-                      <Users className="mr-2 h-4 w-4" />
-                      Send to Results
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => generateCohortResultsMutation.mutate()}
-                      disabled={generateCohortResultsMutation.isPending}
-                      data-testid="button-regenerate-results"
-                    >
-                      {generateCohortResultsMutation.isPending ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Regenerating...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="h-4 w-4 mr-2" />
-                          Regenerate Cohort Results
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={handleDownloadCohortPDF}
-                      data-testid="button-download-cohort-pdf"
-                    >
-                      <Download className="mr-2 h-4 w-4" />
-                      Download PDF
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </TabsContent>
+            </TabsContent>
+          ))}
         </Tabs>
       </main>
 
@@ -2319,3 +2298,6 @@ export default function FacilitatorWorkspace() {
     </div>
   );
 }
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">Pairwise Voting</h2>
