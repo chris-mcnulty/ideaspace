@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -62,7 +62,7 @@ import {
   Grid3x3,
   TrendingUp,
 } from "lucide-react";
-import type { Organization, Space, Note, Participant, Category, User, Idea } from "@shared/schema";
+import type { Organization, Space, Note, Participant, Category, User, Idea, WorkspaceModule } from "@shared/schema";
 import { Leaderboard } from "@/components/Leaderboard";
 import { KnowledgeBaseManager } from "@/components/KnowledgeBaseManager";
 import { ShareLinksDialog } from "@/components/ShareLinksDialog";
@@ -453,6 +453,81 @@ export default function FacilitatorWorkspace() {
       return await res.json();
     },
   });
+
+  // Fetch workspace modules for dynamic tab ordering
+  const { data: workspaceModules = [] } = useQuery<WorkspaceModule[]>({
+    queryKey: [`/api/spaces/${params.space}/modules`],
+    enabled: !!params.space,
+  });
+
+  // Tab configuration type
+  type TabConfig = {
+    value: string;
+    label: string;
+    icon?: React.ComponentType<{ className?: string }>;
+    count?: number;
+  };
+
+  // Build facilitator tabs in journey sequence
+  const facilitatorTabs = useMemo((): TabConfig[] => {
+    // Fixed tabs: Modules → Ideas Hub → Knowledge Base (if needed) → Participants
+    const baseTabs: TabConfig[] = [
+      { value: "modules", label: "Modules", icon: Settings },
+      { value: "ideas", label: "Ideas Hub", icon: FolderPlus },
+      { value: "knowledge-base", label: "Knowledge Base", icon: BookOpen },
+      { value: "participants", label: "Participants", count: participants.length },
+    ];
+
+    // Get enabled modules sorted by orderIndex
+    const enabledModules = workspaceModules
+      .filter(m => m.enabled)
+      .sort((a, b) => a.orderIndex - b.orderIndex);
+
+    // Map module types to tab configs
+    const moduleTabs: TabConfig[] = enabledModules
+      .map((module): TabConfig | null => {
+        switch (module.moduleType) {
+          case "priority-matrix":
+            return { value: "priority-matrix", label: "Priority Matrix", icon: Grid3x3 };
+          case "staircase":
+            return { value: "staircase", label: "Staircase", icon: TrendingUp };
+          case "survey":
+            return { value: "survey", label: "Survey", icon: ClipboardList };
+          case "pairwise-voting":
+            return { value: "voting", label: "Voting", count: votes.length };
+          case "stack-ranking":
+            return { value: "ranking", label: "Ranking", icon: ListOrdered };
+          case "marketplace":
+            return { value: "marketplace", label: "Marketplace", icon: Coins };
+          default:
+            return null;
+        }
+      })
+      .filter((tab: TabConfig | null): tab is TabConfig => tab !== null);
+
+    // Results tab (always last)
+    const resultsTabs: TabConfig[] = [
+      { value: "results", label: "Results", icon: Trophy },
+    ];
+
+    return [...baseTabs, ...moduleTabs, ...resultsTabs];
+  }, [workspaceModules, participants.length, votes.length]);
+
+  // Helper to check if a tab should be rendered
+  const isTabEnabled = useCallback((tabValue: string) => {
+    return facilitatorTabs.some(t => t.value === tabValue);
+  }, [facilitatorTabs]);
+
+  // Active tab state with fallback logic
+  const [activeTab, setActiveTab] = useState<string>("modules");
+
+  // Fallback to first tab if current tab becomes unavailable
+  useEffect(() => {
+    const availableTabValues = facilitatorTabs.map(t => t.value);
+    if (!availableTabValues.includes(activeTab) && facilitatorTabs.length > 0) {
+      setActiveTab(facilitatorTabs[0].value);
+    }
+  }, [facilitatorTabs, activeTab]);
 
   // Generate cohort results mutation
   const generateCohortResultsMutation = useMutation({
@@ -1185,60 +1260,76 @@ export default function FacilitatorWorkspace() {
       </section>
 
       <main className="container mx-auto px-6 py-8">
-        <Tabs defaultValue="ideas" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList>
-            <TabsTrigger value="ideas" data-testid="tab-ideas">
-              <FolderPlus className="mr-2 h-4 w-4" />
-              Ideas Hub
-            </TabsTrigger>
-            <TabsTrigger value="priority-matrix" data-testid="tab-priority-matrix">
-              <Grid3x3 className="mr-2 h-4 w-4" />
-              Priority Matrix
-            </TabsTrigger>
-            <TabsTrigger value="staircase" data-testid="tab-staircase">
-              <TrendingUp className="mr-2 h-4 w-4" />
-              Staircase
-            </TabsTrigger>
-            <TabsTrigger value="modules" data-testid="tab-modules">
-              <Settings className="mr-2 h-4 w-4" />
-              Modules
-            </TabsTrigger>
-            <TabsTrigger value="notes" data-testid="tab-notes">
-              Notes ({notes.length})
-            </TabsTrigger>
-            <TabsTrigger value="participants" data-testid="tab-participants">
-              Participants ({participants.length})
-            </TabsTrigger>
-            <TabsTrigger value="voting" data-testid="tab-voting">
-              Voting ({votes.length})
-            </TabsTrigger>
-            <TabsTrigger value="ranking" data-testid="tab-ranking">
-              <ListOrdered className="mr-2 h-4 w-4" />
-              Ranking
-            </TabsTrigger>
-            <TabsTrigger value="marketplace" data-testid="tab-marketplace">
-              <Coins className="mr-2 h-4 w-4" />
-              Marketplace
-            </TabsTrigger>
-            <TabsTrigger value="survey" data-testid="tab-survey">
-              <ClipboardList className="mr-2 h-4 w-4" />
-              Survey
-            </TabsTrigger>
-            <TabsTrigger value="knowledge-base" data-testid="tab-knowledge-base">
-              <BookOpen className="mr-2 h-4 w-4" />
-              Knowledge Base
-            </TabsTrigger>
-            <TabsTrigger value="results" data-testid="tab-results">
-              <Trophy className="mr-2 h-4 w-4" />
-              Results
-            </TabsTrigger>
+            {facilitatorTabs.map(tab => {
+              const Icon = tab.icon;
+              return (
+                <TabsTrigger 
+                  key={tab.value} 
+                  value={tab.value} 
+                  data-testid={`tab-${tab.value}`}
+                >
+                  {Icon && <Icon className="mr-2 h-4 w-4" />}
+                  {tab.label}
+                  {tab.count !== undefined && ` (${tab.count})`}
+                </TabsTrigger>
+              );
+            })}
           </TabsList>
+
+          <TabsContent value="modules" className="mt-6">
+            <ModuleConfiguration spaceId={space.id} />
+          </TabsContent>
 
           <TabsContent value="ideas" className="mt-6">
             <IdeasHub spaceId={space.id} categories={manualCategories} />
           </TabsContent>
 
-          <TabsContent value="priority-matrix" className="mt-6">
+          <TabsContent value="knowledge-base" className="mt-6">
+            <KnowledgeBaseManager spaceId={space.id} />
+          </TabsContent>
+
+          <TabsContent value="participants" className="mt-6">
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold">Participants</h2>
+                  <p className="text-muted-foreground mt-1">
+                    {participants.length} participant{participants.length !== 1 ? 's' : ''} in this workspace
+                  </p>
+                </div>
+              </div>
+              {participants.length > 0 ? (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {participants.map(participant => (
+                    <Card key={participant.id} className="hover-elevate">
+                      <CardHeader>
+                        <CardTitle className="flex items-center justify-between">
+                          <span className="truncate">{participant.displayName}</span>
+                          {participant.isOnline && (
+                            <Badge variant="default" className="ml-2">Online</Badge>
+                          )}
+                        </CardTitle>
+                        {participant.isGuest && (
+                          <Badge variant="secondary">Guest</Badge>
+                        )}
+                      </CardHeader>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="py-8 text-center text-muted-foreground">
+                    No participants yet
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </TabsContent>
+
+          {isTabEnabled("priority-matrix") && (
+            <TabsContent value="priority-matrix" className="mt-6">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h2 className="text-2xl font-bold">2x2 Priority Matrix</h2>
