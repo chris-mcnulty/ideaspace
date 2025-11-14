@@ -155,7 +155,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Helper function to resolve workspace identifier (code or UUID) to UUID
   async function resolveWorkspaceId(identifier: string): Promise<string | null> {
-    const isWorkspaceCode = /^\d{4}-\d{4}$/.test(identifier);
+    // Match 8-digit codes with or without hyphen: nnnnnnnn or nnnn-nnnn
+    const isWorkspaceCode = /^\d{8}$/.test(identifier) || /^\d{4}-\d{4}$/.test(identifier);
     
     if (isWorkspaceCode) {
       const space = await storage.getSpaceByCode(identifier);
