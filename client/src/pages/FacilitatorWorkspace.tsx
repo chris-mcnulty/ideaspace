@@ -1127,6 +1127,103 @@ export default function FacilitatorWorkspace() {
     },
   });
 
+  // Helper render functions for tab content
+  const renderModulesTab = () => (
+    <ModuleConfiguration spaceId={space!.id} />
+  );
+
+  const renderIdeasTab = () => (
+    <IdeasHub spaceId={space!.id} categories={manualCategories} />
+  );
+
+  const renderKnowledgeBaseTab = () => (
+    <KnowledgeBaseManager 
+      scope="workspace" 
+      scopeId={space!.id}
+      title="Workspace Knowledge Base"
+      description="Documents available to AI for this workspace"
+    />
+  );
+
+  const renderParticipantsTab = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Participants</h2>
+          <p className="text-muted-foreground mt-1">
+            {participants.length} participant{participants.length !== 1 ? 's' : ''} in this workspace
+          </p>
+        </div>
+      </div>
+      {participants.length > 0 ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {participants.map(participant => (
+            <Card key={participant.id} className="hover-elevate">
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span className="truncate">{participant.displayName}</span>
+                  {participant.isOnline && (
+                    <Badge variant="default" className="ml-2">Online</Badge>
+                  )}
+                </CardTitle>
+                {participant.isGuest && (
+                  <Badge variant="secondary">Guest</Badge>
+                )}
+              </CardHeader>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground">
+            No participants yet
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+
+  const renderPriorityMatrixTab = () => (
+    <PriorityMatrix spaceId={space!.id} />
+  );
+
+  const renderStaircaseTab = () => (
+    <StaircaseModule spaceId={space!.id} />
+  );
+
+  const renderSurveyTab = () => (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Survey</h2>
+          <p className="text-muted-foreground mt-1">
+            Create questions and view participant responses
+          </p>
+        </div>
+        <Button
+          variant="ghost"
+          onClick={() => window.open(`/o/${params.org}/s/${params.space}/survey`, '_blank')}
+          data-testid="button-test-survey"
+        >
+          Test Survey View
+        </Button>
+      </div>
+      <SurveyQuestionsManager spaceId={space!.id} />
+      <SurveyResultsGrid spaceId={space!.id} />
+    </div>
+  );
+
+  // Map tab values to their render functions
+  const tabContentByValue: Record<string, () => React.ReactNode> = {
+    "modules": renderModulesTab,
+    "ideas": renderIdeasTab,
+    "knowledge-base": renderKnowledgeBaseTab,
+    "participants": renderParticipantsTab,
+    "priority-matrix": renderPriorityMatrixTab,
+    "staircase": renderStaircaseTab,
+    "survey": renderSurveyTab,
+  };
+
   if (spaceLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -1287,7 +1384,12 @@ export default function FacilitatorWorkspace() {
           </TabsContent>
 
           <TabsContent value="knowledge-base" className="mt-6">
-            <KnowledgeBaseManager spaceId={space.id} />
+            <KnowledgeBaseManager 
+              scope="workspace" 
+              scopeId={space.id}
+              title="Workspace Knowledge Base"
+              description="Documents available to AI for this workspace"
+            />
           </TabsContent>
 
           <TabsContent value="participants" className="mt-6">
@@ -1326,590 +1428,6 @@ export default function FacilitatorWorkspace() {
                 </Card>
               )}
             </div>
-          </TabsContent>
-
-          {isTabEnabled("priority-matrix") && (
-            <TabsContent value="priority-matrix" className="mt-6">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold">2x2 Priority Matrix</h2>
-                <p className="text-muted-foreground mt-1">
-                  Collaborative drag-and-drop grid for positioning ideas
-                </p>
-              </div>
-              <Button
-                variant="default"
-                onClick={() => navigateParticipantsMutation.mutate("priority-matrix")}
-                disabled={navigateParticipantsMutation.isPending}
-                data-testid="button-navigate-to-priority-matrix"
-              >
-                <Users className="mr-2 h-4 w-4" />
-                Bring Participants Here
-              </Button>
-            </div>
-            <PriorityMatrix 
-              spaceId={space.id}
-            />
-          </TabsContent>
-
-          <TabsContent value="staircase" className="mt-6">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold">Staircase Rating</h2>
-                <p className="text-muted-foreground mt-1">
-                  Diagonal 0-10 scale for visual idea assessment
-                </p>
-              </div>
-              <Button
-                variant="default"
-                onClick={() => navigateParticipantsMutation.mutate("staircase")}
-                disabled={navigateParticipantsMutation.isPending}
-                data-testid="button-navigate-to-staircase"
-              >
-                <Users className="mr-2 h-4 w-4" />
-                Bring Participants Here
-              </Button>
-            </div>
-            <StaircaseModule 
-              spaceId={space.id}
-            />
-          </TabsContent>
-
-          <TabsContent value="modules" className="mt-6">
-            <ModuleConfiguration spaceId={space.id} />
-          </TabsContent>
-
-          <TabsContent value="notes" className="mt-6 space-y-6">
-            {/* Notes Header */}
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Search notes..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                  data-testid="input-search-notes"
-                />
-              </div>
-              <div className="flex gap-2">
-                {selectedNotes.size > 0 && (
-                  <>
-                    <Button
-                      variant="outline"
-                      onClick={handleBulkDelete}
-                      data-testid="button-bulk-delete"
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete ({selectedNotes.size})
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={handleMergeNotes}
-                      data-testid="button-bulk-merge"
-                    >
-                      <Merge className="mr-2 h-4 w-4" />
-                      Merge ({selectedNotes.size})
-                    </Button>
-                  </>
-                )}
-                <Button
-                  variant="outline"
-                  onClick={() => categorizeMutation.mutate()}
-                  disabled={notes.length === 0 || categorizeMutation.isPending}
-                  data-testid="button-ai-categorize"
-                >
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  {categorizeMutation.isPending ? "Categorizing..." : "AI Categorize"}
-                </Button>
-                <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" data-testid="button-create-category">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Create Category
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Create Category</DialogTitle>
-                      <DialogDescription>
-                        Create a new category for organizing notes manually
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="category-name">Category Name</Label>
-                        <Input
-                          id="category-name"
-                          value={categoryName}
-                          onChange={(e) => setCategoryName(e.target.value)}
-                          placeholder="Enter category name"
-                          data-testid="input-category-name"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="category-color">Color</Label>
-                        <Input
-                          id="category-color"
-                          type="color"
-                          value={categoryColor}
-                          onChange={(e) => setCategoryColor(e.target.value)}
-                          data-testid="input-category-color"
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button
-                        onClick={() =>
-                          createCategoryMutation.mutate({
-                            name: categoryName,
-                            color: categoryColor,
-                          })
-                        }
-                        disabled={!categoryName.trim() || createCategoryMutation.isPending}
-                        data-testid="button-submit-category"
-                      >
-                        {createCategoryMutation.isPending ? "Creating..." : "Create"}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-                <Dialog open={isDataManagementDialogOpen} onOpenChange={setIsDataManagementDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" data-testid="button-manage-data">
-                      <Download className="mr-2 h-4 w-4" />
-                      Export/Import Data
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[500px]">
-                    <DialogHeader>
-                      <DialogTitle>Manage Workspace Data</DialogTitle>
-                      <DialogDescription>
-                        Export or import ideas with their categories in a single CSV file
-                      </DialogDescription>
-                    </DialogHeader>
-                    <Tabs value={dataManagementTab} onValueChange={(v) => setDataManagementTab(v as "export" | "import")} className="w-full">
-                      <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="export" data-testid="tab-export">Export</TabsTrigger>
-                        <TabsTrigger value="import" data-testid="tab-import">Import</TabsTrigger>
-                      </TabsList>
-                      <TabsContent value="export" className="space-y-4">
-                        <div className="space-y-2">
-                          <p className="text-sm text-muted-foreground">
-                            Download all ideas and categories in a single CSV file. Categories are included with each idea.
-                          </p>
-                          <p className="text-sm font-medium">Format: Idea, Category, Participant, Created At</p>
-                        </div>
-                        <Button
-                          onClick={() => {
-                            window.location.href = `/api/spaces/${params.space}/export/data-csv`;
-                            setIsDataManagementDialogOpen(false);
-                          }}
-                          className="w-full"
-                          data-testid="button-download-csv"
-                        >
-                          <Download className="mr-2 h-4 w-4" />
-                          Download CSV File
-                        </Button>
-                      </TabsContent>
-                      <TabsContent value="import" className="space-y-4">
-                        <div className="space-y-2">
-                          <p className="text-sm text-muted-foreground">
-                            Upload a CSV file with ideas and categories. Categories will be automatically created if they don't exist.
-                          </p>
-                          <p className="text-sm font-medium">Required columns: Idea, Category, Participant, Created At</p>
-                        </div>
-                        <div className="space-y-4">
-                          <input
-                            type="file"
-                            accept=".csv"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) {
-                                importDataMutation.mutate(file);
-                              }
-                            }}
-                            className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
-                            data-testid="input-import-data-file"
-                          />
-                          {importDataMutation.isPending && (
-                            <p className="text-sm text-muted-foreground">Importing...</p>
-                          )}
-                        </div>
-                      </TabsContent>
-                    </Tabs>
-                  </DialogContent>
-                </Dialog>
-                <Dialog open={isAddNoteDialogOpen} onOpenChange={setIsAddNoteDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button data-testid="button-add-note">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Add Note
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Preload Note</DialogTitle>
-                      <DialogDescription>
-                        Add a note to the session before participants start brainstorming
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="note-content">Note Content</Label>
-                        <Textarea
-                          id="note-content"
-                          placeholder="Enter note content..."
-                          value={newNoteContent}
-                          onChange={(e) => setNewNoteContent(e.target.value)}
-                          rows={4}
-                          data-testid="textarea-note-content"
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button
-                        variant="outline"
-                        onClick={() => setIsAddNoteDialogOpen(false)}
-                        data-testid="button-cancel-add-note"
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={() => addNoteMutation.mutate(newNoteContent)}
-                        disabled={!newNoteContent.trim() || addNoteMutation.isPending}
-                        data-testid="button-save-note"
-                      >
-                        Add Note
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-
-                {/* Merge Notes Dialog */}
-                <Dialog open={isMergeDialogOpen} onOpenChange={setIsMergeDialogOpen}>
-                  <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                      <DialogTitle>Merge {selectedNotes.size} Notes</DialogTitle>
-                      <DialogDescription>
-                        Combine the selected notes into a single note. Edit the merged content below.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="merged-content">Merged Content</Label>
-                        <Textarea
-                          id="merged-content"
-                          value={mergedNoteContent}
-                          onChange={(e) => setMergedNoteContent(e.target.value)}
-                          rows={6}
-                          data-testid="textarea-merged-content"
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button
-                        variant="outline"
-                        onClick={() => setIsMergeDialogOpen(false)}
-                        data-testid="button-cancel-merge"
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={() => mergeNotesMutation.mutate()}
-                        disabled={!mergedNoteContent.trim() || mergeNotesMutation.isPending}
-                        data-testid="button-save-merge"
-                      >
-                        Merge Notes
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-
-                {/* Save as Template Dialog */}
-                <Dialog open={isTemplateDialogOpen} onOpenChange={setIsTemplateDialogOpen}>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Save as Template</DialogTitle>
-                      <DialogDescription>
-                        Create a frozen snapshot template from "{space.name}"
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <div className="rounded-md bg-muted/50 p-4 mb-4">
-                        <p className="text-sm font-medium mb-2">
-                          This creates a frozen snapshot that includes:
-                        </p>
-                        <ul className="space-y-1 text-sm text-muted-foreground">
-                          <li className="flex items-center gap-2">
-                            <StickyNote className="h-3 w-3" />
-                            {notes.length} note{notes.length !== 1 ? 's' : ''} (current state)
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <BookOpen className="h-3 w-3" />
-                            Knowledge base documents for this workspace
-                          </li>
-                        </ul>
-                        <p className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
-                          💡 The template will be a separate frozen copy. Changes to this workspace won't affect the template.
-                        </p>
-                      </div>
-                      <div className="space-y-3">
-                        <Button
-                          variant="outline"
-                          className="w-full justify-start"
-                          onClick={() => markAsTemplateMutation.mutate('organization')}
-                          disabled={markAsTemplateMutation.isPending}
-                          data-testid="button-org-template"
-                        >
-                          <Users className="h-4 w-4 mr-2" />
-                          <div className="text-left">
-                            <div className="font-medium">Organization Template</div>
-                            <div className="text-xs text-muted-foreground">Available only to this organization</div>
-                          </div>
-                        </Button>
-                        {currentUser && (currentUser.role === "global_admin") && (
-                          <Button
-                            variant="outline"
-                            className="w-full justify-start"
-                            onClick={() => markAsTemplateMutation.mutate('system')}
-                            disabled={markAsTemplateMutation.isPending}
-                            data-testid="button-system-template"
-                          >
-                            <FileStack className="h-4 w-4 mr-2" />
-                            <div className="text-left">
-                              <div className="font-medium">System Template</div>
-                              <div className="text-xs text-muted-foreground">Available to all organizations</div>
-                            </div>
-                          </Button>
-                        )}
-                      </div>
-                      {markAsTemplateMutation.isPending && (
-                        <div className="flex items-center justify-center py-2">
-                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                        </div>
-                      )}
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            </div>
-
-            {/* Notes List - Grouped by Category */}
-            {notesLoading ? (
-              <div className="flex min-h-[400px] items-center justify-center">
-                <p className="text-muted-foreground">Loading notes...</p>
-              </div>
-            ) : filteredNotes.length === 0 ? (
-              <div className="flex min-h-[400px] items-center justify-center rounded-lg border-2 border-dashed">
-                <div className="text-center">
-                  <StickyNote className="mx-auto h-12 w-12 text-muted-foreground" />
-                  <p className="mt-4 text-lg font-medium">
-                    {searchQuery ? "No notes found" : "No notes yet"}
-                  </p>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {searchQuery
-                      ? "Try a different search term"
-                      : "Preload notes or wait for participants to add ideas"}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-8">
-                {categories.map((category) => (
-                  <div key={category} className="space-y-3">
-                    {/* Category Header */}
-                    <div className="flex items-center gap-3">
-                      <Badge className={`px-3 py-1 text-sm font-medium ${getCategoryColor(category)}`} data-testid={`badge-category-${category}`}>
-                        {category === "No Category" ? (
-                          category
-                        ) : (
-                          <>
-                            {category}
-                            {groupedNotes[category].some(n => n.isAiCategory) && (
-                              <Sparkles className="ml-1 h-3 w-3 inline" />
-                            )}
-                          </>
-                        )}
-                      </Badge>
-                      <span className="text-sm text-muted-foreground">
-                        {groupedNotes[category].length} {groupedNotes[category].length === 1 ? "note" : "notes"}
-                      </span>
-                    </div>
-
-                    {/* Notes Grid */}
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      {groupedNotes[category].map((note) => (
-                        <Card
-                          key={note.id}
-                          className={`cursor-pointer transition-all hover-elevate ${
-                            selectedNotes.has(note.id) ? "ring-2 ring-primary" : ""
-                          }`}
-                          onClick={() => toggleNoteSelection(note.id)}
-                          data-testid={`note-card-${note.id}`}
-                        >
-                          <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-3">
-                            <CardTitle className="text-sm font-medium line-clamp-2">
-                              {note.content}
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-2">
-                            <div className="flex flex-wrap gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setEditDialogNote(note);
-                                  setEditNoteContent(note.content);
-                                }}
-                                data-testid={`button-edit-note-${note.id}`}
-                              >
-                                <Edit2 className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setRewriteDialogNote(note);
-                                  setRewriteVariations([]);
-                                  rewriteNoteMutation.mutate({ noteId: note.id, count: 3 });
-                                }}
-                                disabled={rewriteNoteMutation.isPending}
-                                data-testid={`button-rewrite-note-${note.id}`}
-                              >
-                                <Sparkles className="h-3 w-3 text-primary" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  deleteNoteMutation.mutate(note.id);
-                                }}
-                                data-testid={`button-delete-note-${note.id}`}
-                              >
-                                <Trash2 className="h-3 w-3 text-destructive" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  updateNoteVisibilityMutation.mutate({
-                                    noteId: note.id,
-                                    updates: { visibleInRanking: !note.visibleInRanking }
-                                  });
-                                }}
-                                title={note.visibleInRanking ? "Hide from Ranking" : "Show in Ranking"}
-                                data-testid={`button-toggle-ranking-visibility-${note.id}`}
-                              >
-                                {note.visibleInRanking ? (
-                                  <Eye className="h-3 w-3 text-blue-500" />
-                                ) : (
-                                  <EyeOff className="h-3 w-3 text-muted-foreground" />
-                                )}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  updateNoteVisibilityMutation.mutate({
-                                    noteId: note.id,
-                                    updates: { visibleInMarketplace: !note.visibleInMarketplace }
-                                  });
-                                }}
-                                title={note.visibleInMarketplace ? "Hide from Marketplace" : "Show in Marketplace"}
-                                data-testid={`button-toggle-marketplace-visibility-${note.id}`}
-                              >
-                                {note.visibleInMarketplace ? (
-                                  <Coins className="h-3 w-3 text-green-500" />
-                                ) : (
-                                  <Coins className="h-3 w-3 text-muted-foreground opacity-50" />
-                                )}
-                              </Button>
-                            </div>
-                            {manualCategories.length > 0 && (
-                              <div onClick={(e) => e.stopPropagation()}>
-                                <Select
-                                  value={note.manualCategoryId || "none"}
-                                  onValueChange={(value) => {
-                                    updateNoteCategoryMutation.mutate({
-                                      noteId: note.id,
-                                      categoryId: value === "none" ? null : value,
-                                    });
-                                  }}
-                                >
-                                  <SelectTrigger
-                                    className="h-8 text-xs"
-                                    data-testid={`select-category-${note.id}`}
-                                  >
-                                    <SelectValue placeholder="Assign category" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="none">No Category</SelectItem>
-                                    {manualCategories.map((cat) => (
-                                      <SelectItem key={cat.id} value={cat.id}>
-                                        <div className="flex items-center gap-2">
-                                          <div
-                                            className="h-3 w-3 rounded-full"
-                                            style={{ backgroundColor: cat.color }}
-                                          />
-                                          {cat.name}
-                                        </div>
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="participants" className="mt-6">
-            {participants.length === 0 ? (
-              <div className="flex min-h-[400px] items-center justify-center rounded-lg border-2 border-dashed">
-                <div className="text-center">
-                  <Users className="mx-auto h-12 w-12 text-muted-foreground" />
-                  <p className="mt-4 text-lg font-medium">No participants yet</p>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Waiting for participants to join the session
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {participants.map((participant) => (
-                  <Card key={participant.id} data-testid={`participant-card-${participant.id}`}>
-                    <CardHeader>
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`h-2 w-2 rounded-full ${
-                            participant.isOnline ? "bg-green-500" : "bg-gray-300"
-                          }`}
-                        />
-                        <CardTitle className="text-base">{participant.displayName}</CardTitle>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-1 text-sm text-muted-foreground">
-                        <p>Status: {participant.isOnline ? "Online" : "Offline"}</p>
-                        <p>Type: {participant.isGuest ? "Guest" : "Registered"}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
           </TabsContent>
 
           <TabsContent value="voting" className="mt-6 space-y-6">
@@ -2374,14 +1892,6 @@ export default function FacilitatorWorkspace() {
             <SurveyResultsGrid spaceId={space.id} />
           </TabsContent>
 
-          <TabsContent value="knowledge-base" className="mt-6">
-            <KnowledgeBaseManager
-              scope="workspace"
-              scopeId={space.id}
-              title={`${space.name} Knowledge Base`}
-              description="Upload documents specific to this workspace to help ground AI categorization and personalized results"
-            />
-          </TabsContent>
 
           <TabsContent value="results" className="mt-6 space-y-6">
             {/* Comprehensive Voting Results Table */}
