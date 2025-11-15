@@ -3,14 +3,22 @@ import { pgTable, text, varchar, timestamp, boolean, integer, jsonb, real, uniqu
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// System-wide settings table for global configuration
+// System-wide and organization-level settings table
+// For system-wide settings: organizationId is null
+// For organization-specific settings: organizationId is set
 export const systemSettings = pgTable("system_settings", {
-  key: text("key").primaryKey(), // e.g., 'oauth_enabled', 'maintenance_mode', etc.
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id"), // null for system-wide settings, set for org-specific
+  key: text("key").notNull(), // e.g., 'oauth_enabled', 'maintenance_mode', etc.
   value: jsonb("value").notNull(), // Flexible JSON value for different setting types
   description: text("description"), // Human-readable description of the setting
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  updatedBy: varchar("updated_by").references(() => users.id),
-});
+  updatedBy: varchar("updated_by"), // Will reference users.id
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  // Ensure unique key per organization (or system-wide if organizationId is null)
+  uniqueOrgKey: unique().on(table.organizationId, table.key),
+}));
 
 export const organizations = pgTable("organizations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -518,6 +526,12 @@ export const staircasePositions = pgTable("staircase_positions", {
 }));
 
 // Insert schemas
+export const insertSystemSettingSchema = createInsertSchema(systemSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertOrganizationSchema = createInsertSchema(organizations).omit({
   id: true,
   createdAt: true,
@@ -740,6 +754,9 @@ export const insertStaircasePositionSchema = createInsertSchema(staircasePositio
 });
 
 // Types
+export type SystemSetting = typeof systemSettings.$inferSelect;
+export type InsertSystemSetting = z.infer<typeof insertSystemSettingSchema>;
+
 export type Organization = typeof organizations.$inferSelect;
 export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
 

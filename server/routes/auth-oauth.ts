@@ -22,6 +22,30 @@ declare module 'express-session' {
 
 const router = express.Router();
 
+// Check if OAuth/SSO is enabled
+router.get('/api/auth/oauth-status', async (req: Request, res: Response) => {
+  try {
+    // Check both system-wide and organization-specific settings
+    let oauthEnabled = false;
+    
+    // First check if there's a system-wide setting
+    const systemSetting = await storage.getSystemSetting('oauth_enabled', null);
+    if (systemSetting) {
+      oauthEnabled = systemSetting.value as boolean;
+    } else {
+      // Default: OAuth is enabled if credentials are configured
+      oauthEnabled = !!(process.env.ORION_CLIENT_ID && process.env.ORION_CLIENT_SECRET);
+    }
+    
+    res.json({ enabled: oauthEnabled });
+  } catch (error) {
+    console.error('Error checking OAuth status:', error);
+    // Fail open - if we can't check, allow OAuth if credentials exist
+    const enabled = !!(process.env.ORION_CLIENT_ID && process.env.ORION_CLIENT_SECRET);
+    res.json({ enabled });
+  }
+});
+
 // Get OAuth config from environment
 const ORION_BASE_URL = process.env.ORION_ISSUER_URL || 'http://localhost:5000';
 // In Replit, use the REPLIT_DOMAINS environment variable to get the public URL

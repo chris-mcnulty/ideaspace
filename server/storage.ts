@@ -63,7 +63,10 @@ import {
   type InsertStaircaseModule,
   type StaircasePosition,
   type InsertStaircasePosition,
+  type SystemSetting,
+  type InsertSystemSetting,
   organizations,
+  systemSettings,
   users,
   spaces,
   participants,
@@ -99,6 +102,11 @@ import {
 import { eq, and, desc, or, isNull, gte, lte, sql } from "drizzle-orm";
 
 export interface IStorage {
+  // System Settings
+  getSystemSetting(key: string, organizationId?: string | null): Promise<SystemSetting | undefined>;
+  setSystemSetting(setting: InsertSystemSetting): Promise<SystemSetting>;
+  getAllSystemSettings(organizationId?: string | null): Promise<SystemSetting[]>;
+  
   // Organizations
   getOrganization(id: string): Promise<Organization | undefined>;
   getOrganizationBySlug(slug: string): Promise<Organization | undefined>;
@@ -325,6 +333,45 @@ export interface IStorage {
 }
 
 export class DbStorage implements IStorage {
+  // System Settings
+  async getSystemSetting(key: string, organizationId: string | null = null): Promise<SystemSetting | undefined> {
+    const conditions = organizationId 
+      ? and(eq(systemSettings.key, key), eq(systemSettings.organizationId, organizationId))
+      : and(eq(systemSettings.key, key), isNull(systemSettings.organizationId));
+    
+    const [setting] = await db.select().from(systemSettings).where(conditions).limit(1);
+    return setting;
+  }
+
+  async setSystemSetting(setting: InsertSystemSetting): Promise<SystemSetting> {
+    // Try to update existing setting, or insert if it doesn't exist
+    const existing = await this.getSystemSetting(setting.key, setting.organizationId || null);
+    
+    if (existing) {
+      const [updated] = await db.update(systemSettings)
+        .set({
+          value: setting.value,
+          description: setting.description,
+          updatedBy: setting.updatedBy,
+          updatedAt: new Date()
+        })
+        .where(eq(systemSettings.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(systemSettings).values(setting).returning();
+      return created;
+    }
+  }
+
+  async getAllSystemSettings(organizationId: string | null = null): Promise<SystemSetting[]> {
+    const condition = organizationId 
+      ? eq(systemSettings.organizationId, organizationId)
+      : isNull(systemSettings.organizationId);
+    
+    return db.select().from(systemSettings).where(condition);
+  }
+
   // Organizations
   async getOrganization(id: string): Promise<Organization | undefined> {
     const [org] = await db.select().from(organizations).where(eq(organizations.id, id)).limit(1);

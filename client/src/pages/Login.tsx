@@ -14,10 +14,17 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [emailNotVerified, setEmailNotVerified] = useState(false);
+  const [oauthEnabled, setOauthEnabled] = useState(false);
   const [, setLocation] = useLocation();
 
   useEffect(() => {
     document.title = "Nebula - Sign In | The Synozur Alliance";
+    
+    // Check if OAuth/SSO is enabled
+    fetch('/api/auth/oauth-status')
+      .then(res => res.json())
+      .then(data => setOauthEnabled(data.enabled))
+      .catch(err => console.error('Failed to check OAuth status:', err));
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -206,29 +213,33 @@ export default function Login() {
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>
               
-              <div className="relative w-full">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-background px-2 text-muted-foreground">Or</span>
-                </div>
-              </div>
-              
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={() => window.location.href = "/auth/sso/login"}
-                data-testid="button-sso-sign-in"
-              >
-                <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M8 12h8" />
-                  <path d="M12 8v8" />
-                </svg>
-                Sign in with Synozur account
-              </Button>
+              {oauthEnabled && (
+                <>
+                  <div className="relative w-full">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-background px-2 text-muted-foreground">Or</span>
+                    </div>
+                  </div>
+                  
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => window.location.href = "/auth/sso/login"}
+                    data-testid="button-sso-sign-in"
+                  >
+                    <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M8 12h8" />
+                      <path d="M12 8v8" />
+                    </svg>
+                    Sign in with Synozur account
+                  </Button>
+                </>
+              )}
               
               <div className="flex flex-col items-center gap-2 text-xs text-muted-foreground">
                 <button 
