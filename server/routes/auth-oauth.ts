@@ -1,17 +1,33 @@
 import express from 'express';
 import { OAuthClient } from '../services/oauth-client';
-import storage from '../storage';
+import { storage } from '../storage';
 import { users, type User } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import { db } from '../db';
 import type { Request, Response } from 'express';
 
+// Extend express-session types to include OAuth properties
+declare module 'express-session' {
+  interface SessionData {
+    oauth_state?: string;
+    code_verifier?: string;
+    returnTo?: string;
+    userId?: string;
+    user?: User;
+    access_token?: string;
+    refresh_token?: string;
+    id_token?: string;
+  }
+}
+
 const router = express.Router();
 
 // Get OAuth config from environment
-const isDevelopment = process.env.NODE_ENV !== 'production';
 const ORION_BASE_URL = process.env.ORION_ISSUER_URL || 'http://localhost:5000';
-const NEBULA_BASE_URL = isDevelopment ? 'http://localhost:5001' : process.env.NEBULA_BASE_URL || 'https://nebula.synozur.com';
+// In Replit, use the REPLIT_DOMAINS environment variable to get the public URL
+const NEBULA_BASE_URL = process.env.REPLIT_DOMAINS 
+  ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
+  : process.env.NEBULA_BASE_URL || 'https://nebula.synozur.com';
 
 // Initialize OAuth client
 const oauthClient = new OAuthClient({
@@ -70,6 +86,10 @@ router.get('/auth/callback', async (req: Request, res: Response) => {
     }
     
     // Restore code verifier from session
+    if (!req.session.code_verifier) {
+      console.error('No code verifier found in session');
+      return res.redirect('/login?error=missing_verifier');
+    }
     oauthClient.setCodeVerifier(req.session.code_verifier);
     
     // Exchange authorization code for tokens
