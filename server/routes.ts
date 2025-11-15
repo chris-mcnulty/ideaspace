@@ -127,6 +127,9 @@ function createWorkspaceAccessMiddleware(options: {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Register OAuth routes
+  app.use(oauthRoutes);
+  
   // Configure multer for file uploads (max 10MB)
   const upload = multer({
     storage: multer.memoryStorage(),
