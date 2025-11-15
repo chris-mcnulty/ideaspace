@@ -16,12 +16,18 @@ export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: text("email").notNull().unique(),
   username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+  password: text("password"), // Now nullable for OAuth users
   organizationId: varchar("organization_id").references(() => organizations.id),
   role: text("role").notNull().default("user"), // global_admin, company_admin, facilitator, user
   displayName: text("display_name"),
   emailVerified: boolean("email_verified").notNull().default(false),
+  // OAuth fields
+  orionId: text("orion_id").unique(), // User ID from Orion identity provider
+  authProvider: text("auth_provider").notNull().default("local"), // 'local' or 'orion'
+  orionTenantId: text("orion_tenant_id"), // Tenant ID from Orion
+  lastLogin: timestamp("last_login"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const emailVerificationTokens = pgTable("email_verification_tokens", {

@@ -4,6 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import passport from "passport";
 import multer from "multer";
 import { storage } from "./storage";
+import oauthRoutes from "./routes/auth-oauth";
 import { db } from "./db";
 import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, type Space, organizations, users, companyAdmins, knowledgeBaseDocuments, workspaceTemplates, aiUsageLog, insertIdeaSchema, insertWorkspaceModuleSchema, insertWorkspaceModuleRunSchema, insertPriorityMatrixSchema, insertPriorityMatrixPositionSchema, insertStaircaseModuleSchema, insertStaircasePositionSchema } from "@shared/schema";
 import { uploadImage, validateImageFile, cleanupTempFile } from "./middleware/uploadMiddleware";
