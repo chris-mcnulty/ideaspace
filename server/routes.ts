@@ -707,6 +707,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Admin Panel APIs
+  // System Settings (global admin only)
+  app.get("/api/admin/system-settings", requireGlobalAdmin, async (req, res) => {
+    try {
+      const settings = await storage.getAllSystemSettings(null);
+      res.json(settings);
+    } catch (error) {
+      console.error("Failed to fetch system settings:", error);
+      res.status(500).json({ error: "Failed to fetch system settings" });
+    }
+  });
+
+  app.get("/api/admin/system-settings/:key", requireGlobalAdmin, async (req, res) => {
+    try {
+      const { key } = req.params;
+      const setting = await storage.getSystemSetting(key, null);
+      if (!setting) {
+        return res.status(404).json({ error: "Setting not found" });
+      }
+      res.json(setting);
+    } catch (error) {
+      console.error("Failed to fetch system setting:", error);
+      res.status(500).json({ error: "Failed to fetch system setting" });
+    }
+  });
+
+  app.put("/api/admin/system-settings/:key", requireGlobalAdmin, async (req, res) => {
+    try {
+      const { key } = req.params;
+      const data = z.object({
+        value: z.any(),
+        description: z.string().optional(),
+      }).parse(req.body);
+
+      const currentUser = req.user as User;
+      const setting = await storage.setSystemSetting({
+        key,
+        value: data.value,
+        description: data.description,
+        organizationId: null,
+        updatedBy: currentUser.id,
+      });
+
+      res.json(setting);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Failed to update system setting:", error);
+      res.status(500).json({ error: "Failed to update system setting" });
+    }
+  });
+
   // List all organizations (global admin only)
   app.get("/api/admin/organizations", requireGlobalAdmin, async (req, res) => {
     try {

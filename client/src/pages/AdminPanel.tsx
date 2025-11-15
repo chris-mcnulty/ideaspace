@@ -151,6 +151,12 @@ export default function AdminPanel() {
               <Activity className="h-4 w-4 mr-2" />
               AI Usage
             </TabsTrigger>
+            {currentUser.role === "global_admin" && (
+              <TabsTrigger value="system-settings" data-testid="tab-system-settings">
+                <Activity className="h-4 w-4 mr-2" />
+                System Settings
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="workspaces" className="space-y-6">
@@ -229,6 +235,12 @@ export default function AdminPanel() {
               currentUser={currentUser}
               organizations={displayOrgs}
             />
+          </TabsContent>
+
+          <TabsContent value="system-settings">
+            {currentUser.role === "global_admin" && (
+              <SystemSettingsTab currentUser={currentUser} />
+            )}
           </TabsContent>
         </Tabs>
       </main>
@@ -2953,6 +2965,127 @@ function UsersTab() {
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+// System Settings Tab Component (Global Admin only)
+function SystemSettingsTab({ currentUser }: { currentUser: User }) {
+  const { toast } = useToast();
+  
+  // Fetch all system settings
+  const { data: settings = [], isLoading } = useQuery<SystemSetting[]>({
+    queryKey: ["/api/admin/system-settings"],
+    enabled: currentUser?.role === "global_admin",
+  });
+
+  // Find OAuth setting
+  const oauthSetting = settings.find(s => s.key === "oauth_enabled");
+  const isOAuthEnabled = oauthSetting?.value === true;
+
+  // Toggle OAuth mutation
+  const toggleOAuthMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const response = await apiRequest("PUT", "/api/admin/system-settings/oauth_enabled", {
+        value: enabled,
+        description: "System-wide OAuth/SSO toggle"
+      });
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/system-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/oauth-status"] });
+      toast({
+        title: "Setting updated",
+        description: `OAuth/SSO has been ${isOAuthEnabled ? "disabled" : "enabled"}.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to update setting",
+        description: error.message || "Please try again",
+      });
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin mr-2" />
+        Loading system settings...
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5" />
+            Authentication Settings
+          </CardTitle>
+          <CardDescription>
+            Control system-wide authentication options
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* OAuth/SSO Toggle */}
+          <div className="flex items-center justify-between p-4 border rounded-lg">
+            <div className="space-y-1 flex-1">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="oauth-toggle" className="font-medium">
+                  OAuth/SSO Authentication
+                </Label>
+                <Badge variant={isOAuthEnabled ? "default" : "secondary"}>
+                  {isOAuthEnabled ? "Enabled" : "Disabled"}
+                </Badge>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Allow users to sign in with their Synozur account. When disabled, only local email/password authentication is available.
+              </p>
+              {!isOAuthEnabled && (
+                <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">
+                  ⚠️ OAuth is currently disabled. The "Sign in with Synozur account" button will not appear on the login page.
+                </p>
+              )}
+            </div>
+            <Switch
+              id="oauth-toggle"
+              checked={isOAuthEnabled}
+              onCheckedChange={(checked) => toggleOAuthMutation.mutate(checked)}
+              disabled={toggleOAuthMutation.isPending}
+              data-testid="switch-oauth-enabled"
+            />
+          </div>
+
+          {/* Additional system settings can be added here */}
+        </CardContent>
+      </Card>
+
+      {/* Help Text */}
+      <Card className="border-muted-foreground/20">
+        <CardContent className="pt-6">
+          <div className="flex gap-3">
+            <BookOpen className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-muted-foreground">
+              <p className="font-medium text-foreground mb-1">About OAuth Configuration</p>
+              <p className="mb-2">
+                OAuth/SSO allows users to authenticate using their Synozur account instead of creating a separate password. This provides:
+              </p>
+              <ul className="list-disc list-inside space-y-1 ml-2">
+                <li>Centralized authentication across Synozur applications</li>
+                <li>Automatic role mapping from Orion identity provider</li>
+                <li>Seamless user provisioning and updates</li>
+              </ul>
+              <p className="mt-3">
+                For OAuth setup instructions, see <code className="text-xs bg-muted px-1 py-0.5 rounded">OAUTH_CONFIGURATION_NOTES.md</code> in the project root.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
