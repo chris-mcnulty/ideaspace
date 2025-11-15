@@ -1,13 +1,15 @@
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Building2, Plus, LogOut, Loader2, Mail, Clock, Check, X, BookOpen, FileStack, Activity, Users, Edit, Trash2 } from "lucide-react";
-import type { Organization, Space, User, AccessRequest, WorkspaceTemplate } from "@shared/schema";
+import type { Organization, Space, User, AccessRequest, WorkspaceTemplate, SystemSetting } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { useState, useEffect } from "react";
 import { KnowledgeBaseManager } from "@/components/KnowledgeBaseManager";
 import { ThemeToggle } from "@/components/ThemeToggle";
