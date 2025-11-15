@@ -3,6 +3,15 @@ import { pgTable, text, varchar, timestamp, boolean, integer, jsonb, real, uniqu
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// System-wide settings table for global configuration
+export const systemSettings = pgTable("system_settings", {
+  key: text("key").primaryKey(), // e.g., 'oauth_enabled', 'maintenance_mode', etc.
+  value: jsonb("value").notNull(), // Flexible JSON value for different setting types
+  description: text("description"), // Human-readable description of the setting
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  updatedBy: varchar("updated_by").references(() => users.id),
+});
+
 export const organizations = pgTable("organizations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),

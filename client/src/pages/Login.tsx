@@ -227,7 +227,7 @@ export default function Login() {
                   <path d="M8 12h8" />
                   <path d="M12 8v8" />
                 </svg>
-                Sign in with Orion SSO
+                Sign in with Synozur account
               </Button>
               
               <div className="flex flex-col items-center gap-2 text-xs text-muted-foreground">
