@@ -32,6 +32,11 @@ export function setupAuth() {
             return done(null, false, { message: "Invalid email or password" });
           }
 
+          // Check if user has a password (OAuth users may not)
+          if (!user.password) {
+            return done(null, false, { message: "Invalid email or password" });
+          }
+
           const isValid = await verifyPassword(password, user.password);
           
           if (!isValid) {
