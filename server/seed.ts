@@ -13,8 +13,9 @@ async function seed() {
   });
   console.log("✓ Created organization:", org.name);
 
-  // Create users with different roles (password: "password123" for all, hashed)
-  const hashedPassword = await hashPassword("password123");
+  // Create users with different roles
+  const seedPassword = process.env.SEED_PASSWORD || "password123";
+  const hashedPassword = await hashPassword(seedPassword);
   
   const globalAdmin = await storage.createUser({
     email: "admin@synozur.com",
@@ -52,7 +53,7 @@ async function seed() {
     organizationId: org.id,
   });
   
-  console.log("✓ Created 4 users with different roles (password: password123)");
+  console.log(`✓ Created 4 users with different roles (password: ${seedPassword})`);
 
   // Assign company admin to Acme organization
   await storage.createCompanyAdmin({
