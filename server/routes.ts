@@ -30,6 +30,48 @@ declare module "express-session" {
   }
 }
 
+// Helper function to resolve workspace identifier (code or UUID) to UUID
+async function resolveWorkspaceIdentifier(identifier: string): Promise<string | null> {
+  // Match 8-digit codes with or without hyphen: nnnnnnnn or nnnn-nnnn
+  const isWorkspaceCode = /^\d{8}$/.test(identifier) || /^\d{4}-\d{4}$/.test(identifier);
+  
+  if (isWorkspaceCode) {
+    const space = await storage.getSpaceByCode(identifier);
+    return space?.id || null;
+  }
+  
+  // Already a UUID or other ID format
+  return identifier;
+}
+
+// Helper function to check if workspace status indicates it's open for participation
+// Uses prefix matching to handle variants like "ideation-live", "vote-round1", etc.
+function isWorkspaceOpenForParticipation(status: string): boolean {
+  if (!status) return false;
+  
+  const normalized = status.toLowerCase().trim();
+  
+  // Exact lifecycle statuses
+  if (normalized === 'open') return true;
+  
+  // Closed/draft/archived are not open
+  if (['closed', 'draft', 'processing', 'archived'].includes(normalized)) return false;
+  
+  // Check active session phase prefixes
+  const activePhrasePrefixes = [
+    'ideation', 'ideate', 
+    'voting', 'vote', 
+    'ranking', 'rank', 
+    'marketplace', 'market',
+    'survey', 
+    'priority-matrix', 'priority', 
+    'staircase',
+    'results'
+  ];
+  
+  return activePhrasePrefixes.some(prefix => normalized.startsWith(prefix));
+}
+
 // Middleware factory to check workspace access based on status and guest permissions
 function createWorkspaceAccessMiddleware(options: {
   allowClosed?: boolean;  // Allow access even if workspace is closed (for results with resultsPublicAfterClose)
@@ -37,9 +79,15 @@ function createWorkspaceAccessMiddleware(options: {
 }) {
   return async (req: ExpressRequest, res: ExpressResponse, next: NextFunction) => {
     try {
-      const spaceId = req.params.spaceId || req.params.space || (req.body as any)?.spaceId;
-      if (!spaceId) {
+      const rawSpaceId = req.params.spaceId || req.params.space || (req.body as any)?.spaceId;
+      if (!rawSpaceId) {
         return res.status(400).json({ error: "Workspace ID required" });
+      }
+
+      // Resolve workspace code to UUID if needed
+      const spaceId = await resolveWorkspaceIdentifier(rawSpaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
       }
 
       const space = await storage.getSpace(spaceId);
@@ -82,7 +130,8 @@ function createWorkspaceAccessMiddleware(options: {
         });
       }
 
-      if (options.requireOpen && space.status !== 'open') {
+      // Check if workspace is open for participation using robust prefix matching
+      if (options.requireOpen && !isWorkspaceOpenForParticipation(space.status)) {
         return res.status(403).json({ 
           error: "This workspace is not currently open for participation",
           code: "WORKSPACE_NOT_OPEN"
@@ -159,16 +208,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Helper function to resolve workspace identifier (code or UUID) to UUID
   async function resolveWorkspaceId(identifier: string): Promise<string | null> {
-    // Match 8-digit codes with or without hyphen: nnnnnnnn or nnnn-nnnn
-    const isWorkspaceCode = /^\d{8}$/.test(identifier) || /^\d{4}-\d{4}$/.test(identifier);
-    
-    if (isWorkspaceCode) {
-      const space = await storage.getSpaceByCode(identifier);
-      return space?.id || null;
-    }
-    
-    // Already a UUID or other ID format
-    return identifier;
+    return resolveWorkspaceIdentifier(identifier);
   }
 
   // Workspace code lookup (public endpoint for entry flow)
@@ -2152,6 +2192,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = req.user as User | undefined;
       const isFacilitatorOrAdmin = user && ["facilitator", "company_admin", "global_admin"].includes(user.role);
       
+      // Resolve workspace code to UUID if needed
+      const resolvedSpaceId = await resolveWorkspaceId(data.spaceId);
+      if (!resolvedSpaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      data.spaceId = resolvedSpaceId;
+      
       if (!isFacilitatorOrAdmin) {
         // For participants, override participantId with session value to prevent forgery
         const sessionParticipantId = req.session?.participantId;
@@ -2161,17 +2208,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         data.participantId = sessionParticipantId;
         
         // For participants, verify ideation phase is active
-        const space = await storage.getSpace(data.spaceId);
+        const space = await storage.getSpace(resolvedSpaceId);
         if (!space) {
           return res.status(404).json({ error: "Workspace not found" });
         }
         
-        // Check if ideation phase is active (time-window based for both live and async)
-        const isIdeationActive = space.ideationStartsAt && space.ideationEndsAt && 
+        // Check if ideation phase is active by status OR time window
+        const statusBasedActive = ['ideation', 'ideate'].includes(space.status.toLowerCase());
+        const timeWindowActive = space.ideationStartsAt && space.ideationEndsAt && 
           new Date() >= new Date(space.ideationStartsAt) && 
           new Date() <= new Date(space.ideationEndsAt);
         
-        if (!isIdeationActive) {
+        if (!statusBasedActive && !timeWindowActive) {
           return res.status(403).json({ error: "Ideation phase is not currently active. New ideas cannot be added at this time." });
         }
       }

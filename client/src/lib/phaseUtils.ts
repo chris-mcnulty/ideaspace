@@ -32,13 +32,14 @@ export function getPhaseStatus(
   return "ended";
 }
 
-export function isPhaseActive(
-  space: Space,
-  phaseType: PhaseType
-): boolean {
-  // First check if the space's current status matches the phase type
-  // This handles live sessions where facilitators manually control phases
-  const statusMappings: Record<string, PhaseType> = {
+function normalizeStatusToPhase(status: string): PhaseType | null {
+  if (!status) return null;
+  
+  // Normalize: lowercase, trim, remove hyphens for comparison
+  const normalized = status.toLowerCase().trim();
+  
+  // Exact matches first
+  const exactMappings: Record<string, PhaseType> = {
     "ideation": "ideation",
     "ideate": "ideation",
     "voting": "voting",
@@ -46,10 +47,41 @@ export function isPhaseActive(
     "ranking": "ranking",
     "rank": "ranking",
     "marketplace": "marketplace",
+    "market": "marketplace",
     "survey": "survey",
   };
   
-  const currentPhase = statusMappings[space.status];
+  if (exactMappings[normalized]) {
+    return exactMappings[normalized];
+  }
+  
+  // Prefix-based matching for variants like "ideation-live", "vote-round1", etc.
+  if (normalized.startsWith("ideate") || normalized.startsWith("ideation")) {
+    return "ideation";
+  }
+  if (normalized.startsWith("vote") || normalized.startsWith("voting")) {
+    return "voting";
+  }
+  if (normalized.startsWith("rank") || normalized.startsWith("ranking")) {
+    return "ranking";
+  }
+  if (normalized.startsWith("market") || normalized.startsWith("marketplace")) {
+    return "marketplace";
+  }
+  if (normalized.startsWith("survey")) {
+    return "survey";
+  }
+  
+  return null;
+}
+
+export function isPhaseActive(
+  space: Space,
+  phaseType: PhaseType
+): boolean {
+  // First check if the space's current status matches the phase type
+  // This handles live sessions where facilitators manually control phases
+  const currentPhase = normalizeStatusToPhase(space.status);
   if (currentPhase === phaseType) {
     return true;
   }
