@@ -19,7 +19,7 @@ import { generatePairwiseExport, generateStackRankingExport, generateMarketplace
 import { generateCohortResults, generatePersonalizedResults, generateAllPersonalizedResults } from "./services/results";
 import { hashPassword, requireAuth, requireRole, requireGlobalAdmin, requireCompanyAdmin, requireFacilitator } from "./auth";
 import { generateWorkspaceCode, isValidWorkspaceCode } from "./services/workspace-code";
-import { sendAccessRequestEmail, sendEmailVerification, sendPasswordReset } from "./services/email";
+import { sendAccessRequestEmail, sendEmailVerification, sendPasswordReset, sendSessionInviteEmail, sendPhaseChangeNotificationEmail, sendResultsAvailableEmail, sendBulkNotifications, type SessionInviteEmailData, type PhaseChangeEmailData, type ResultsReadyEmailData } from "./services/email";
 import { randomBytes } from "crypto";
 import { fileUploadService } from "./services/file-upload";
 
@@ -4802,6 +4802,229 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Failed to generate all personalized results:", error);
       res.status(500).json({ error: error.message || "Failed to generate personalized results" });
+    }
+  });
+
+  // ============================================================
+  // Email Notification Endpoints
+  // ============================================================
+
+  // Send session invite to a participant
+  app.post("/api/spaces/:spaceId/notifications/invite", requireFacilitator, async (req, res) => {
+    try {
+      const { spaceId } = req.params;
+      const { email, name, role, personalMessage, sessionDate, sessionTime } = req.body as {
+        email: string;
+        name: string;
+        role?: 'participant' | 'facilitator';
+        personalMessage?: string;
+        sessionDate?: string;
+        sessionTime?: string;
+      };
+
+      if (!email || !name) {
+        return res.status(400).json({ error: "Email and name are required" });
+      }
+
+      const space = await storage.getSpace(spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      const organization = space.organizationId ? await storage.getOrganization(space.organizationId) : null;
+      const currentUser = req.user as User;
+
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const joinUrl = `${baseUrl}/o/${organization?.slug || 'org'}/s/${space.code}`;
+
+      await sendSessionInviteEmail(email, {
+        inviteeName: name,
+        role: role || 'participant',
+        organizationName: organization?.name || 'Organization',
+        workspaceName: space.name,
+        workspaceCode: space.code,
+        facilitatorName: currentUser.username,
+        joinUrl,
+        personalMessage,
+        sessionDate,
+        sessionTime,
+      });
+
+      res.json({ success: true, message: `Invitation sent to ${email}` });
+    } catch (error: any) {
+      console.error("Failed to send invitation:", error);
+      res.status(500).json({ error: error.message || "Failed to send invitation" });
+    }
+  });
+
+  // Send bulk invites to multiple participants
+  app.post("/api/spaces/:spaceId/notifications/invite-bulk", requireFacilitator, async (req, res) => {
+    try {
+      const { spaceId } = req.params;
+      const { recipients, personalMessage, sessionDate, sessionTime } = req.body as {
+        recipients: Array<{ email: string; name: string; role?: 'participant' | 'facilitator' }>;
+        personalMessage?: string;
+        sessionDate?: string;
+        sessionTime?: string;
+      };
+
+      if (!recipients || !Array.isArray(recipients) || recipients.length === 0) {
+        return res.status(400).json({ error: "Recipients array is required" });
+      }
+
+      const space = await storage.getSpace(spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      const organization = space.organizationId ? await storage.getOrganization(space.organizationId) : null;
+      const currentUser = req.user as User;
+
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const joinUrl = `${baseUrl}/o/${organization?.slug || 'org'}/s/${space.code}`;
+
+      let sent = 0;
+      let failed = 0;
+      const errors: string[] = [];
+
+      for (const recipient of recipients) {
+        try {
+          await sendSessionInviteEmail(recipient.email, {
+            inviteeName: recipient.name,
+            role: recipient.role || 'participant',
+            organizationName: organization?.name || 'Organization',
+            workspaceName: space.name,
+            workspaceCode: space.code,
+            facilitatorName: currentUser.username,
+            joinUrl,
+            personalMessage,
+            sessionDate,
+            sessionTime,
+          });
+          sent++;
+        } catch (error: any) {
+          failed++;
+          errors.push(`${recipient.email}: ${error.message}`);
+        }
+      }
+
+      res.json({ success: true, sent, failed, errors: errors.length > 0 ? errors : undefined });
+    } catch (error: any) {
+      console.error("Failed to send bulk invitations:", error);
+      res.status(500).json({ error: error.message || "Failed to send invitations" });
+    }
+  });
+
+  // Send phase change notification to all participants with email
+  app.post("/api/spaces/:spaceId/notifications/phase-change", requireFacilitator, async (req, res) => {
+    try {
+      const { spaceId } = req.params;
+      const { previousPhase, newPhase, phaseDescription, deadline } = req.body as {
+        previousPhase?: string;
+        newPhase: string;
+        phaseDescription?: string;
+        deadline?: string;
+      };
+
+      if (!newPhase) {
+        return res.status(400).json({ error: "newPhase is required" });
+      }
+
+      const space = await storage.getSpace(spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      const organization = space.organizationId ? await storage.getOrganization(space.organizationId) : null;
+      const participants = await storage.getParticipantsBySpace(spaceId);
+
+      // Filter participants who have email addresses
+      const emailableParticipants = participants.filter(p => p.email);
+      
+      if (emailableParticipants.length === 0) {
+        return res.json({ success: true, sent: 0, message: "No participants with email addresses" });
+      }
+
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const actionUrl = `${baseUrl}/o/${organization?.slug || 'org'}/s/${space.code}`;
+
+      const phaseDescriptions: Record<string, string> = {
+        'ideation': 'Share your ideas and contribute to the collective vision.',
+        'voting': 'Compare ideas pairwise and vote for your preferences.',
+        'ranking': 'Rank the ideas in order of priority.',
+        'marketplace': 'Allocate your coins to the ideas you value most.',
+        'survey': 'Rate the ideas on the survey questions.',
+        'priority-matrix': 'Position ideas on the priority matrix.',
+        'staircase': 'Rate ideas on the staircase scale.',
+        'results': 'View the results and insights from the session.',
+      };
+
+      const description = phaseDescription || phaseDescriptions[newPhase.toLowerCase()] || `The session has moved to the ${newPhase} phase.`;
+
+      const results = await sendBulkNotifications('phase_change', 
+        emailableParticipants.map(p => ({ email: p.email!, name: p.displayName })),
+        {
+          organizationName: organization?.name || 'Organization',
+          workspaceName: space.name,
+          workspaceCode: space.code,
+          previousPhase,
+          newPhase,
+          phaseDescription: description,
+          actionUrl,
+          deadline,
+        }
+      );
+
+      res.json({ success: true, ...results });
+    } catch (error: any) {
+      console.error("Failed to send phase change notifications:", error);
+      res.status(500).json({ error: error.message || "Failed to send notifications" });
+    }
+  });
+
+  // Send results available notification to all participants
+  app.post("/api/spaces/:spaceId/notifications/results-ready", requireFacilitator, async (req, res) => {
+    try {
+      const { spaceId } = req.params;
+
+      const space = await storage.getSpace(spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      const organization = space.organizationId ? await storage.getOrganization(space.organizationId) : null;
+      const participants = await storage.getParticipantsBySpace(spaceId);
+
+      // Filter participants who have email addresses
+      const emailableParticipants = participants.filter(p => p.email);
+      
+      if (emailableParticipants.length === 0) {
+        return res.json({ success: true, sent: 0, message: "No participants with email addresses" });
+      }
+
+      // Check what results are available
+      const cohortResults = await storage.getCohortResultsBySpace(spaceId);
+      const cohortResultsAvailable = cohortResults.length > 0;
+
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const resultsUrl = `${baseUrl}/o/${organization?.slug || 'org'}/s/${space.code}/results`;
+
+      const results = await sendBulkNotifications('results_ready',
+        emailableParticipants.map(p => ({ email: p.email!, name: p.displayName })),
+        {
+          organizationName: organization?.name || 'Organization',
+          workspaceName: space.name,
+          workspaceCode: space.code,
+          hasPersonalizedResults: true,
+          cohortResultsAvailable,
+          resultsUrl,
+        }
+      );
+
+      res.json({ success: true, ...results });
+    } catch (error: any) {
+      console.error("Failed to send results notifications:", error);
+      res.status(500).json({ error: error.message || "Failed to send notifications" });
     }
   });
 
