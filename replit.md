@@ -43,6 +43,13 @@ The design system features a dark mode with a primary purple accent, dark blue-b
 - **AI Integration**: Leverages OpenAI API for note categorization, card rewrites, and AI usage tracking.
 - **Voting Mechanisms**: Implements Pairwise Voting (round-robin) and Stack Ranking (Borda Count) with real-time leaderboards.
 - **Guest Access Control**: Manages workspace access with configurable permissions, access requests, and email notifications.
+- **Email Notification System** (Nov 2025): Comprehensive SendGrid-powered email notifications via Replit connector integration:
+  - **Session Invites**: Single and bulk invitation emails with session details and join links
+  - **Phase Change Notifications**: Automated alerts when facilitators move sessions between phases
+  - **Results Ready Notifications**: Notify participants when personalized/cohort results are available
+  - **Workspace Reminders**: Deadline approaching, incomplete submission, and session starting alerts
+  - **API Endpoints**: `/api/spaces/:spaceId/notifications/invite`, `/invite-bulk`, `/phase-change`, `/results-ready`
+  - **Branded Templates**: All emails use Nebula/Synozur branding with purple gradient headers
 - **Facilitator Controls**: Tools for managing notes (CRUD, merge, bulk select, AI rewrites), session states, and AI categorization.
 - **Share Links & QR Codes**: Facilitators can generate shareable URLs and client-side QR codes.
 - **Workspace Access Controls**: Enforces status-based and guest permission-based access restrictions.
