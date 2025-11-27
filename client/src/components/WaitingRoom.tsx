@@ -10,15 +10,29 @@ import { generateGuestName } from "@/lib/guestNames";
 import { useState } from "react";
 import { useLocation } from "wouter";
 
+type LifecycleStatus = "draft" | "open" | "closed" | "processing" | "archived";
+type SessionPhase = "ideation" | "ideate" | "voting" | "vote" | "ranking" | "rank" | 
+  "marketplace" | "survey" | "results" | "priority-matrix" | "staircase";
+
 interface WaitingRoomProps {
   orgName: string;
   spaceName: string;
   spacePurpose: string;
-  status: "draft" | "open" | "closed";
+  status: LifecycleStatus | SessionPhase | string;
   onJoinAnonymous?: (guestName: string) => void;
   onRegister?: (data: any) => void;
   workspaceUrl?: string;
 }
+
+const isActiveStatus = (status: string): boolean => {
+  const activeStatuses = ["open", "ideation", "ideate", "voting", "vote", "ranking", "rank", 
+    "marketplace", "survey", "results", "priority-matrix", "staircase"];
+  return activeStatuses.includes(status);
+};
+
+const isClosedStatus = (status: string): boolean => {
+  return status === "closed" || status === "archived";
+};
 
 export default function WaitingRoom({
   orgName,
@@ -62,7 +76,7 @@ export default function WaitingRoom({
             </div>
           )}
 
-          {status === "closed" && (
+          {isClosedStatus(status) && (
             <div className="py-8 text-center">
               <p className="text-sm text-muted-foreground">
                 This session has ended. Contact your facilitator for access.
@@ -70,7 +84,7 @@ export default function WaitingRoom({
             </div>
           )}
 
-          {status === "open" && (
+          {isActiveStatus(status) && (
             <Tabs defaultValue="anonymous" className="w-full">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="anonymous" data-testid="tab-anonymous">Guest</TabsTrigger>

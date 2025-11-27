@@ -36,8 +36,25 @@ export function isPhaseActive(
   space: Space,
   phaseType: PhaseType
 ): boolean {
-  // Check time windows for all session modes
-  // For live mode, facilitators can enable phases by setting time windows
+  // First check if the space's current status matches the phase type
+  // This handles live sessions where facilitators manually control phases
+  const statusMappings: Record<string, PhaseType> = {
+    "ideation": "ideation",
+    "ideate": "ideation",
+    "voting": "voting",
+    "vote": "voting",
+    "ranking": "ranking",
+    "rank": "ranking",
+    "marketplace": "marketplace",
+    "survey": "survey",
+  };
+  
+  const currentPhase = statusMappings[space.status];
+  if (currentPhase === phaseType) {
+    return true;
+  }
+  
+  // Also check time windows for async sessions
   const phase = getPhaseTimeWindow(space, phaseType);
   
   // If no time window is set, phase is not active

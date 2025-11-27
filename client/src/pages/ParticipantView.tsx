@@ -37,6 +37,17 @@ export default function ParticipantView() {
   
   // Get participant ID from session storage (set by waiting room)
   const participantId = sessionStorage.getItem("participantId");
+  
+  // Redirect to waiting room if no participant ID (user hasn't joined through waiting room)
+  useEffect(() => {
+    if (!participantId && !isAuthenticated) {
+      toast({
+        title: "Please join the session first",
+        description: "You need to join through the waiting room to participate.",
+      });
+      navigate(`/o/${params.org}/s/${params.space}`);
+    }
+  }, [participantId, isAuthenticated, params.org, params.space, navigate, toast]);
 
   // Fetch organization and space
   const { data: org } = useQuery<Organization>({
@@ -314,8 +325,8 @@ export default function ParticipantView() {
         </div>
       </div>
 
-      {/* WHITE WHITEBOARD AREA */}
-      <main className="flex-1 overflow-hidden bg-white text-gray-900">
+      {/* WHITEBOARD AREA - with proper dark mode support */}
+      <main className="flex-1 overflow-hidden bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
         <div className="h-full overflow-auto p-8">
           <div className="mx-auto max-w-7xl">
             {/* Create Note Button (floating on white) - Only show when ideation is active */}
@@ -332,21 +343,21 @@ export default function ParticipantView() {
             
             {/* Ideation closed message */}
             {!showNoteForm && space && !isPhaseActive(space, "ideation") && (
-              <div className="mb-6 rounded-lg border border-muted-foreground/20 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+              <div className="mb-6 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
                 <Clock className="mr-2 inline-block h-4 w-4" />
                 Ideation phase is not currently active. New ideas cannot be added at this time.
               </div>
             )}
 
-            {/* Note Creation Form (on white background) */}
+            {/* Note Creation Form */}
             {showNoteForm && (
-              <Card className="mb-6 max-w-md border-2 border-primary/20 bg-white p-4">
-                <h3 className="mb-3 text-sm font-bold text-gray-900">Create New Idea</h3>
+              <Card className="mb-6 max-w-md border-2 border-primary/20 bg-white dark:bg-gray-800 p-4">
+                <h3 className="mb-3 text-sm font-bold text-gray-900 dark:text-gray-100">Create New Idea</h3>
                 <Textarea
                   placeholder="What's your idea or insight?"
                   value={noteContent}
                   onChange={(e) => setNoteContent(e.target.value)}
-                  className="mb-3 min-h-24 resize-none bg-white text-gray-900"
+                  className="mb-3 min-h-24 resize-none bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   data-testid="input-note-content"
                   autoFocus
                 />
@@ -372,10 +383,10 @@ export default function ParticipantView() {
               </Card>
             )}
 
-            {/* Notes Grid (sticky notes on white board) */}
+            {/* Notes Grid (sticky notes on whiteboard) */}
             {notes.length === 0 && !showNoteForm && (
               <div className="py-12 text-center">
-                <p className="text-gray-500">
+                <p className="text-gray-600 dark:text-gray-400">
                   No ideas yet. Be the first to add one!
                 </p>
               </div>
@@ -394,7 +405,7 @@ export default function ParticipantView() {
                       >
                         {categoryName}
                       </Badge>
-                      <span className="text-sm text-gray-500">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
                         {groupedNotes[categoryName].length} {groupedNotes[categoryName].length === 1 ? 'idea' : 'ideas'}
                       </span>
                     </div>

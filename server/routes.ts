@@ -2728,6 +2728,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Promote session notes to ideas
+  app.post("/api/spaces/:spaceId/ideas/from-notes", requireFacilitator, async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      
+      const { noteIds } = req.body as { noteIds: string[] };
+      
+      if (!Array.isArray(noteIds) || noteIds.length === 0) {
+        return res.status(400).json({ error: "Note IDs must be a non-empty array" });
+      }
+      
+      const user = req.user as User;
+      const promotedIdeas = [];
+      
+      for (const noteId of noteIds) {
+        // Fetch the note
+        const note = await storage.getNote(noteId);
+        if (!note || note.spaceId !== spaceId) {
+          continue; // Skip notes that don't exist or belong to other spaces
+        }
+        
+        // Create idea from note
+        const idea = await storage.createIdea({
+          spaceId,
+          content: note.content,
+          contentType: 'text',
+          manualCategoryId: null,
+          sourceType: 'participant_submitted',
+          createdByUserId: user.id
+        });
+        promotedIdeas.push(idea);
+      }
+      
+      // Broadcast promotion
+      broadcastToSpace(spaceId, { 
+        type: "notes_promoted", 
+        data: { count: promotedIdeas.length } 
+      });
+      
+      res.json({ 
+        success: true, 
+        count: promotedIdeas.length,
+        ideas: promotedIdeas 
+      });
+    } catch (error) {
+      console.error("Failed to promote notes to ideas:", error);
+      res.status(500).json({ error: "Failed to promote notes to ideas" });
+    }
+  });
+  
   // Upload image for an idea
   app.post("/api/ideas/upload-image", 
     requireFacilitator, 

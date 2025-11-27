@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { 
   Plus, Upload, Download, Trash2, Edit2, Save, X, 
   Image, FileText, Hash, Users, Calendar, Search,
-  FolderPlus, Tag, MoreVertical, Check
+  FolderPlus, Tag, MoreVertical, Check, ArrowRight, StickyNote
 } from 'lucide-react';
 import { 
   DropdownMenu, 
@@ -33,7 +33,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import type { Idea, Category } from '@shared/schema';
+import type { Idea, Category, Note, Participant } from '@shared/schema';
 
 interface IdeasHubProps {
   spaceId: string;
@@ -46,11 +46,13 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterSource, setFilterSource] = useState<string>('all');
   const [selectedIdeas, setSelectedIdeas] = useState<Set<string>>(new Set());
+  const [selectedNotes, setSelectedNotes] = useState<Set<string>>(new Set());
   const [editingIdea, setEditingIdea] = useState<Idea | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [bulkAction, setBulkAction] = useState<'delete' | 'categorize' | null>(null);
   const [bulkCategoryId, setBulkCategoryId] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<'ideas' | 'notes'>('ideas');
   
   // Form state for new idea
   const [newIdea, setNewIdea] = useState({
@@ -66,6 +68,18 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
   // Fetch ideas
   const { data: ideas = [], isLoading, refetch } = useQuery<Idea[]>({
     queryKey: [`/api/spaces/${spaceId}/ideas`],
+    enabled: !!spaceId
+  });
+  
+  // Fetch session notes (participant-created content)
+  const { data: notes = [], isLoading: notesLoading } = useQuery<Note[]>({
+    queryKey: [`/api/spaces/${spaceId}/notes`],
+    enabled: !!spaceId
+  });
+  
+  // Fetch participants for note author lookup
+  const { data: participants = [] } = useQuery<Participant[]>({
+    queryKey: [`/api/spaces/${spaceId}/participants`],
     enabled: !!spaceId
   });
   
@@ -161,6 +175,23 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
     },
     onError: () => {
       toast({ title: "Failed to import ideas", variant: "destructive" });
+    }
+  });
+  
+  // Promote notes to ideas mutation
+  const promoteNotesMutation = useMutation({
+    mutationFn: async (noteIds: string[]) => {
+      const response = await apiRequest('POST', `/api/spaces/${spaceId}/ideas/from-notes`, { noteIds });
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/ideas`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/notes`] });
+      setSelectedNotes(new Set());
+      toast({ title: `${data.count || data.length || 'Notes'} promoted to ideas successfully` });
+    },
+    onError: () => {
+      toast({ title: "Failed to promote notes to ideas", variant: "destructive" });
     }
   });
   
@@ -337,6 +368,44 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
     return categories.find(c => c.id === id);
   };
   
+  // Get participant by ID for note author lookup
+  const getParticipantById = (id: string | null) => {
+    if (!id) return null;
+    return participants.find(p => p.id === id);
+  };
+  
+  // Handle note selection
+  const handleSelectNote = (id: string, checked: boolean) => {
+    const newSelected = new Set(selectedNotes);
+    if (checked) {
+      newSelected.add(id);
+    } else {
+      newSelected.delete(id);
+    }
+    setSelectedNotes(newSelected);
+  };
+  
+  // Handle select all notes
+  const handleSelectAllNotes = (checked: boolean) => {
+    if (checked) {
+      setSelectedNotes(new Set(notes.map((n: Note) => n.id)));
+    } else {
+      setSelectedNotes(new Set());
+    }
+  };
+  
+  // Handle promote notes to ideas
+  const handlePromoteNotes = () => {
+    if (selectedNotes.size === 0) return;
+    promoteNotesMutation.mutate(Array.from(selectedNotes));
+  };
+  
+  // Handle promote all notes
+  const handlePromoteAllNotes = () => {
+    if (notes.length === 0) return;
+    promoteNotesMutation.mutate(notes.map((n: Note) => n.id));
+  };
+  
   return (
     <div className="space-y-4" data-testid="ideas-hub">
       <Card>
@@ -347,22 +416,44 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
               Ideas Hub
             </CardTitle>
             <CardDescription>
-              Manage all ideas across modules
+              Manage all ideas and session notes
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
             <Badge variant="secondary">
-              {filteredIdeas.length} ideas
+              {ideas.length} ideas
             </Badge>
-            {selectedIdeas.size > 0 && (
+            <Badge variant="outline">
+              {notes.length} session notes
+            </Badge>
+            {activeTab === 'ideas' && selectedIdeas.size > 0 && (
               <Badge variant="default">
                 {selectedIdeas.size} selected
+              </Badge>
+            )}
+            {activeTab === 'notes' && selectedNotes.size > 0 && (
+              <Badge variant="default">
+                {selectedNotes.size} selected
               </Badge>
             )}
           </div>
         </CardHeader>
         
         <CardContent>
+          {/* Tab Navigation */}
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'ideas' | 'notes')} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 mb-4">
+              <TabsTrigger value="ideas" data-testid="tab-ideas">
+                <FolderPlus className="w-4 h-4 mr-2" />
+                Ideas ({ideas.length})
+              </TabsTrigger>
+              <TabsTrigger value="notes" data-testid="tab-notes">
+                <StickyNote className="w-4 h-4 mr-2" />
+                Session Notes ({notes.length})
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="ideas" className="mt-0">
           {/* Toolbar */}
           <div className="flex flex-col gap-4 mb-4">
             <div className="flex items-center gap-2 flex-wrap">
@@ -628,6 +719,117 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
               </div>
             )}
           </ScrollArea>
+            </TabsContent>
+            
+            <TabsContent value="notes" className="mt-0">
+              {/* Notes Toolbar */}
+              <div className="flex items-center gap-2 mb-4 flex-wrap">
+                {notes.length > 0 && (
+                  <>
+                    <Button 
+                      onClick={handlePromoteAllNotes}
+                      size="sm"
+                      disabled={promoteNotesMutation.isPending}
+                      data-testid="button-promote-all-notes"
+                    >
+                      <ArrowRight className="w-4 h-4 mr-1" />
+                      Promote All to Ideas
+                    </Button>
+                    {selectedNotes.size > 0 && (
+                      <Button 
+                        onClick={handlePromoteNotes}
+                        size="sm"
+                        variant="outline"
+                        disabled={promoteNotesMutation.isPending}
+                        data-testid="button-promote-selected-notes"
+                      >
+                        <ArrowRight className="w-4 h-4 mr-1" />
+                        Promote Selected ({selectedNotes.size})
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
+              
+              {/* Notes List */}
+              <ScrollArea className="h-[500px]">
+                {notesLoading ? (
+                  <div className="flex items-center justify-center h-32">
+                    <div className="text-muted-foreground">Loading session notes...</div>
+                  </div>
+                ) : notes.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-32 text-center">
+                    <StickyNote className="w-12 h-12 text-muted-foreground mb-2" />
+                    <div className="text-muted-foreground">No session notes yet</div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Participant notes will appear here during ideation
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {/* Select All Notes */}
+                    <div className="flex items-center gap-2 p-2 border-b">
+                      <Checkbox
+                        id="select-all-notes"
+                        checked={notes.length > 0 && selectedNotes.size === notes.length}
+                        onCheckedChange={handleSelectAllNotes}
+                        data-testid="checkbox-select-all-notes"
+                      />
+                      <label htmlFor="select-all-notes" className="text-sm text-muted-foreground">
+                        Select all session notes
+                      </label>
+                    </div>
+                    
+                    {/* Note Items */}
+                    {notes.map((note: Note) => {
+                      const participant = getParticipantById(note.participantId);
+                      return (
+                        <div 
+                          key={note.id}
+                          className="flex items-center gap-3 p-3 border rounded-md hover-elevate"
+                          data-testid={`note-item-${note.id}`}
+                        >
+                          <Checkbox
+                            checked={selectedNotes.has(note.id)}
+                            onCheckedChange={(checked) => handleSelectNote(note.id, checked === true)}
+                            data-testid={`checkbox-note-${note.id}`}
+                          />
+                          
+                          <div className="flex-1 space-y-1">
+                            <p className="text-sm" data-testid={`text-note-content-${note.id}`}>
+                              {note.content}
+                            </p>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge 
+                                variant="outline" 
+                                className="text-xs"
+                                style={{ backgroundColor: note.color }}
+                              >
+                                {participant?.name || 'Anonymous'}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(note.createdAt).toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => promoteNotesMutation.mutate([note.id])}
+                            disabled={promoteNotesMutation.isPending}
+                            data-testid={`button-promote-note-${note.id}`}
+                          >
+                            <ArrowRight className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </ScrollArea>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
       

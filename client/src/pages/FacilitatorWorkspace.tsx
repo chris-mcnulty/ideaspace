@@ -1209,22 +1209,36 @@ export default function FacilitatorWorkspace() {
 
   const renderPriorityMatrixTab = () => (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-2xl font-bold">2x2 Priority Matrix</h2>
           <p className="text-muted-foreground mt-1">
             Collaborative drag-and-drop grid for positioning ideas
           </p>
         </div>
-        <Button
-          variant="default"
-          onClick={() => navigateParticipantsMutation.mutate("priority-matrix")}
-          disabled={navigateParticipantsMutation.isPending}
-          data-testid="button-navigate-to-priority-matrix"
-        >
-          <Users className="mr-2 h-4 w-4" />
-          Bring Participants Here
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={() => {
+              navigateParticipantsMutation.mutate("ideate");
+              setActiveTab("ideas");
+            }}
+            disabled={navigateParticipantsMutation.isPending}
+            data-testid="button-matrix-return-to-ideation"
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Return to Ideation
+          </Button>
+          <Button
+            variant="default"
+            onClick={() => navigateParticipantsMutation.mutate("priority-matrix")}
+            disabled={navigateParticipantsMutation.isPending}
+            data-testid="button-navigate-to-priority-matrix"
+          >
+            <Users className="mr-2 h-4 w-4" />
+            Bring Participants Here
+          </Button>
+        </div>
       </div>
       <PriorityMatrix spaceId={space.id} />
     </div>
@@ -1232,22 +1246,36 @@ export default function FacilitatorWorkspace() {
 
   const renderStaircaseTab = () => (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-2xl font-bold">Staircase Rating</h2>
           <p className="text-muted-foreground mt-1">
             Diagonal 0-10 scale for visual idea assessment
           </p>
         </div>
-        <Button
-          variant="default"
-          onClick={() => navigateParticipantsMutation.mutate("staircase")}
-          disabled={navigateParticipantsMutation.isPending}
-          data-testid="button-navigate-to-staircase"
-        >
-          <Users className="mr-2 h-4 w-4" />
-          Bring Participants Here
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={() => {
+              navigateParticipantsMutation.mutate("ideate");
+              setActiveTab("ideas");
+            }}
+            disabled={navigateParticipantsMutation.isPending}
+            data-testid="button-return-to-ideation"
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Return to Ideation
+          </Button>
+          <Button
+            variant="default"
+            onClick={() => navigateParticipantsMutation.mutate("staircase")}
+            disabled={navigateParticipantsMutation.isPending}
+            data-testid="button-navigate-to-staircase"
+          >
+            <Users className="mr-2 h-4 w-4" />
+            Bring Participants Here
+          </Button>
+        </div>
       </div>
       <StaircaseModule spaceId={space.id} />
     </div>
