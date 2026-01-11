@@ -101,6 +101,18 @@ import {
 } from "@shared/schema";
 import { eq, and, desc, or, isNull, gte, lte, sql } from "drizzle-orm";
 
+/**
+ * Normalize email addresses for consistent storage and lookup.
+ * Converts to lowercase and trims whitespace.
+ * Preserves undefined (returns undefined if input is undefined).
+ * Converts null and empty strings to null.
+ */
+export function normalizeEmail(email: string | null | undefined): string | null | undefined {
+  if (email === undefined) return undefined;
+  if (email === null || email.trim() === '') return null;
+  return email.toLowerCase().trim();
+}
+
 export interface IStorage {
   // System Settings
   getSystemSetting(key: string, organizationId?: string | null): Promise<SystemSetting | undefined>;
@@ -406,7 +418,9 @@ export class DbStorage implements IStorage {
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    const normalized = normalizeEmail(email);
+    if (!normalized) return undefined;
+    const [user] = await db.select().from(users).where(eq(users.email, normalized)).limit(1);
     return user;
   }
 
@@ -424,12 +438,19 @@ export class DbStorage implements IStorage {
   }
 
   async createUser(user: InsertUser): Promise<User> {
-    const [created] = await db.insert(users).values(user).returning();
+    const normalizedUser = {
+      ...user,
+      email: normalizeEmail(user.email) || user.email,
+    };
+    const [created] = await db.insert(users).values(normalizedUser).returning();
     return created;
   }
 
   async updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined> {
-    const [updated] = await db.update(users).set(user).where(eq(users.id, id)).returning();
+    const normalizedUser = user.email 
+      ? { ...user, email: normalizeEmail(user.email) || user.email }
+      : user;
+    const [updated] = await db.update(users).set(normalizedUser).where(eq(users.id, id)).returning();
     return updated;
   }
 
@@ -781,10 +802,12 @@ export class DbStorage implements IStorage {
   }
 
   async getParticipantBySpaceAndEmail(spaceId: string, email: string): Promise<Participant | undefined> {
+    const normalized = normalizeEmail(email);
+    if (!normalized) return undefined;
     const [participant] = await db.select().from(participants).where(
       and(
         eq(participants.spaceId, spaceId),
-        eq(participants.email, email)
+        eq(participants.email, normalized)
       )
     ).limit(1);
     return participant;
@@ -801,12 +824,18 @@ export class DbStorage implements IStorage {
   }
 
   async createParticipant(participant: InsertParticipant): Promise<Participant> {
-    const [created] = await db.insert(participants).values(participant).returning();
+    const normalizedParticipant = participant.email !== undefined
+      ? { ...participant, email: normalizeEmail(participant.email) }
+      : participant;
+    const [created] = await db.insert(participants).values(normalizedParticipant).returning();
     return created;
   }
 
   async updateParticipant(id: string, participant: Partial<InsertParticipant>): Promise<Participant | undefined> {
-    const [updated] = await db.update(participants).set(participant).where(eq(participants.id, id)).returning();
+    const normalizedParticipant = participant.email !== undefined
+      ? { ...participant, email: normalizeEmail(participant.email) }
+      : participant;
+    const [updated] = await db.update(participants).set(normalizedParticipant).where(eq(participants.id, id)).returning();
     return updated;
   }
 
@@ -816,10 +845,12 @@ export class DbStorage implements IStorage {
   }
 
   async findOrphanedParticipantsByEmail(email: string): Promise<Participant[]> {
+    const normalized = normalizeEmail(email);
+    if (!normalized) return [];
     // Find guest participants without userId that match the email
     return db.select().from(participants).where(
       and(
-        eq(participants.email, email),
+        eq(participants.email, normalized),
         eq(participants.userId, null as any)
       )
     );
@@ -1072,7 +1103,12 @@ export class DbStorage implements IStorage {
   }
 
   async createAccessRequest(request: InsertAccessRequest): Promise<AccessRequest> {
-    const [created] = await db.insert(accessRequests).values(request).returning();
+    // Access requests always have email (notNull field), normalize it
+    const normalizedEmail = request.email.toLowerCase().trim();
+    const [created] = await db.insert(accessRequests).values({
+      ...request,
+      email: normalizedEmail,
+    }).returning();
     return created;
   }
 
@@ -1087,8 +1123,10 @@ export class DbStorage implements IStorage {
   }
 
   async checkExistingAccessRequest(spaceId: string, email: string): Promise<AccessRequest | undefined> {
+    const normalized = normalizeEmail(email);
+    if (!normalized) return undefined;
     const [existing] = await db.select().from(accessRequests).where(
-      and(eq(accessRequests.spaceId, spaceId), eq(accessRequests.email, email), eq(accessRequests.status, "pending"))
+      and(eq(accessRequests.spaceId, spaceId), eq(accessRequests.email, normalized), eq(accessRequests.status, "pending"))
     ).limit(1);
     return existing;
   }

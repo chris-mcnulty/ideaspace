@@ -1503,31 +1503,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // If approved, add user as participant to the workspace
       if (data.status === "approved") {
-        // Normalize email for consistent lookups
-        const normalizedEmail = request.email.toLowerCase().trim();
-        
-        // Check if user with this email already exists
-        const existingUser = await storage.getUserByEmail(normalizedEmail);
-        
-        // Check if they're already a participant in this workspace (efficient indexed queries)
-        const participantByEmail = await storage.getParticipantBySpaceAndEmail(request.spaceId, normalizedEmail);
+        // Storage methods now handle email normalization automatically
+        const existingUser = await storage.getUserByEmail(request.email);
+        const participantByEmail = await storage.getParticipantBySpaceAndEmail(request.spaceId, request.email);
         
         if (participantByEmail) {
           // Participant record exists - check if we need to link to user account
           if (existingUser && !participantByEmail.userId) {
-            // Link existing guest participant to user account
             await storage.linkParticipantToUser(participantByEmail.id, existingUser.id);
           }
-          // Already a participant, no further action needed
         } else if (existingUser) {
           // Check if participant exists by userId
           const participantByUserId = await storage.getParticipantBySpaceAndUserId(request.spaceId, existingUser.id);
           if (!participantByUserId) {
-            // Create participant linked to existing user
+            // Create participant linked to existing user (email normalized by storage)
             await storage.createParticipant({
               spaceId: request.spaceId,
               displayName: request.displayName,
-              email: normalizedEmail,
+              email: request.email,
               userId: existingUser.id,
               isGuest: false,
             });
@@ -1537,7 +1530,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.createParticipant({
             spaceId: request.spaceId,
             displayName: request.displayName,
-            email: normalizedEmail,
+            email: request.email,
             userId: null,
             isGuest: true,
           });
@@ -1551,7 +1544,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 : 'http://localhost:5000';
               const joinUrl = `${baseUrl}/join/${space.code}`;
               
-              await sendSessionInviteEmail(normalizedEmail, {
+              await sendSessionInviteEmail(request.email, {
                 inviteeName: request.displayName,
                 workspaceName: space.name,
                 workspaceCode: space.code,
@@ -1561,7 +1554,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               });
             } catch (emailError) {
               console.error('Failed to send invitation email after approval:', emailError);
-              // Don't fail the approval if email fails
             }
           }
         }
