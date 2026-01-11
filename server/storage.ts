@@ -165,6 +165,8 @@ export interface IStorage {
   // Participants
   getParticipant(id: string): Promise<Participant | undefined>;
   getParticipantsBySpace(spaceId: string): Promise<Participant[]>;
+  getParticipantBySpaceAndEmail(spaceId: string, email: string): Promise<Participant | undefined>;
+  getParticipantBySpaceAndUserId(spaceId: string, userId: string): Promise<Participant | undefined>;
   createParticipant(participant: InsertParticipant): Promise<Participant>;
   updateParticipant(id: string, participant: Partial<InsertParticipant>): Promise<Participant | undefined>;
   deleteParticipant(id: string): Promise<boolean>;
@@ -776,6 +778,26 @@ export class DbStorage implements IStorage {
 
   async getParticipantsBySpace(spaceId: string): Promise<Participant[]> {
     return db.select().from(participants).where(eq(participants.spaceId, spaceId));
+  }
+
+  async getParticipantBySpaceAndEmail(spaceId: string, email: string): Promise<Participant | undefined> {
+    const [participant] = await db.select().from(participants).where(
+      and(
+        eq(participants.spaceId, spaceId),
+        eq(participants.email, email)
+      )
+    ).limit(1);
+    return participant;
+  }
+
+  async getParticipantBySpaceAndUserId(spaceId: string, userId: string): Promise<Participant | undefined> {
+    const [participant] = await db.select().from(participants).where(
+      and(
+        eq(participants.spaceId, spaceId),
+        eq(participants.userId, userId)
+      )
+    ).limit(1);
+    return participant;
   }
 
   async createParticipant(participant: InsertParticipant): Promise<Participant> {

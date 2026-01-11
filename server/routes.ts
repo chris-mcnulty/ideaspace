@@ -1501,20 +1501,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
         resolvedBy: currentUser.id,
       });
 
-      // If approved, create or update user and add them as facilitator or participant
+      // If approved, add user as participant to the workspace
       if (data.status === "approved") {
+        // Normalize email for consistent lookups
+        const normalizedEmail = request.email.toLowerCase().trim();
+        
         // Check if user with this email already exists
-        let user = await storage.getUserByEmail(request.email);
+        const existingUser = await storage.getUserByEmail(normalizedEmail);
         
-        if (!user) {
-          // Create a new user account (they'll need to set password on first login)
-          // For now, we'll just add them to the workspace as a participant
-          // They can register later to claim the account
-          // Note: This is a placeholder - full implementation would involve invitation emails
+        // Check if they're already a participant in this workspace (efficient indexed queries)
+        const participantByEmail = await storage.getParticipantBySpaceAndEmail(request.spaceId, normalizedEmail);
+        
+        if (participantByEmail) {
+          // Participant record exists - check if we need to link to user account
+          if (existingUser && !participantByEmail.userId) {
+            // Link existing guest participant to user account
+            await storage.linkParticipantToUser(participantByEmail.id, existingUser.id);
+          }
+          // Already a participant, no further action needed
+        } else if (existingUser) {
+          // Check if participant exists by userId
+          const participantByUserId = await storage.getParticipantBySpaceAndUserId(request.spaceId, existingUser.id);
+          if (!participantByUserId) {
+            // Create participant linked to existing user
+            await storage.createParticipant({
+              spaceId: request.spaceId,
+              displayName: request.displayName,
+              email: normalizedEmail,
+              userId: existingUser.id,
+              isGuest: false,
+            });
+          }
+        } else {
+          // No existing user - create guest participant and send invitation
+          await storage.createParticipant({
+            spaceId: request.spaceId,
+            displayName: request.displayName,
+            email: normalizedEmail,
+            userId: null,
+            isGuest: true,
+          });
+          
+          // Send invitation email to the new participant (if workspace has required fields)
+          if (space.organizationId && space.code) {
+            try {
+              const org = await storage.getOrganization(space.organizationId);
+              const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+                ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+                : 'http://localhost:5000';
+              const joinUrl = `${baseUrl}/join/${space.code}`;
+              
+              await sendSessionInviteEmail(normalizedEmail, {
+                inviteeName: request.displayName,
+                workspaceName: space.name,
+                workspaceCode: space.code,
+                organizationName: org?.name || 'Nebula',
+                joinUrl,
+                role: 'participant',
+              });
+            } catch (emailError) {
+              console.error('Failed to send invitation email after approval:', emailError);
+              // Don't fail the approval if email fails
+            }
+          }
         }
-        
-        // TODO: Add user as participant or facilitator to the workspace
-        // This will be implemented in a later task
       }
 
       res.json(updated);
