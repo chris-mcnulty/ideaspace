@@ -803,9 +803,8 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
                               <Badge 
                                 variant="outline" 
                                 className="text-xs"
-                                style={{ backgroundColor: note.color }}
                               >
-                                {participant?.name || 'Anonymous'}
+                                {participant?.displayName || 'Anonymous'}
                               </Badge>
                               <span className="text-xs text-muted-foreground">
                                 {new Date(note.createdAt).toLocaleString()}

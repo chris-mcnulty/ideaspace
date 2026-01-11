@@ -1,6 +1,6 @@
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import BrandHeader from "@/components/BrandHeader";
 import StickyNote from "@/components/StickyNote";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Users, User, Clock, Vote, ListOrdered, Coins, ClipboardList } from "lucide-react";
+import { Plus, Users, User, Clock, Vote, ListOrdered, Coins, ClipboardList, Lightbulb, Sparkles } from "lucide-react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -34,6 +34,10 @@ export default function ParticipantView() {
   const [showNoteForm, setShowNoteForm] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [editContent, setEditContent] = useState("");
+  
+  // Track recently added notes for animation (note IDs added in last 3 seconds)
+  const [recentNoteIds, setRecentNoteIds] = useState<Set<string>>(new Set());
+  const previousNoteCountRef = useRef<number>(0);
   
   // Get participant ID from session storage (set by waiting room)
   const participantId = sessionStorage.getItem("participantId");
@@ -89,8 +93,31 @@ export default function ParticipantView() {
   const { isConnected } = useWebSocket({
     spaceId: params.space,
     onMessage: (message) => {
-      // Handle different message types
-      if (message.type === 'note:created' || message.type === 'note:updated' || message.type === 'note:deleted') {
+      // Handle note events with visual feedback
+      if (message.type === 'note_created') {
+        queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/notes`] });
+        // Track new note for animation
+        const newNoteId = message.data?.id;
+        if (newNoteId && message.data?.participantId !== participantId) {
+          setRecentNoteIds(prev => new Set(Array.from(prev).concat(newNoteId)));
+          // Remove from recent after 3 seconds
+          setTimeout(() => {
+            setRecentNoteIds(prev => {
+              const next = new Set(prev);
+              next.delete(newNoteId);
+              return next;
+            });
+          }, 3000);
+          // Show subtle notification
+          const authorName = participants.find(p => p.id === message.data?.participantId)?.displayName || 'Someone';
+          toast({
+            title: "New idea added",
+            description: `${authorName} shared a new idea`,
+            duration: 2000,
+          });
+        }
+      }
+      if (message.type === 'note_updated' || message.type === 'note_deleted') {
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/notes`] });
       }
       if (message.type === 'participant:joined' || message.type === 'participant:left') {
@@ -303,14 +330,21 @@ export default function ParticipantView() {
 
       {/* Dark Top Bar with Session Info */}
       <div className="border-b bg-card px-6 py-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <h1 className="text-lg font-bold" data-testid="text-space-name">
               {space?.name}
             </h1>
             <p className="text-sm text-muted-foreground">{space?.purpose}</p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
+            {/* Live Ideas Count */}
+            <div className="flex items-center gap-2" data-testid="status-ideas-count">
+              <Lightbulb className="h-4 w-4 text-yellow-500" />
+              <span className="text-sm text-muted-foreground">
+                {notes.length} {notes.length === 1 ? 'idea' : 'ideas'}
+              </span>
+            </div>
             <div className="flex items-center gap-2" data-testid="status-participants">
               <Users className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm text-muted-foreground">
@@ -429,6 +463,7 @@ export default function ParticipantView() {
                             canDelete={canDelete}
                             onEdit={() => handleEditNote(note)}
                             onDelete={() => handleDeleteNote(note.id)}
+                            isNew={recentNoteIds.has(note.id)}
                           />
                         );
                       })}
