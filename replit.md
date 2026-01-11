@@ -52,6 +52,12 @@ The design system features a dark mode with a primary purple accent, dark blue-b
   - **API Endpoints**: `/api/spaces/:spaceId/notifications/invite`, `/invite-bulk`, `/phase-change`, `/results-ready`
   - **Branded Templates**: All emails use Nebula/Synozur branding with purple gradient headers
 - **Facilitator Controls**: Tools for managing notes (CRUD, merge, bulk select, AI rewrites), session states, and AI categorization.
+- **Ideation Module Enhancements** (Jan 2026): 
+  - **Real-time Collaboration**: Live idea count in participant header, WebSocket notifications for new notes with author name, 3-second animation for recently added ideas
+  - **Improved Legibility**: Enhanced StickyNote component with larger text (text-base), relaxed line height, better visual hierarchy with author/content/category separations, minimum 180px height, responsive width
+  - **Deterministic Colors**: Sticky note colors are assigned based on note ID hash for consistency across re-renders
+  - **Facilitator Word Limits**: Configurable minWordCount and maxWordCount in ideation module config, client-side validation with real-time word count display, visual feedback for under/over limits, disabled submit when invalid
+  - **Timer Configuration**: timerEnabled and timerDurationMinutes options in module config (UI placeholder for future countdown implementation)
 - **Share Links & QR Codes**: Facilitators can generate shareable URLs and client-side QR codes.
 - **Workspace Access Controls**: Enforces status-based and guest permission-based access restrictions.
 - **Unified Category Management**: A single system for AI and human categorization, allowing facilitator overrides and real-time updates.
