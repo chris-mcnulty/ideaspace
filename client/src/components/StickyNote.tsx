@@ -52,7 +52,7 @@ export default function StickyNote({
   return (
     <div
       className={cn(
-        "group relative flex h-48 w-48 cursor-move flex-col rounded-md border-2 p-3 shadow-sm transition-all hover:shadow-md",
+        "group relative flex min-h-[180px] w-full cursor-pointer flex-col rounded-lg border-2 p-4 shadow-md transition-all hover:shadow-lg hover:-translate-y-0.5",
         noteColor,
         selected && "ring-2 ring-primary ring-offset-2",
         isNew && "animate-pulse ring-2 ring-primary/50",
@@ -61,30 +61,34 @@ export default function StickyNote({
       onClick={onClick}
       data-testid={`sticky-note-${content.substring(0, 10)}`}
     >
-      <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-1 text-xs text-gray-700 dark:text-gray-100">
-          <User className="h-3 w-3 opacity-80" />
-          <span className="truncate opacity-80">{author || "Anonymous"}</span>
+      {/* Author Header */}
+      <div className="mb-3 flex items-center justify-between border-b border-current/10 pb-2">
+        <div className="flex items-center gap-1.5 text-xs font-medium text-gray-700 dark:text-gray-200">
+          <User className="h-3.5 w-3.5 text-gray-600 dark:text-gray-300" />
+          <span className="truncate max-w-[120px]">{author || "Anonymous"}</span>
         </div>
-        <GripVertical className="h-4 w-4 text-gray-600 dark:text-gray-300 opacity-50" />
+        <GripVertical className="h-4 w-4 text-gray-500 dark:text-gray-400 opacity-40 group-hover:opacity-70 transition-opacity" />
       </div>
 
-      <div className="flex-1 overflow-y-auto text-sm leading-snug text-gray-900 dark:text-gray-100 font-medium">
+      {/* Main Content - Improved Typography */}
+      <div className="flex-1 overflow-y-auto text-base leading-relaxed text-gray-800 dark:text-gray-100 font-medium tracking-wide">
         {content}
       </div>
 
+      {/* Category Badge */}
       {category && (
-        <div className="mt-2">
-          <Badge variant="secondary" className="text-xs">
-            {isAiCategory && <span className="mr-1 italic">AI:</span>}
+        <div className="mt-3 pt-2 border-t border-current/10">
+          <Badge variant="secondary" className="text-xs font-semibold">
+            {isAiCategory && <span className="mr-1 text-primary italic">AI:</span>}
             {category}
           </Badge>
         </div>
       )}
 
+      {/* Timestamp Footer */}
       {timestamp && (
-        <div className="mt-1 font-mono text-xs text-gray-600 dark:text-gray-300 opacity-60">
-          {timestamp.toLocaleTimeString()}
+        <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 font-mono tabular-nums">
+          {timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </div>
       )}
 
@@ -95,28 +99,28 @@ export default function StickyNote({
             <Button
               size="icon"
               variant="secondary"
-              className="h-6 w-6 rounded-full"
+              className="rounded-full shadow-sm"
               onClick={(e) => {
                 e.stopPropagation();
                 onEdit();
               }}
               data-testid="button-edit-note"
             >
-              <Edit2 className="h-3 w-3" />
+              <Edit2 className="h-3.5 w-3.5" />
             </Button>
           )}
           {canDelete && onDelete && (
             <Button
               size="icon"
               variant="destructive"
-              className="h-6 w-6 rounded-full"
+              className="rounded-full shadow-sm"
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete();
               }}
               data-testid="button-delete-note"
             >
-              <Trash2 className="h-3 w-3" />
+              <Trash2 className="h-3.5 w-3.5" />
             </Button>
           )}
         </div>
