@@ -73,6 +73,7 @@ import IdeasHub from "@/components/IdeasHub";
 import ModuleConfiguration from "@/components/ModuleConfiguration";
 import PriorityMatrix from "@/components/PriorityMatrix";
 import StaircaseModule from "@/components/StaircaseModule";
+import { NotificationPanel } from "@/components/NotificationPanel";
 
 // Comprehensive Results Table Component
 function ComprehensiveResultsTable({
@@ -1179,6 +1180,13 @@ export default function FacilitatorWorkspace() {
           </p>
         </div>
       </div>
+
+      <NotificationPanel 
+        spaceId={space.id} 
+        participants={participants}
+        currentPhase={space.status || undefined}
+      />
+
       {participants.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {participants.map(participant => (
@@ -1190,9 +1198,14 @@ export default function FacilitatorWorkspace() {
                     <Badge variant="default" className="ml-2">Online</Badge>
                   )}
                 </CardTitle>
-                {participant.isGuest && (
-                  <Badge variant="secondary">Guest</Badge>
-                )}
+                <CardDescription className="flex items-center gap-2">
+                  {participant.isGuest && (
+                    <Badge variant="secondary">Guest</Badge>
+                  )}
+                  {participant.email && (
+                    <span className="text-xs text-muted-foreground truncate">{participant.email}</span>
+                  )}
+                </CardDescription>
               </CardHeader>
             </Card>
           ))}
