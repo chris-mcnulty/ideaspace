@@ -43,6 +43,7 @@ The design system features a dark mode with a primary purple accent, dark blue-b
 - **AI Integration**: Leverages OpenAI API for note categorization, card rewrites, and AI usage tracking.
 - **Voting Mechanisms**: Implements Pairwise Voting (round-robin) and Stack Ranking (Borda Count) with real-time leaderboards.
 - **Guest Access Control**: Manages workspace access with configurable permissions, access requests, and email notifications.
+- **Email Normalization** (Jan 2026): All email addresses are normalized (lowercase, trimmed) at write time via `normalizeEmail()` helper in `server/storage.ts`. This prevents duplicate records due to casing/whitespace variations. Applied to: `createUser`, `updateUser`, `createParticipant`, `updateParticipant`, `createAccessRequest`. Lookup methods also normalize input for consistent matching.
 - **Email Notification System** (Nov 2025): Comprehensive SendGrid-powered email notifications via Replit connector integration:
   - **Session Invites**: Single and bulk invitation emails with session details and join links
   - **Phase Change Notifications**: Automated alerts when facilitators move sessions between phases
