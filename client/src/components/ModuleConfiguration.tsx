@@ -63,7 +63,11 @@ const MODULE_METADATA = {
     config: {
       maxIdeasPerParticipant: 10,
       allowAnonymous: false,
-      requireCategory: false
+      requireCategory: false,
+      minWordCount: 0,
+      maxWordCount: 0,
+      timerEnabled: false,
+      timerDurationMinutes: 15
     }
   },
   'pairwise-voting': {
@@ -346,10 +350,14 @@ export default function ModuleConfiguration({ spaceId }: ModuleConfigurationProp
     setHasChanges(true);
   };
   
-  // Handle module configuration
+  // Handle module configuration - merge stored config with defaults to ensure new fields are present
   const handleConfigureModule = (module: WorkspaceModule) => {
     setConfiguringModule(module);
-    setModuleConfig(module.config || MODULE_METADATA[module.moduleType]?.config || {});
+    // Start with defaults from MODULE_METADATA, then overlay stored config values
+    const defaults = MODULE_METADATA[module.moduleType]?.config || {};
+    const stored = module.config || {};
+    // Merge: defaults first, then stored values override (but new keys from defaults are preserved)
+    setModuleConfig({ ...defaults, ...stored });
   };
   
   // Save module configuration

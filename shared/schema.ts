@@ -365,7 +365,11 @@ export type ModuleType = typeof MODULE_TYPES[number];
 const ideationConfigSchema = z.object({
   maxIdeasPerParticipant: z.number().int().min(1).max(100).default(10),
   allowAnonymous: z.boolean().default(false),
-  requireCategory: z.boolean().default(false)
+  requireCategory: z.boolean().default(false),
+  minWordCount: z.number().int().min(0).max(50).default(0),
+  maxWordCount: z.number().int().min(0).max(500).default(0),
+  timerEnabled: z.boolean().default(false),
+  timerDurationMinutes: z.number().int().min(1).max(120).default(15)
 });
 
 const pairwiseVotingConfigSchema = z.object({

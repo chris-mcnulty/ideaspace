@@ -23,7 +23,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { isPhaseActive } from "@/lib/phaseUtils";
-import type { Organization, Space, Note, Participant, Category } from "@shared/schema";
+import type { Organization, Space, Note, Participant, Category, WorkspaceModule } from "@shared/schema";
 
 export default function ParticipantView() {
   const params = useParams() as { org: string; space: string };
@@ -88,6 +88,33 @@ export default function ParticipantView() {
     queryKey: [`/api/spaces/${params.space}/categories`],
     enabled: !!params.space,
   });
+
+  // Fetch workspace modules to get ideation configuration
+  const { data: workspaceModules = [] } = useQuery<WorkspaceModule[]>({
+    queryKey: [`/api/spaces/${params.space}/modules`],
+    enabled: !!params.space,
+  });
+
+  // Extract ideation module configuration
+  const ideationModule = workspaceModules.find(m => m.moduleType === 'ideation');
+  const ideationConfig = ideationModule?.config as {
+    maxIdeasPerParticipant?: number;
+    allowAnonymous?: boolean;
+    requireCategory?: boolean;
+    minWordCount?: number;
+    maxWordCount?: number;
+    timerEnabled?: boolean;
+    timerDurationMinutes?: number;
+  } | undefined;
+  
+  // Word count validation
+  const wordCount = noteContent.trim().split(/\s+/).filter(Boolean).length;
+  const minWordCount = ideationConfig?.minWordCount || 0;
+  const maxWordCount = ideationConfig?.maxWordCount || 0;
+  const hasMinWordLimit = minWordCount > 0;
+  const hasMaxWordLimit = maxWordCount > 0;
+  const isBelowMinWords = hasMinWordLimit && wordCount < minWordCount;
+  const isAboveMaxWords = hasMaxWordLimit && wordCount > maxWordCount;
 
   // WebSocket connection
   const { isConnected } = useWebSocket({
@@ -222,6 +249,25 @@ export default function ParticipantView() {
 
   const handleCreateNote = () => {
     if (!noteContent.trim()) return;
+    
+    // Validate word limits
+    if (isBelowMinWords) {
+      toast({
+        variant: "destructive",
+        title: "Idea too short",
+        description: `Please add at least ${minWordCount} words to your idea.`,
+      });
+      return;
+    }
+    if (isAboveMaxWords) {
+      toast({
+        variant: "destructive",
+        title: "Idea too long",
+        description: `Please limit your idea to ${maxWordCount} words.`,
+      });
+      return;
+    }
+    
     createNoteMutation.mutate(noteContent);
   };
 
@@ -391,14 +437,45 @@ export default function ParticipantView() {
                   placeholder="What's your idea or insight?"
                   value={noteContent}
                   onChange={(e) => setNoteContent(e.target.value)}
-                  className="mb-3 min-h-24 resize-none bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  className={`mb-2 min-h-24 resize-none bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
+                    isAboveMaxWords ? 'border-red-500 focus-visible:ring-red-500' : ''
+                  }`}
                   data-testid="input-note-content"
                   autoFocus
                 />
+                {/* Word count and validation feedback */}
+                <div className="mb-3 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className={`${
+                      isAboveMaxWords ? 'text-red-500' :
+                      isBelowMinWords ? 'text-yellow-600 dark:text-yellow-400' :
+                      'text-gray-500 dark:text-gray-400'
+                    }`} data-testid="text-word-count">
+                      {wordCount} {wordCount === 1 ? 'word' : 'words'}
+                    </span>
+                    {(hasMinWordLimit || hasMaxWordLimit) && (
+                      <span className="text-gray-400 dark:text-gray-500">
+                        ({hasMinWordLimit && `min: ${minWordCount}`}
+                        {hasMinWordLimit && hasMaxWordLimit && ', '}
+                        {hasMaxWordLimit && `max: ${maxWordCount}`})
+                      </span>
+                    )}
+                  </div>
+                  {isBelowMinWords && (
+                    <span className="text-yellow-600 dark:text-yellow-400">
+                      Need {minWordCount - wordCount} more
+                    </span>
+                  )}
+                  {isAboveMaxWords && (
+                    <span className="text-red-500">
+                      {wordCount - maxWordCount} over limit
+                    </span>
+                  )}
+                </div>
                 <div className="flex gap-2">
                   <Button
                     onClick={handleCreateNote}
-                    disabled={!noteContent.trim() || createNoteMutation.isPending}
+                    disabled={!noteContent.trim() || createNoteMutation.isPending || isBelowMinWords || isAboveMaxWords}
                     data-testid="button-submit-note"
                   >
                     {createNoteMutation.isPending ? "Adding..." : "Add to Board"}
