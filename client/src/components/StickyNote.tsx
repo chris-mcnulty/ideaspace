@@ -36,13 +36,20 @@ export default function StickyNote({
   canDelete = false,
   isNew = false,
 }: StickyNoteProps) {
+  // High-contrast, vibrant colors for maximum visibility in both light and dark modes
   const colors = [
-    "bg-yellow-100 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700",
-    "bg-blue-100 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700",
-    "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-700",
-    "bg-pink-100 dark:bg-pink-900/20 border-pink-300 dark:border-pink-700",
-    "bg-purple-100 dark:bg-purple-900/20 border-purple-300 dark:border-purple-700",
-    "bg-orange-100 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700",
+    // Yellow - warm and inviting
+    "bg-amber-200 dark:bg-amber-500/30 border-amber-400 dark:border-amber-400/60 text-amber-950 dark:text-amber-50",
+    // Blue - calm and professional
+    "bg-sky-200 dark:bg-sky-500/30 border-sky-400 dark:border-sky-400/60 text-sky-950 dark:text-sky-50",
+    // Green - fresh and positive
+    "bg-emerald-200 dark:bg-emerald-500/30 border-emerald-400 dark:border-emerald-400/60 text-emerald-950 dark:text-emerald-50",
+    // Pink - vibrant and energetic
+    "bg-rose-200 dark:bg-rose-500/30 border-rose-400 dark:border-rose-400/60 text-rose-950 dark:text-rose-50",
+    // Purple - creative and unique
+    "bg-violet-200 dark:bg-violet-500/30 border-violet-400 dark:border-violet-400/60 text-violet-950 dark:text-violet-50",
+    // Orange - warm and attention-grabbing
+    "bg-orange-200 dark:bg-orange-500/30 border-orange-400 dark:border-orange-400/60 text-orange-950 dark:text-orange-50",
   ];
   
   // Deterministic color based on note ID for consistency across re-renders
@@ -52,7 +59,7 @@ export default function StickyNote({
   return (
     <div
       className={cn(
-        "group relative flex min-h-[180px] w-full cursor-pointer flex-col rounded-lg border-2 p-4 shadow-md transition-all hover:shadow-lg hover:-translate-y-0.5",
+        "group relative flex min-h-[200px] w-full cursor-pointer flex-col rounded-xl border-2 p-5 shadow-lg transition-all hover:shadow-xl hover:-translate-y-0.5",
         noteColor,
         selected && "ring-2 ring-primary ring-offset-2",
         isNew && "animate-pulse ring-2 ring-primary/50",
@@ -62,23 +69,23 @@ export default function StickyNote({
       data-testid={`sticky-note-${content.substring(0, 10)}`}
     >
       {/* Author Header */}
-      <div className="mb-3 flex items-center justify-between border-b border-current/10 pb-2">
-        <div className="flex items-center gap-1.5 text-xs font-medium text-gray-700 dark:text-gray-200">
-          <User className="h-3.5 w-3.5 text-gray-600 dark:text-gray-300" />
-          <span className="truncate max-w-[120px]">{author || "Anonymous"}</span>
+      <div className="mb-3 flex items-center justify-between border-b border-current/20 pb-2">
+        <div className="flex items-center gap-2 text-sm font-semibold opacity-80">
+          <User className="h-4 w-4" />
+          <span className="truncate max-w-[140px]">{author || "Anonymous"}</span>
         </div>
-        <GripVertical className="h-4 w-4 text-gray-500 dark:text-gray-400 opacity-40 group-hover:opacity-70 transition-opacity" />
+        <GripVertical className="h-4 w-4 opacity-40 group-hover:opacity-70 transition-opacity" />
       </div>
 
-      {/* Main Content - Improved Typography */}
-      <div className="flex-1 overflow-y-auto text-base leading-relaxed text-gray-800 dark:text-gray-100 font-medium tracking-wide">
+      {/* Main Content - Maximum Legibility Typography */}
+      <div className="flex-1 overflow-y-auto text-lg leading-relaxed font-semibold tracking-normal">
         {content}
       </div>
 
       {/* Category Badge */}
       {category && (
-        <div className="mt-3 pt-2 border-t border-current/10">
-          <Badge variant="secondary" className="text-xs font-semibold">
+        <div className="mt-4 pt-3 border-t border-current/20">
+          <Badge variant="secondary" className="text-xs font-bold px-2.5 py-1">
             {isAiCategory && <span className="mr-1 text-primary italic">AI:</span>}
             {category}
           </Badge>
@@ -87,7 +94,7 @@ export default function StickyNote({
 
       {/* Timestamp Footer */}
       {timestamp && (
-        <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 font-mono tabular-nums">
+        <div className="mt-2 text-sm opacity-70 font-mono tabular-nums">
           {timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </div>
       )}

@@ -521,8 +521,8 @@ export default function ParticipantView() {
                       </span>
                     </div>
 
-                    {/* Notes in this category */}
-                    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {/* Notes in this category - Optimized grid for maximum visibility */}
+                    <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
                       {groupedNotes[categoryName].map((note) => {
                         // Check if participant can edit/delete this note
                         const isOwner = note.participantId === participantId;

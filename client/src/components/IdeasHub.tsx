@@ -780,33 +780,35 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
                       </label>
                     </div>
                     
-                    {/* Note Items */}
+                    {/* Note Items - Enhanced legibility */}
                     {notes.map((note: Note) => {
                       const participant = getParticipantById(note.participantId);
                       return (
                         <div 
                           key={note.id}
-                          className="flex items-center gap-3 p-3 border rounded-md hover-elevate"
+                          className="flex items-start gap-4 p-4 border-2 rounded-lg hover-elevate bg-card"
                           data-testid={`note-item-${note.id}`}
                         >
                           <Checkbox
                             checked={selectedNotes.has(note.id)}
                             onCheckedChange={(checked) => handleSelectNote(note.id, checked === true)}
+                            className="mt-1"
                             data-testid={`checkbox-note-${note.id}`}
                           />
                           
-                          <div className="flex-1 space-y-1">
-                            <p className="text-sm" data-testid={`text-note-content-${note.id}`}>
+                          <div className="flex-1 space-y-2">
+                            <p className="text-base font-medium leading-relaxed" data-testid={`text-note-content-${note.id}`}>
                               {note.content}
                             </p>
-                            <div className="flex items-center gap-2 flex-wrap">
+                            <div className="flex items-center gap-3 flex-wrap">
                               <Badge 
-                                variant="outline" 
-                                className="text-xs"
+                                variant="secondary" 
+                                className="text-xs font-semibold"
                               >
+                                <Users className="w-3 h-3 mr-1" />
                                 {participant?.displayName || 'Anonymous'}
                               </Badge>
-                              <span className="text-xs text-muted-foreground">
+                              <span className="text-xs text-muted-foreground font-mono">
                                 {new Date(note.createdAt).toLocaleString()}
                               </span>
                             </div>
@@ -814,7 +816,7 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
                           
                           <Button
                             size="icon"
-                            variant="ghost"
+                            variant="outline"
                             onClick={() => promoteNotesMutation.mutate([note.id])}
                             disabled={promoteNotesMutation.isPending}
                             data-testid={`button-promote-note-${note.id}`}
