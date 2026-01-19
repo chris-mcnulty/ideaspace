@@ -14,6 +14,26 @@ Nebula is a multi-tenant web application designed for structured collaborative e
   - Accessibility requirements (WCAG 2.1 AA)
   - Dark mode support
 
+## Synozur Alliance Application Suite
+Nebula is part of the Synozur Alliance application suite. When implementing common patterns (SSO, multi-tenancy, user administration), reference these sibling applications:
+
+### Vega - Strategy & OKR Platform (Reference Application)
+- **Repository**: https://github.com/chris-mcnulty/synozur-vega
+- **Replit**: https://replit.com/@chrismcnulty1/VegaPrototype
+- **Purpose**: AI-augmented Company OS for strategy development, objectives, and key results
+- **Reference Patterns** (copy from Vega for consistency):
+  - **Microsoft Entra ID SSO**: Multi-tenant MSAL-based Azure AD authentication with PKCE flow, JIT user provisioning, tenant mapping, SSO policy enforcement
+  - **User & Tenant Auto-Creation**: Just-in-time provisioning based on email domain
+  - **Tenant Administration**: Full CRUD, allowed email domains, invite-only mode for public domains
+  - **User Administration**: Role-based access with 6 defined roles, fine-grained permissions
+  - **Public Domain Handling**: Prevents domain squatting for Gmail/Yahoo/Outlook users via invite-only tenants
+  - **Vocabulary Module**: Customizable terminology with system defaults and tenant overrides
+  - **MCP Server**: Model Context Protocol integration for AI assistants
+
+### Galaxy - Central OAuth Provider (Future)
+- **Status**: Planned for later in 2026
+- **Purpose**: Will serve as the central OAuth provider for all Synozur Alliance applications, replacing Orion
+
 ## System Architecture
 Nebula is a multi-tenant web application with an ideas-centric architecture that supports flexible, non-linear module journeys.
 
