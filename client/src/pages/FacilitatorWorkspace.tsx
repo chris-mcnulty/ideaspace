@@ -74,6 +74,8 @@ import ModuleConfiguration from "@/components/ModuleConfiguration";
 import PriorityMatrix from "@/components/PriorityMatrix";
 import StaircaseModule from "@/components/StaircaseModule";
 import { NotificationPanel } from "@/components/NotificationPanel";
+import { CountdownTimer } from "@/components/CountdownTimer";
+import { isPhaseActive } from "@/lib/phaseUtils";
 
 // Comprehensive Results Table Component
 function ComprehensiveResultsTable({
@@ -823,9 +825,22 @@ export default function FacilitatorWorkspace() {
       // When starting a session (status = open), automatically enable ideation phase
       if (status === "open") {
         const now = new Date();
-        const farFuture = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000); // 1 year from now
+        
+        // Check if ideation timer is enabled in module config
+        const ideationModule = workspaceModules.find(m => m.moduleType === 'ideation');
+        const ideationConfig = ideationModule?.config as { timerEnabled?: boolean; timerDurationMinutes?: number } | undefined;
+        
         updates.ideationStartsAt = now.toISOString();
-        updates.ideationEndsAt = farFuture.toISOString();
+        
+        if (ideationConfig?.timerEnabled && ideationConfig?.timerDurationMinutes) {
+          // Set end time based on configured duration
+          const timerEndTime = new Date(now.getTime() + ideationConfig.timerDurationMinutes * 60 * 1000);
+          updates.ideationEndsAt = timerEndTime.toISOString();
+        } else {
+          // No timer - use far future as default
+          const farFuture = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+          updates.ideationEndsAt = farFuture.toISOString();
+        }
       }
       
       const response = await apiRequest("PATCH", `/api/spaces/${params.space}`, updates);
@@ -2106,6 +2121,26 @@ export default function FacilitatorWorkspace() {
                 <Badge variant={space.status === "open" ? "default" : "secondary"}>
                   {space.status}
                 </Badge>
+                {/* Ideation Timer - show when timer is enabled and ideation is active */}
+                {space.status === "open" && (() => {
+                  const ideationModule = workspaceModules.find(m => m.moduleType === 'ideation');
+                  const ideationConfig = ideationModule?.config as { timerEnabled?: boolean; timerDurationMinutes?: number } | undefined;
+                  const isIdeationActive = isPhaseActive(space, "ideation");
+                  
+                  return isIdeationActive && ideationConfig?.timerEnabled && space.ideationEndsAt ? (
+                    <CountdownTimer
+                      endTime={space.ideationEndsAt}
+                      size="md"
+                      onExpire={() => {
+                        toast({
+                          title: "Ideation Timer Ended",
+                          description: "The ideation phase timer has expired.",
+                        });
+                        queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}`] });
+                      }}
+                    />
+                  ) : null;
+                })()}
               </div>
             </div>
             <div className="flex flex-wrap gap-2">

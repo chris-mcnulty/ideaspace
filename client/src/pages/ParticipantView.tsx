@@ -15,7 +15,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Users, User, Clock, Vote, ListOrdered, Coins, ClipboardList, Lightbulb, Sparkles } from "lucide-react";
+import { Plus, Users, User, Clock, Vote, ListOrdered, Coins, ClipboardList, Lightbulb, Sparkles, Timer } from "lucide-react";
+import { CountdownTimer } from "@/components/CountdownTimer";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -384,6 +385,20 @@ export default function ParticipantView() {
             <p className="text-sm text-muted-foreground">{space?.purpose}</p>
           </div>
           <div className="flex items-center gap-4 flex-wrap">
+            {/* Ideation Timer - show when timer is enabled and ideation is active */}
+            {space && isPhaseActive(space, "ideation") && ideationConfig?.timerEnabled && space.ideationEndsAt && (
+              <CountdownTimer
+                endTime={space.ideationEndsAt}
+                size="md"
+                onExpire={() => {
+                  toast({
+                    title: "Time's Up!",
+                    description: "The ideation phase has ended.",
+                  });
+                  queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}`] });
+                }}
+              />
+            )}
             {/* Live Ideas Count */}
             <div className="flex items-center gap-2" data-testid="status-ideas-count">
               <Lightbulb className="h-4 w-4 text-yellow-500" />

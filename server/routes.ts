@@ -1236,10 +1236,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const updates: any = {};
       
+      // Get workspace modules to check for timer configuration
+      const workspaceModules = await storage.getWorkspaceModules(req.params.id);
+      const ideationModule = workspaceModules.find(m => m.moduleType === 'ideation');
+      const ideationConfig = ideationModule?.config as { timerEnabled?: boolean; timerDurationMinutes?: number } | undefined;
+      
       switch (phase) {
         case "ideate":
           updates.ideationStartsAt = now;
-          updates.ideationEndsAt = farFuture;
+          // If timer is enabled, set end time based on configured duration
+          if (ideationConfig?.timerEnabled && ideationConfig?.timerDurationMinutes) {
+            const timerEndTime = new Date(now.getTime() + ideationConfig.timerDurationMinutes * 60 * 1000);
+            updates.ideationEndsAt = timerEndTime;
+          } else {
+            updates.ideationEndsAt = farFuture;
+          }
           break;
         case "vote":
           updates.votingStartsAt = now;
