@@ -33,13 +33,12 @@ The design system features a dark mode with a primary purple accent, dark blue-b
 - **Real-time Collaboration**: Utilizes WebSockets for live updates.
 - **Role-Based Access Control (RBAC)**: Defines Global Admin, Company Admin, Facilitator, and User roles.
 - **Authentication**: Includes both local authentication (email verification, secure password reset) and OAuth 2.1 SSO integration with Orion identity provider.
-- **OAuth Integration**: Full OAuth 2.1 PKCE-enabled Single Sign-On with configurable killswitch:
+- **OAuth Integration** (SUSPENDED - Jan 2026): OAuth 2.1 PKCE-enabled Single Sign-On infrastructure exists but Orion integration is on hold. Galaxy will replace Orion as the central OAuth provider later in 2026.
   - System-wide and organization-level settings table for configuration
   - OAuth can be enabled/disabled via `oauth_enabled` setting in systemSettings table
-  - Defaults to enabled if Orion credentials (ORION_CLIENT_ID, ORION_CLIENT_SECRET, ORION_ISSUER_URL) are configured
   - Supports both local and federated authentication simultaneously
   - User schema supports both auth providers with seamless migration from local to OAuth
-  - Role mapping from Orion to Nebula roles (nebula.global_admin → global_admin, etc.)
+  - Role mapping infrastructure ready for Galaxy integration
 - **AI Integration**: Leverages OpenAI API for note categorization, card rewrites, and AI usage tracking.
 - **Voting Mechanisms**: Implements Pairwise Voting (round-robin) and Stack Ranking (Borda Count) with real-time leaderboards.
 - **Guest Access Control**: Manages workspace access with configurable permissions, access requests, and email notifications.
