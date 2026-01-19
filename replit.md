@@ -57,7 +57,15 @@ The design system features a dark mode with a primary purple accent, dark blue-b
   - **Maximum Legibility StickyNotes**: High-contrast vibrant color palette (amber, sky, emerald, rose, violet, orange) with explicit text colors for light/dark modes. Typography uses text-lg font-semibold for content, text-sm font-semibold for author. Enhanced sizing with min-h-[200px], p-5 padding, rounded-xl corners, shadow-lg effects. Hover effects: shadow-xl, -translate-y-0.5 (no size changes per design rules)
   - **Deterministic Colors**: Sticky note colors are assigned based on note ID hash for consistency across re-renders
   - **Facilitator Word Limits**: Configurable minWordCount and maxWordCount in ideation module config, client-side validation with real-time word count display, visual feedback for under/over limits, disabled submit when invalid
-  - **Timer Configuration**: timerEnabled and timerDurationMinutes options in module config (UI placeholder for future countdown implementation)
+  - **Countdown Timer** (Jan 2026): Full countdown timer implementation for ideation phase:
+    - CountdownTimer component with visual states: normal (outline) → warning (yellow, ≤5min) → critical (red, ≤1min) → urgent (pulsing, ≤30sec) → expired
+    - Timer configuration via ideation module config: timerEnabled (boolean) and timerDurationMinutes (default 15)
+    - Server-side: Sets ideationEndsAt based on timerDurationMinutes when activating phase via navigate-participants endpoint
+    - Client-side: FacilitatorWorkspace updateSpaceStatusMutation mirrors server logic for consistency
+    - Timer displays in both ParticipantView header and FacilitatorWorkspace ideation tab
+    - Automatic phase deactivation: isPhaseActive returns false when now > ideationEndsAt, hiding timer and blocking submissions
+    - onExpire callback shows toast and invalidates queries for real-time UI update
+    - Proper state management: isExpired resets on endTime changes, local hasExpired flag prevents double-firing
   - **Optimized Grid Layout**: ParticipantView uses gap-8 spacing, responsive columns (1→sm:2→lg:3→2xl:4) for maximum visibility
   - **Enhanced IdeasHub Session Notes**: Facilitator view with larger text (text-base font-medium), border-2 cards, bg-card backgrounds, Users icon in author badges
 - **Share Links & QR Codes**: Facilitators can generate shareable URLs and client-side QR codes.
