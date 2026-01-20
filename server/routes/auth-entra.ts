@@ -21,9 +21,14 @@ declare module 'express-session' {
 const router = Router();
 
 // MSAL Configuration
+// Note: AZURE_TENANT_ID should be set to "common" for multi-tenant mode
+// This allows users from ANY Microsoft tenant to authenticate
+// The actual tenant ID is captured from the token and stored in the organizations table
+// for tenant-specific operations like user directory lookups
 const msalConfig: Configuration = {
   auth: {
     clientId: process.env.AZURE_CLIENT_ID || '',
+    // Use 'common' for multi-tenant: allows any org directory + personal Microsoft accounts
     authority: `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID || 'common'}`,
     clientSecret: process.env.AZURE_CLIENT_SECRET || '',
   },
@@ -118,8 +123,10 @@ router.get('/auth/entra/login', async (req: Request, res: Response) => {
       req.session.returnTo = req.query.returnTo as string;
     }
     
+    // Scopes for SSO - includes User.Read.All for tenant admin user lookup
+    // Note: User.Read.All requires admin consent in most tenants
     const authCodeUrlParameters = {
-      scopes: ['openid', 'profile', 'email', 'User.Read'],
+      scopes: ['openid', 'profile', 'email', 'User.Read', 'User.Read.All'],
       redirectUri: getRedirectUri(req),
       codeChallenge: challenge,
       codeChallengeMethod: 'S256',
@@ -173,7 +180,7 @@ router.get('/auth/entra/callback', async (req: Request, res: Response) => {
     // Exchange code for tokens
     const tokenRequest = {
       code: code as string,
-      scopes: ['openid', 'profile', 'email', 'User.Read'],
+      scopes: ['openid', 'profile', 'email', 'User.Read', 'User.Read.All'],
       redirectUri: getRedirectUri(req),
       codeVerifier: pkceCodes.verifier,
     };
