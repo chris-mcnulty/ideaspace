@@ -5,6 +5,7 @@ import passport from "passport";
 import multer from "multer";
 import { storage } from "./storage";
 import oauthRoutes from "./routes/auth-oauth";
+import entraRoutes from "./routes/auth-entra";
 import { db } from "./db";
 import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, type Space, organizations, users, companyAdmins, knowledgeBaseDocuments, workspaceTemplates, aiUsageLog, insertIdeaSchema, insertWorkspaceModuleSchema, insertWorkspaceModuleRunSchema, insertPriorityMatrixSchema, insertPriorityMatrixPositionSchema, insertStaircaseModuleSchema, insertStaircasePositionSchema } from "@shared/schema";
 import { uploadImage, validateImageFile, cleanupTempFile } from "./middleware/uploadMiddleware";
@@ -178,6 +179,9 @@ function createWorkspaceAccessMiddleware(options: {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Register OAuth routes
   app.use(oauthRoutes);
+  
+  // Register Microsoft Entra ID SSO routes
+  app.use(entraRoutes);
   
   // Configure multer for file uploads (max 10MB)
   const upload = multer({

@@ -15,6 +15,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [emailNotVerified, setEmailNotVerified] = useState(false);
   const [oauthEnabled, setOauthEnabled] = useState(false);
+  const [entraEnabled, setEntraEnabled] = useState(false);
   const [, setLocation] = useLocation();
 
   useEffect(() => {
@@ -25,6 +26,12 @@ export default function Login() {
       .then(res => res.json())
       .then(data => setOauthEnabled(data.enabled))
       .catch(err => console.error('Failed to check OAuth status:', err));
+    
+    // Check if Entra ID SSO is enabled
+    fetch('/api/auth/entra/status')
+      .then(res => res.json())
+      .then(data => setEntraEnabled(data.enabled))
+      .catch(err => console.error('Failed to check Entra SSO status:', err));
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -213,7 +220,7 @@ export default function Login() {
                 {isLoading ? "Signing in..." : "Sign In"}
               </Button>
               
-              {oauthEnabled && (
+              {(oauthEnabled || entraEnabled) && (
                 <>
                   <div className="relative w-full">
                     <div className="absolute inset-0 flex items-center">
@@ -224,20 +231,37 @@ export default function Login() {
                     </div>
                   </div>
                   
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => window.location.href = "/auth/sso/login"}
-                    data-testid="button-sso-sign-in"
-                  >
-                    <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="10" />
-                      <path d="M8 12h8" />
-                      <path d="M12 8v8" />
-                    </svg>
-                    Sign in with Synozur account
-                  </Button>
+                  {entraEnabled && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => window.location.href = "/auth/entra/login"}
+                      data-testid="button-entra-sign-in"
+                    >
+                      <svg className="mr-2 h-4 w-4" viewBox="0 0 21 21" fill="currentColor">
+                        <path d="M0 0h10v10H0V0zm11 0h10v10H11V0zM0 11h10v10H0V11zm11 0h10v10H11V11z"/>
+                      </svg>
+                      Sign in with Microsoft
+                    </Button>
+                  )}
+                  
+                  {oauthEnabled && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => window.location.href = "/auth/sso/login"}
+                      data-testid="button-sso-sign-in"
+                    >
+                      <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M8 12h8" />
+                        <path d="M12 8v8" />
+                      </svg>
+                      Sign in with Synozur account
+                    </Button>
+                  )}
                 </>
               )}
               

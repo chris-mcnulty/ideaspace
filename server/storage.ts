@@ -65,8 +65,11 @@ import {
   type InsertStaircasePosition,
   type SystemSetting,
   type InsertSystemSetting,
+  type ServicePlan,
+  type InsertServicePlan,
   organizations,
   systemSettings,
+  servicePlans,
   users,
   spaces,
   participants,
@@ -118,10 +121,20 @@ export interface IStorage {
   getSystemSetting(key: string, organizationId?: string | null): Promise<SystemSetting | undefined>;
   setSystemSetting(setting: InsertSystemSetting): Promise<SystemSetting>;
   getAllSystemSettings(organizationId?: string | null): Promise<SystemSetting[]>;
+
+  // Service Plans
+  getServicePlan(id: string): Promise<ServicePlan | undefined>;
+  getServicePlanByName(name: string): Promise<ServicePlan | undefined>;
+  getAllServicePlans(): Promise<ServicePlan[]>;
+  getActiveServicePlans(): Promise<ServicePlan[]>;
+  createServicePlan(plan: InsertServicePlan): Promise<ServicePlan>;
+  updateServicePlan(id: string, plan: Partial<InsertServicePlan>): Promise<ServicePlan | undefined>;
   
   // Organizations
   getOrganization(id: string): Promise<Organization | undefined>;
   getOrganizationBySlug(slug: string): Promise<Organization | undefined>;
+  getOrganizationByDomain(domain: string): Promise<Organization | undefined>;
+  getOrganizationByEntraTenantId(entraTenantId: string): Promise<Organization | undefined>;
   getAllOrganizations(): Promise<Organization[]>;
   createOrganization(org: InsertOrganization): Promise<Organization>;
   updateOrganization(id: string, org: Partial<InsertOrganization>): Promise<Organization | undefined>;
@@ -130,6 +143,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEntraId(entraId: string): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
   getUsersByOrganization(organizationId: string): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
@@ -386,6 +400,44 @@ export class DbStorage implements IStorage {
     return db.select().from(systemSettings).where(condition);
   }
 
+  // Service Plans
+  async getServicePlan(id: string): Promise<ServicePlan | undefined> {
+    const [plan] = await db.select().from(servicePlans).where(eq(servicePlans.id, id)).limit(1);
+    return plan;
+  }
+
+  async getServicePlanByName(name: string): Promise<ServicePlan | undefined> {
+    const [plan] = await db.select().from(servicePlans).where(eq(servicePlans.name, name.toLowerCase())).limit(1);
+    return plan;
+  }
+
+  async getAllServicePlans(): Promise<ServicePlan[]> {
+    return db.select().from(servicePlans).orderBy(servicePlans.sortOrder);
+  }
+
+  async getActiveServicePlans(): Promise<ServicePlan[]> {
+    return db.select().from(servicePlans)
+      .where(eq(servicePlans.isActive, true))
+      .orderBy(servicePlans.sortOrder);
+  }
+
+  async createServicePlan(plan: InsertServicePlan): Promise<ServicePlan> {
+    const [created] = await db.insert(servicePlans).values({
+      ...plan,
+      name: plan.name.toLowerCase(),
+    }).returning();
+    return created;
+  }
+
+  async updateServicePlan(id: string, plan: Partial<InsertServicePlan>): Promise<ServicePlan | undefined> {
+    const updateData = plan.name ? { ...plan, name: plan.name.toLowerCase() } : plan;
+    const [updated] = await db.update(servicePlans)
+      .set({ ...updateData, updatedAt: new Date() })
+      .where(eq(servicePlans.id, id))
+      .returning();
+    return updated;
+  }
+
   // Organizations
   async getOrganization(id: string): Promise<Organization | undefined> {
     const [org] = await db.select().from(organizations).where(eq(organizations.id, id)).limit(1);
@@ -394,6 +446,28 @@ export class DbStorage implements IStorage {
 
   async getOrganizationBySlug(slug: string): Promise<Organization | undefined> {
     const [org] = await db.select().from(organizations).where(eq(organizations.slug, slug)).limit(1);
+    return org;
+  }
+
+  async getOrganizationByDomain(domain: string): Promise<Organization | undefined> {
+    const normalizedDomain = domain.toLowerCase().trim();
+    // Check primary domain first
+    const [orgByPrimary] = await db.select().from(organizations)
+      .where(eq(organizations.domain, normalizedDomain))
+      .limit(1);
+    if (orgByPrimary) return orgByPrimary;
+    
+    // Check allowed domains array
+    const allOrgs = await db.select().from(organizations);
+    return allOrgs.find(org => 
+      org.allowedDomains?.includes(normalizedDomain)
+    );
+  }
+
+  async getOrganizationByEntraTenantId(entraTenantId: string): Promise<Organization | undefined> {
+    const [org] = await db.select().from(organizations)
+      .where(eq(organizations.entraTenantId, entraTenantId))
+      .limit(1);
     return org;
   }
 
@@ -426,6 +500,11 @@ export class DbStorage implements IStorage {
 
   async getUserByUsername(username: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.username, username)).limit(1);
+    return user;
+  }
+
+  async getUserByEntraId(entraId: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.entraId, entraId)).limit(1);
     return user;
   }
 

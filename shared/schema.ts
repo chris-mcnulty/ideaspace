@@ -20,13 +20,60 @@ export const systemSettings = pgTable("system_settings", {
   uniqueOrgKey: unique().on(table.organizationId, table.key),
 }));
 
+// Service Plans for subscription tiers
+export const servicePlans = pgTable("service_plans", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull().unique(), // 'trial', 'team', 'enterprise'
+  displayName: text("display_name").notNull(), // 'Trial', 'Team', 'Enterprise'
+  description: text("description"),
+  maxWorkspaces: integer("max_workspaces").notNull().default(1), // -1 for unlimited
+  maxTeamSeats: integer("max_team_seats").notNull().default(5), // Max users per org
+  aiEnabled: boolean("ai_enabled").notNull().default(false), // AI features unlocked
+  trialDays: integer("trial_days"), // Number of days for trial period (null for non-trial plans)
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Public email domains list (Gmail, Yahoo, Outlook, etc.) - users with these domains get invite-only tenants
+export const PUBLIC_EMAIL_DOMAINS = [
+  'gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.co.uk', 'yahoo.fr', 'yahoo.de',
+  'outlook.com', 'hotmail.com', 'hotmail.co.uk', 'live.com', 'msn.com',
+  'aol.com', 'icloud.com', 'me.com', 'mac.com',
+  'protonmail.com', 'proton.me', 'tutanota.com', 'zoho.com',
+  'mail.com', 'gmx.com', 'gmx.net', 'yandex.com', 'qq.com', '163.com'
+];
+
+export function isPublicEmailDomain(email: string): boolean {
+  const domain = email.toLowerCase().split('@')[1];
+  return PUBLIC_EMAIL_DOMAINS.includes(domain);
+}
+
+export function getEmailDomain(email: string): string {
+  return email.toLowerCase().split('@')[1] || '';
+}
+
 export const organizations = pgTable("organizations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   logoUrl: text("logo_url"),
   primaryColor: text("primary_color"),
+  // Domain and SSO fields
+  domain: text("domain"), // Primary email domain for this organization (e.g., 'acme.com')
+  allowedDomains: text("allowed_domains").array(), // Additional allowed email domains
+  inviteOnly: boolean("invite_only").notNull().default(false), // If true, users must be invited to join
+  // SSO Configuration
+  ssoEnabled: boolean("sso_enabled").notNull().default(false),
+  ssoProvider: text("sso_provider"), // 'entra', 'google', etc.
+  entraTenantId: text("entra_tenant_id"), // Microsoft Entra (Azure AD) Tenant ID
+  // Service Plan
+  servicePlanId: varchar("service_plan_id").references(() => servicePlans.id),
+  subscriptionStartedAt: timestamp("subscription_started_at"),
+  subscriptionExpiresAt: timestamp("subscription_expires_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const users = pgTable("users", {
@@ -38,10 +85,14 @@ export const users = pgTable("users", {
   role: text("role").notNull().default("user"), // global_admin, company_admin, facilitator, user
   displayName: text("display_name"),
   emailVerified: boolean("email_verified").notNull().default(false),
-  // OAuth fields
+  // OAuth fields (legacy - Orion)
   orionId: text("orion_id").unique(), // User ID from Orion identity provider
-  authProvider: text("auth_provider").notNull().default("local"), // 'local' or 'orion'
   orionTenantId: text("orion_tenant_id"), // Tenant ID from Orion
+  // Entra ID (Azure AD) fields
+  entraId: text("entra_id").unique(), // Microsoft Entra Object ID (oid claim)
+  entraTenantId: text("entra_tenant_id"), // Microsoft Entra Tenant ID (tid claim)
+  // Auth provider: 'local', 'orion', 'entra'
+  authProvider: text("auth_provider").notNull().default("local"),
   lastLogin: timestamp("last_login"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -536,9 +587,16 @@ export const insertSystemSettingSchema = createInsertSchema(systemSettings).omit
   updatedAt: true,
 });
 
+export const insertServicePlanSchema = createInsertSchema(servicePlans).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertOrganizationSchema = createInsertSchema(organizations).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({
@@ -760,6 +818,9 @@ export const insertStaircasePositionSchema = createInsertSchema(staircasePositio
 // Types
 export type SystemSetting = typeof systemSettings.$inferSelect;
 export type InsertSystemSetting = z.infer<typeof insertSystemSettingSchema>;
+
+export type ServicePlan = typeof servicePlans.$inferSelect;
+export type InsertServicePlan = z.infer<typeof insertServicePlanSchema>;
 
 export type Organization = typeof organizations.$inferSelect;
 export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;

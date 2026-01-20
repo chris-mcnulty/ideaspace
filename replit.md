@@ -1,7 +1,7 @@
 # Nebula - Multi-Tenant Collaborative Envisioning Platform
 
 ## Overview
-Nebula is a multi-tenant web application designed for structured collaborative envisioning sessions. It enables facilitators to guide cohorts through real-time ideation, AI-powered categorization, pairwise voting, and stack ranking, culminating in personalized results. The platform aims to provide a robust environment for organizations to conduct effective envisioning workshops, offering a comprehensive solution for effective envisioning workshops.
+Nebula is a multi-tenant web application for structured collaborative envisioning sessions. It enables facilitators to guide cohorts through real-time ideation, AI-powered categorization, voting, and ranking, culminating in personalized results. The platform aims to provide a robust environment for organizations to conduct effective envisioning workshops.
 
 ## User Preferences
 - The user wants iterative development.
@@ -14,96 +14,38 @@ Nebula is a multi-tenant web application designed for structured collaborative e
   - Accessibility requirements (WCAG 2.1 AA)
   - Dark mode support
 
-## Synozur Alliance Application Suite
-Nebula is part of the Synozur Alliance application suite. When implementing common patterns (SSO, multi-tenancy, user administration), reference these sibling applications:
-
-### Vega - Strategy & OKR Platform (Reference Application)
-- **Repository**: https://github.com/chris-mcnulty/synozur-vega
-- **Replit**: https://replit.com/@chrismcnulty1/VegaPrototype
-- **Purpose**: AI-augmented Company OS for strategy development, objectives, and key results
-- **Reference Patterns** (copy from Vega for consistency):
-  - **Microsoft Entra ID SSO**: Multi-tenant MSAL-based Azure AD authentication with PKCE flow, JIT user provisioning, tenant mapping, SSO policy enforcement
-  - **User & Tenant Auto-Creation**: Just-in-time provisioning based on email domain
-  - **Tenant Administration**: Full CRUD, allowed email domains, invite-only mode for public domains
-  - **User Administration**: Role-based access with 6 defined roles, fine-grained permissions
-  - **Public Domain Handling**: Prevents domain squatting for Gmail/Yahoo/Outlook users via invite-only tenants
-  - **Vocabulary Module**: Customizable terminology with system defaults and tenant overrides
-  - **MCP Server**: Model Context Protocol integration for AI assistants
-
-### Galaxy - Central OAuth Provider (Future)
-- **Status**: Planned for later in 2026
-- **Purpose**: Will serve as the central OAuth provider for all Synozur Alliance applications, replacing Orion
-
 ## System Architecture
 Nebula is a multi-tenant web application with an ideas-centric architecture that supports flexible, non-linear module journeys.
 
-### Ideas-Centric Architecture (Nov 2025)
-The platform has been refactored to treat **ideas** as first-class entities independent of any specific module:
-- **Ideas Table**: Core entity storing all ideas (participant-generated, facilitator-entered, preloaded, or imported)
-- **Workspace Modules**: Configurable modules per workspace with enable/disable, ordering, and JSONB config
-- **Module Runs**: Track individual executions of modules for repeatable sessions
-- **Flexible Journeys**: Facilitators can create custom module sequences (e.g., preload ideas → 2x2 grid → marketplace → results)
-- **Smart Results**: Only display data from actually-used modules
+### Ideas-Centric Architecture
+The platform treats **ideas** as first-class entities independent of any specific module. This enables configurable workspace modules, tracking of module runs for repeatable sessions, and flexible facilitator-defined module sequences.
 
 ### UI/UX Decisions
-The design system features a dark mode with a primary purple accent, dark blue-black backgrounds, and a custom font (Avenir Next LT Pro). Branding includes Synozur logos and a favicon. The UI incorporates gradient text effects, automatic elevation on hover states, and organization-specific branding in headers. Navigation includes a consistent sticky header with a theme toggle and user profile menu.
+The design system features a dark mode with a primary purple accent, dark blue-black backgrounds, and Avenir Next LT Pro font. Branding includes Synozur logos, gradient text effects, automatic elevation on hover, and organization-specific branding in headers. Navigation includes a sticky header with a theme toggle and user profile menu.
 
 ### Technical Implementations
 - **Multi-Tenancy**: Supports organization isolation and custom branding.
-- **Real-time Collaboration**: Utilizes WebSockets for live updates.
+- **Real-time Collaboration**: Utilizes WebSockets for live updates across various modules.
 - **Role-Based Access Control (RBAC)**: Defines Global Admin, Company Admin, Facilitator, and User roles.
-- **Authentication**: Includes both local authentication (email verification, secure password reset) and OAuth 2.1 SSO integration with Orion identity provider.
-- **OAuth Integration** (SUSPENDED - Jan 2026): OAuth 2.1 PKCE-enabled Single Sign-On infrastructure exists but Orion integration is on hold. Galaxy will replace Orion as the central OAuth provider later in 2026.
-  - System-wide and organization-level settings table for configuration
-  - OAuth can be enabled/disabled via `oauth_enabled` setting in systemSettings table
-  - Supports both local and federated authentication simultaneously
-  - User schema supports both auth providers with seamless migration from local to OAuth
-  - Role mapping infrastructure ready for Galaxy integration
-- **AI Integration**: Leverages OpenAI API for note categorization, card rewrites, and AI usage tracking.
-- **Voting Mechanisms**: Implements Pairwise Voting (round-robin) and Stack Ranking (Borda Count) with real-time leaderboards.
-- **Guest Access Control**: Manages workspace access with configurable permissions, access requests, and email notifications.
-- **Email Normalization** (Jan 2026): All email addresses are normalized (lowercase, trimmed) at write time via `normalizeEmail()` helper in `server/storage.ts`. This prevents duplicate records due to casing/whitespace variations. Applied to: `createUser`, `updateUser`, `createParticipant`, `updateParticipant`, `createAccessRequest`. Lookup methods also normalize input for consistent matching.
-- **Email Notification System** (Nov 2025): Comprehensive SendGrid-powered email notifications via Replit connector integration:
-  - **Session Invites**: Single and bulk invitation emails with session details and join links
-  - **Phase Change Notifications**: Automated alerts when facilitators move sessions between phases
-  - **Results Ready Notifications**: Notify participants when personalized/cohort results are available
-  - **Workspace Reminders**: Deadline approaching, incomplete submission, and session starting alerts
-  - **API Endpoints**: `/api/spaces/:spaceId/notifications/invite`, `/invite-bulk`, `/phase-change`, `/results-ready`
-  - **Branded Templates**: All emails use Nebula/Synozur branding with purple gradient headers
-- **Facilitator Controls**: Tools for managing notes (CRUD, merge, bulk select, AI rewrites), session states, and AI categorization.
-- **Ideation Module Enhancements** (Jan 2026): 
-  - **Real-time Collaboration**: Live idea count in participant header, WebSocket notifications for new notes with author name, 3-second animation for recently added ideas
-  - **Maximum Legibility StickyNotes**: High-contrast vibrant color palette (amber, sky, emerald, rose, violet, orange) with explicit text colors for light/dark modes. Typography uses text-lg font-semibold for content, text-sm font-semibold for author. Enhanced sizing with min-h-[200px], p-5 padding, rounded-xl corners, shadow-lg effects. Hover effects: shadow-xl, -translate-y-0.5 (no size changes per design rules)
-  - **Deterministic Colors**: Sticky note colors are assigned based on note ID hash for consistency across re-renders
-  - **Facilitator Word Limits**: Configurable minWordCount and maxWordCount in ideation module config, client-side validation with real-time word count display, visual feedback for under/over limits, disabled submit when invalid
-  - **Countdown Timer** (Jan 2026): Full countdown timer implementation for ideation phase:
-    - CountdownTimer component with visual states: normal (outline) → warning (yellow, ≤5min) → critical (red, ≤1min) → urgent (pulsing, ≤30sec) → expired
-    - Timer configuration via ideation module config: timerEnabled (boolean) and timerDurationMinutes (default 15)
-    - Server-side: Sets ideationEndsAt based on timerDurationMinutes when activating phase via navigate-participants endpoint
-    - Client-side: FacilitatorWorkspace updateSpaceStatusMutation mirrors server logic for consistency
-    - Timer displays in both ParticipantView header and FacilitatorWorkspace ideation tab
-    - Automatic phase deactivation: isPhaseActive returns false when now > ideationEndsAt, hiding timer and blocking submissions
-    - onExpire callback shows toast and invalidates queries for real-time UI update
-    - Proper state management: isExpired resets on endTime changes, local hasExpired flag prevents double-firing
-  - **Optimized Grid Layout**: ParticipantView uses gap-8 spacing, responsive columns (1→sm:2→lg:3→2xl:4) for maximum visibility
-  - **Enhanced IdeasHub Session Notes**: Facilitator view with larger text (text-base font-medium), border-2 cards, bg-card backgrounds, Users icon in author badges
-- **Share Links & QR Codes**: Facilitators can generate shareable URLs and client-side QR codes.
-- **Workspace Access Controls**: Enforces status-based and guest permission-based access restrictions.
-- **Unified Category Management**: A single system for AI and human categorization, allowing facilitator overrides and real-time updates.
-- **Knowledge Base System**: A three-tiered document management system (System, Organization, Workspace scopes) for grounding AI, supporting multiple file types, secure storage, and RBAC.
+- **Authentication**: Supports local authentication (email verification, password reset) and Microsoft Entra ID SSO with JIT user and tenant provisioning. It includes robust handling for public domains and maps corporate email domains to organizations.
+- **AI Integration**: Leverages OpenAI API for note categorization, card rewrites, and usage tracking.
+- **Voting Mechanisms**: Implements Pairwise Voting and Stack Ranking with real-time leaderboards.
+- **Guest Access Control**: Manages workspace access with configurable permissions and notifications.
+- **Email Notification System**: SendGrid-powered notifications for session invites, phase changes, results, and reminders.
+- **Ideation Module Enhancements**: Includes real-time collaboration features (live idea count, WebSocket notifications), maximum legibility StickyNotes with deterministic colors, configurable facilitator word limits, and a full countdown timer with visual states and automatic phase deactivation.
+- **Share Links & QR Codes**: Generation of shareable URLs and client-side QR codes.
+- **Unified Category Management**: System for AI and human categorization with facilitator overrides.
+- **Knowledge Base System**: Three-tiered document management (System, Organization, Workspace scopes) for AI grounding, supporting multiple file types and RBAC.
 - **Marketplace Allocation**: A coin-based voting system with real-time budget display.
-- **Export System**: Facilitators and admins can export categorized data from all voting modules for GenAI analytics.
+- **Export System**: Export of categorized data from voting modules for analytics and client-side PDF generation for results with branding.
 - **Consolidated Data Export/Import**: Unified CSV export/import for ideas and categories.
-- **Results Generation**: AI-powered generation of cohort summaries and personalized participant results.
-- **Branded PDF Export**: Client-side PDF generation for cohort and personalized results with organization branding.
-- **Facilitator Dashboard**: Central dashboard for managing accessible workspaces.
-- **Admin Panel UI**: Comprehensive CRUD operations for organizations and workspaces.
-- **Workspace Template System**: Snapshot-based template architecture for system and organization-scoped templates.
-- **2x2 Priority Matrix Module**: Collaborative drag-and-drop grid for positioning ideas along configurable axes (e.g., Impact vs. Effort), with real-time WebSocket updates for multi-user collaboration and facilitator-controlled participant navigation.
-- **Staircase Module**: Diagonal rating grid (0-10 scale) for visual assessment of ideas with drag-and-drop positioning, SVG-based visualization, configurable labels, real-time WebSocket synchronization, optional score distribution histogram, and facilitator-controlled participant navigation.
-- **Survey Module**: Customizable 1-5 scale rating system for evaluating ideas across multiple questions.
-- **Collaborative Module Navigation**: Facilitators can send participants to specific modules (Priority Matrix, Staircase, Survey, Voting, Ranking, Marketplace, Ideation, Results) via "Bring Participants Here" buttons with real-time WebSocket broadcasts and toast notifications.
-- **Dynamic Facilitator Tab Ordering** (Nov 2025): Map-based tab rendering system that synchronizes facilitator workspace tabs with workspace_modules configuration. Tab sequence: Modules → Ideas Hub → Knowledge Base → Participants → [Enabled modules sorted by orderIndex] → Results. Implementation uses helper render functions (renderModulesTab, renderIdeasTab, etc.) mapped via tabContentByValue Record to ensure tab triggers and content stay perfectly aligned. Module type mapping: pairwise-voting→voting, stack-ranking→ranking, priority-matrix→priority-matrix, staircase→staircase, survey→survey, marketplace→marketplace. Adding new module types requires updates to both facilitatorTabs builder (FacilitatorWorkspace.tsx lines 457-514) and tabContentByValue map (lines 1992-2004).
+- **Results Generation**: AI-powered cohort summaries and personalized participant results.
+- **Facilitator Dashboard**: Central management for accessible workspaces.
+- **Admin Panel UI**: CRUD operations for organizations and workspaces.
+- **Workspace Template System**: Snapshot-based template architecture.
+- **Module Variety**: Includes 2x2 Priority Matrix, Staircase, and Survey modules, all supporting real-time collaboration and facilitator-controlled participant navigation.
+- **Collaborative Module Navigation**: Facilitators can direct participants to specific modules via "Bring Participants Here" functionality.
+- **Dynamic Facilitator Tab Ordering**: Facilitator workspace tabs dynamically synchronize with `workspace_modules` configuration.
 
 ### System Design Choices
 - **Frontend**: React, Wouter, TanStack Query, Tailwind CSS, Shadcn UI.
@@ -123,38 +65,3 @@ The design system features a dark mode with a primary purple accent, dark blue-b
 - **State Management/Data Fetching**: TanStack Query
 - **Styling**: Tailwind CSS, Shadcn UI
 - **WebSocket**: `ws` library
-
-## Test Accounts (Development Environment)
-
-### Password for all test accounts: `TestPass123!`
-
-### Organizations and Users
-
-#### Cascadia Oceanic
-- **Organization**: Cascadia Oceanic (ID: bdc84450-e2a4-4a5d-8771-ef538ee412aa)
-- **Workspace**: Cascadia Vision 2030 (Code: `12345678`)
-- **Admin**: admin@cascadia.test / TestPass123!
-- **Facilitator**: facilitator@cascadia.test / TestPass123!
-
-#### Contoso
-- **Organization**: Contoso (ID: a4208ed6-d134-463a-b9e3-a51b574accbb)
-- **Workspace**: Contoso Innovation Lab (Code: `87654321`)
-- **Admin**: admin@contoso.test / TestPass123!
-- **Facilitator**: facilitator@contoso.test / TestPass123!
-
-#### Fabrikam
-- **Organization**: Fabrikam (ID: 288e53de-94a1-4c92-960b-1de7591cbe27)
-- **Workspace**: Fabrikam Future Factory (Code: `11223344`)
-- **Admin**: admin@fabrikam.test / TestPass123!
-- **Facilitator**: facilitator@fabrikam.test / TestPass123!
-
-#### Global Admin
-- **Email**: admin@nebula.test
-- **Password**: TestPass123!
-- **Role**: Global Admin (no organization)
-
-### Test Data Setup
-- Each workspace has 5 preloaded test ideas
-- Modules enabled: Ideation, Priority Matrix, Pairwise Voting, Marketplace
-- All workspaces are in 'ideation' status
-- Guest access is enabled for all test workspaces
