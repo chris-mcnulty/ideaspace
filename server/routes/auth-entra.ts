@@ -404,6 +404,17 @@ async function processEntraUser(userInfo: EntraUserInfo): Promise<ProcessUserRes
   let existingUser = await storage.getUserByEntraId(entraId);
   
   if (existingUser) {
+    // Check if user's organization has SSO enabled
+    if (existingUser.organizationId) {
+      const org = await storage.getOrganization(existingUser.organizationId);
+      if (org && !org.ssoEnabled) {
+        return {
+          success: false,
+          error: 'SSO is not enabled for your organization. Please use email and password to sign in.',
+        };
+      }
+    }
+    
     // Update last login
     await storage.updateUser(existingUser.id, { lastLogin: new Date() });
     return {
@@ -422,6 +433,17 @@ async function processEntraUser(userInfo: EntraUserInfo): Promise<ProcessUserRes
   existingUser = await storage.getUserByEmail(email);
   
   if (existingUser) {
+    // Check if user's organization has SSO enabled before linking
+    if (existingUser.organizationId) {
+      const org = await storage.getOrganization(existingUser.organizationId);
+      if (org && !org.ssoEnabled) {
+        return {
+          success: false,
+          error: 'SSO is not enabled for your organization. Please use email and password to sign in.',
+        };
+      }
+    }
+    
     // Link existing user to Entra ID
     await storage.updateUser(existingUser.id, {
       entraId,
@@ -461,6 +483,17 @@ async function processEntraUser(userInfo: EntraUserInfo): Promise<ProcessUserRes
   
   const org = organization.org!;
   const isNewTenant = organization.isNew;
+  
+  // For existing orgs, check if SSO is enabled before allowing new user provisioning
+  if (!isNewTenant) {
+    const fullOrg = await storage.getOrganization(org.id);
+    if (fullOrg && !fullOrg.ssoEnabled) {
+      return {
+        success: false,
+        error: 'SSO is not enabled for your organization. Please use email and password to sign in, or contact your administrator to enable SSO.',
+      };
+    }
+  }
   
   // Determine role: first user in a new tenant becomes admin
   // For existing tenants, check if there are any existing users with admin role

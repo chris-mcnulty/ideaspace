@@ -978,7 +978,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Protected: Only global admins can update organizations
+  // Protected: Only global admins can update organizations (full access)
   app.patch("/api/organizations/:id", requireGlobalAdmin, async (req, res) => {
     try {
       const data = insertOrganizationSchema.partial().parse(req.body);
@@ -992,6 +992,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: error.errors });
       }
       res.status(500).json({ error: "Failed to update organization" });
+    }
+  });
+
+  // Company admins can toggle SSO for their own organization
+  app.patch("/api/organizations/:id/sso", requireCompanyAdmin, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const { id: orgId } = req.params;
+      
+      // Company admins can only update their own organization
+      if (currentUser.role === "company_admin" && currentUser.organizationId !== orgId) {
+        return res.status(403).json({ error: "Cannot update other organization's SSO settings" });
+      }
+      
+      const { ssoEnabled } = req.body;
+      if (typeof ssoEnabled !== "boolean") {
+        return res.status(400).json({ error: "ssoEnabled must be a boolean" });
+      }
+      
+      const org = await storage.updateOrganization(orgId, { ssoEnabled });
+      if (!org) {
+        return res.status(404).json({ error: "Organization not found" });
+      }
+      
+      res.json({ ssoEnabled: org.ssoEnabled });
+    } catch (error) {
+      console.error("Error updating SSO settings:", error);
+      res.status(500).json({ error: "Failed to update SSO settings" });
     }
   });
 

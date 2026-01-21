@@ -265,6 +265,35 @@ function OrganizationCard({
     queryKey: ["/api/admin/organizations", organization.id, "spaces"],
   });
 
+  // SSO toggle mutation
+  const ssoMutation = useMutation({
+    mutationFn: async (ssoEnabled: boolean) => {
+      const response = await apiRequest("PATCH", `/api/organizations/${organization.id}/sso`, { ssoEnabled });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update SSO settings");
+      }
+      return response.json();
+    },
+    onSuccess: (_, ssoEnabled) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/organizations"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/organizations/${organization.id}`] });
+      toast({
+        title: ssoEnabled ? "SSO enabled" : "SSO disabled",
+        description: ssoEnabled 
+          ? "Users can now sign in with Microsoft." 
+          : "Users must sign in with email and password.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to update SSO settings",
+        description: error.message || "Please try again",
+      });
+    },
+  });
+
   const deleteOrgMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest("DELETE", `/api/organizations/${organization.id}`);
@@ -319,6 +348,22 @@ function OrganizationCard({
                   {spaces.length} workspace{spaces.length !== 1 ? 's' : ''}
                 </p>
               </div>
+            </div>
+            <div className="flex items-center gap-4 flex-shrink-0">
+              {/* SSO Toggle */}
+              <div className="flex items-center gap-2">
+                <Label htmlFor={`sso-toggle-${organization.id}`} className="text-sm text-muted-foreground">
+                  Microsoft SSO
+                </Label>
+                <Switch
+                  id={`sso-toggle-${organization.id}`}
+                  checked={organization.ssoEnabled ?? false}
+                  onCheckedChange={(checked) => ssoMutation.mutate(checked)}
+                  disabled={ssoMutation.isPending}
+                  data-testid={`switch-sso-${organization.id}`}
+                />
+              </div>
+              <div className="h-6 w-px bg-border" />
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               {currentUserRole === "global_admin" && (
