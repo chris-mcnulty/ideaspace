@@ -2843,6 +2843,7 @@ function UsersTab() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedOrgFilter, setSelectedOrgFilter] = useState<string>("all");
 
   const { data: currentUser } = useQuery<User>({
     queryKey: ["/api/auth/me"],
@@ -2856,6 +2857,20 @@ function UsersTab() {
   const { data: users = [], isLoading } = useQuery<User[]>({
     queryKey: ["/api/admin/users"],
   });
+
+  // Filter users by selected organization
+  const filteredUsers = selectedOrgFilter === "all" 
+    ? users 
+    : selectedOrgFilter === "none"
+      ? users.filter(u => !u.organizationId)
+      : users.filter(u => u.organizationId === selectedOrgFilter);
+
+  // Get organization name for display
+  const getOrgName = (orgId: string | null) => {
+    if (!orgId) return "No Organization";
+    const org = organizations.find(o => o.id === orgId);
+    return org?.name || "Unknown";
+  };
 
   if (isLoading) {
     return (
@@ -2904,34 +2919,54 @@ function UsersTab() {
         </>
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h2 className="text-2xl font-semibold">All Users</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            {users.length} user{users.length !== 1 ? 's' : ''} registered on the platform
+            {filteredUsers.length} of {users.length} user{users.length !== 1 ? 's' : ''} 
+            {selectedOrgFilter !== "all" && " (filtered)"}
           </p>
         </div>
-        <Button 
-          onClick={() => setCreateDialogOpen(true)}
-          data-testid="button-create-user"
-        >
-          <UserPlus className="h-4 w-4 mr-2" />
-          Create User
-        </Button>
+        <div className="flex items-center gap-3">
+          {/* Organization Filter */}
+          {currentUser?.role === "global_admin" && organizations.length > 0 && (
+            <Select value={selectedOrgFilter} onValueChange={setSelectedOrgFilter}>
+              <SelectTrigger className="w-[220px]" data-testid="select-org-filter">
+                <SelectValue placeholder="Filter by organization" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Organizations</SelectItem>
+                <SelectItem value="none">No Organization</SelectItem>
+                {organizations.map((org) => (
+                  <SelectItem key={org.id} value={org.id}>
+                    {org.entraTenantId ? `${org.name} (SSO)` : org.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Button 
+            onClick={() => setCreateDialogOpen(true)}
+            data-testid="button-create-user"
+          >
+            <UserPlus className="h-4 w-4 mr-2" />
+            Create User
+          </Button>
+        </div>
       </div>
 
-      {users.length === 0 ? (
+      {filteredUsers.length === 0 ? (
         <Card>
           <CardContent className="pt-6 text-center text-muted-foreground">
             <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>No users found</p>
+            <p>{selectedOrgFilter === "all" ? "No users found" : "No users in this organization"}</p>
           </CardContent>
         </Card>
       ) : (
         <Card>
           <CardContent className="pt-6">
             <div className="space-y-3">
-              {users.map((user) => (
+              {filteredUsers.map((user) => (
                 <div 
                   key={user.id} 
                   className="flex items-center justify-between p-4 rounded-lg border bg-card"
@@ -2943,9 +2978,16 @@ function UsersTab() {
                         <h3 className="font-medium truncate" data-testid={`user-name-${user.id}`}>
                           {user.displayName || user.username}
                         </h3>
-                        <p className="text-sm text-muted-foreground truncate" data-testid={`user-email-${user.id}`}>
-                          {user.email}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm text-muted-foreground truncate" data-testid={`user-email-${user.id}`}>
+                            {user.email}
+                          </p>
+                          {currentUser?.role === "global_admin" && (
+                            <span className="text-xs text-muted-foreground/70">
+                              • {getOrgName(user.organizationId)}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2954,10 +2996,15 @@ function UsersTab() {
                       variant={user.role === "global_admin" ? "default" : user.role === "company_admin" ? "secondary" : "outline"}
                       data-testid={`user-role-${user.id}`}
                     >
-                      {user.role === "global_admin" ? "Global Admin" : 
-                       user.role === "company_admin" ? "Company Admin" : 
+                      {user.role === "global_admin" ? "Nebula Admin" : 
+                       user.role === "company_admin" ? "Tenant Admin" : 
                        user.role === "facilitator" ? "Facilitator" : "User"}
                     </Badge>
+                    {user.authProvider === "entra" && (
+                      <Badge variant="outline" className="text-blue-600">
+                        SSO
+                      </Badge>
+                    )}
                     {user.emailVerified ? (
                       <Badge variant="outline" className="text-green-600">
                         <Check className="h-3 w-3 mr-1" />
