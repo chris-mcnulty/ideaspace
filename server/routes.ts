@@ -1023,6 +1023,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Link Entra Tenant ID to organization (for admins who signed in via SSO)
+  app.post("/api/organizations/:id/link-entra-tenant", requireCompanyAdmin, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const { id: orgId } = req.params;
+      
+      // Company admins can only link their own organization
+      if (currentUser.role === "company_admin" && currentUser.organizationId !== orgId) {
+        return res.status(403).json({ error: "Cannot link Entra tenant for other organizations" });
+      }
+      
+      // User must have signed in via SSO and have an Entra tenant ID
+      if (!currentUser.entraTenantId) {
+        return res.status(400).json({ 
+          error: "You must sign in with Microsoft SSO to link your Entra tenant" 
+        });
+      }
+      
+      // Get the organization
+      const org = await storage.getOrganization(orgId);
+      if (!org) {
+        return res.status(404).json({ error: "Organization not found" });
+      }
+      
+      // Check if SSO is enabled for this org
+      if (!org.ssoEnabled) {
+        return res.status(400).json({ 
+          error: "SSO is not enabled for this organization" 
+        });
+      }
+      
+      // Check if self-service account creation is enabled (inviteOnly = false)
+      if (org.inviteOnly) {
+        return res.status(400).json({ 
+          error: "Self-service account creation is not enabled for this organization" 
+        });
+      }
+      
+      // Check if already linked
+      if (org.entraTenantId) {
+        return res.status(400).json({ 
+          error: "This organization is already linked to an Entra tenant" 
+        });
+      }
+      
+      // Link the Entra tenant
+      const updatedOrg = await storage.updateOrganization(orgId, { 
+        entraTenantId: currentUser.entraTenantId,
+        ssoProvider: 'entra',
+      });
+      
+      console.log(`[Entra] Linked tenant ${currentUser.entraTenantId} to org ${org.name}`);
+      
+      res.json({ 
+        success: true, 
+        entraTenantId: updatedOrg?.entraTenantId,
+        message: "Entra tenant linked successfully" 
+      });
+    } catch (error) {
+      console.error("Error linking Entra tenant:", error);
+      res.status(500).json({ error: "Failed to link Entra tenant" });
+    }
+  });
+
   // Protected: Only global admins can delete organizations
   app.delete("/api/organizations/:id", requireGlobalAdmin, async (req, res) => {
     try {

@@ -182,6 +182,7 @@ export default function AdminPanel() {
                     key={org.id} 
                     organization={org} 
                     currentUserRole={currentUser.role}
+                    currentUser={currentUser}
                   />
                 ))}
               </div>
@@ -252,10 +253,12 @@ export default function AdminPanel() {
 
 function OrganizationCard({ 
   organization, 
-  currentUserRole 
+  currentUserRole,
+  currentUser
 }: { 
   organization: Organization;
   currentUserRole: string;
+  currentUser: User;
 }) {
   const { toast } = useToast();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -263,6 +266,47 @@ function OrganizationCard({
   // Fetch workspaces for this organization
   const { data: spaces = [], isLoading } = useQuery<Space[]>({
     queryKey: ["/api/admin/organizations", organization.id, "spaces"],
+  });
+
+  // Check if we should show the Entra tenant link prompt
+  // Show only to admins who signed in via SSO, when:
+  // - org has SSO enabled
+  // - org allows self-service registration (inviteOnly = false)
+  // - org has no Entra tenant ID linked
+  // - user is an admin and signed in via SSO
+  const showEntraLinkPrompt = 
+    organization.ssoEnabled && 
+    !organization.inviteOnly && // Self-service account creation enabled
+    !organization.entraTenantId && 
+    (currentUserRole === "company_admin" || currentUserRole === "global_admin") &&
+    currentUser.entraTenantId && // User signed in via SSO
+    currentUser.organizationId === organization.id; // User belongs to this org
+
+  // Link Entra tenant mutation
+  const linkEntraMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", `/api/organizations/${organization.id}/link-entra-tenant`);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to link Entra tenant");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/organizations"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/organizations/${organization.id}`] });
+      toast({
+        title: "Entra tenant linked",
+        description: "Your Microsoft Entra tenant is now linked to this organization.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to link Entra tenant",
+        description: error.message || "Please try again",
+      });
+    },
   });
 
   // SSO toggle mutation
@@ -396,6 +440,39 @@ function OrganizationCard({
           </div>
         </CardHeader>
       <CardContent className="pt-4">
+        {/* Entra Tenant Link Prompt - only for admins */}
+        {showEntraLinkPrompt && (
+          <div className="mb-4 p-4 rounded-lg border border-blue-500/30 bg-blue-500/10">
+            <div className="flex items-start gap-3">
+              <div className="h-8 w-8 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                <Key className="h-4 w-4 text-blue-500" />
+              </div>
+              <div className="flex-1">
+                <h4 className="font-medium text-sm">Link Microsoft Entra Tenant</h4>
+                <p className="text-sm text-muted-foreground mt-1">
+                  SSO is enabled but no Entra tenant is linked. Link your Microsoft tenant to enable user directory lookup and automatic domain mapping.
+                </p>
+                <Button 
+                  size="sm" 
+                  className="mt-3"
+                  onClick={() => linkEntraMutation.mutate()}
+                  disabled={linkEntraMutation.isPending}
+                  data-testid={`button-link-entra-${organization.id}`}
+                >
+                  {linkEntraMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Linking...
+                    </>
+                  ) : (
+                    "Link Entra Tenant"
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+        
         {isLoading ? (
           <div className="flex items-center justify-center py-8 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin mr-2" />
