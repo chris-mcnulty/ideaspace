@@ -1,0 +1,140 @@
+6-01-21 11:13:58.19
+2df17317
+User
+> rest-express@1.0.0 start
+2026-01-21 11:14:03.86
+2df17317
+User
+memory, and will not scale past a single process.
+2026-01-21 11:14:03.86
+2df17317
+User
+Warning: connect.session() MemoryStore is not
+2026-01-21 11:14:03.86
+2df17317
+User
+designed for a production environment, as it will leak
+2026-01-21 11:14:03.87
+2df17317
+User
+Upload directories initialized
+2026-01-21 11:14:03.95
+2df17317
+User
+7:14:03 PM [express] serving on port 5000
+2026-01-21 11:29:07.37
+2df17317
+System
+system: received signal terminated
+2026-01-21 12:05:28.71
+2df17317
+System
+starting up user application
+2026-01-21 12:05:28.71
+2df17317
+System
+forwarding local port 5000 to external port 80 (mapped as 1104)
+2026-01-21 12:05:28.71
+2df17317
+System
+metasidecar: loaded enterprise status from environment is_enterprise=false
+2026-01-21 12:05:30.03
+2df17317
+User
+> NODE_ENV=production node dist/index.js
+2026-01-21 12:05:30.03
+2df17317
+User
+> rest-express@1.0.0 start
+2026-01-21 12:05:34.38
+2df17317
+User
+designed for a production environment, as it will leak
+2026-01-21 12:05:34.38
+2df17317
+User
+memory, and will not scale past a single process.
+2026-01-21 12:05:34.38
+2df17317
+User
+Warning: connect.session() MemoryStore is not
+2026-01-21 12:05:34.39
+2df17317
+User
+Upload directories initialized
+2026-01-21 12:05:34.50
+2df17317
+User
+8:05:34 PM [express] serving on port 5000
+2026-01-21 12:41:37.37
+2df17317
+System
+system: received signal terminated
+2026-01-21 13:36:41.54
+2df17317
+System
+starting up user application
+2026-01-21 13:36:41.54
+2df17317
+System
+forwarding local port 5000 to external port 80 (mapped as 1104)
+2026-01-21 13:36:41.54
+2df17317
+System
+metasidecar: loaded enterprise status from environment is_enterprise=false
+2026-01-21 13:36:42.92
+2df17317
+User
+> rest-express@1.0.0 start
+2026-01-21 13:36:42.92
+2df17317
+User
+> NODE_ENV=production node dist/index.js
+2026-01-21 13:36:47.68
+2df17317
+User
+Warning: connect.session() MemoryStore is not
+2026-01-21 13:36:47.68
+2df17317
+User
+memory, and will not scale past a single process.
+2026-01-21 13:36:47.68
+2df17317
+User
+designed for a production environment, as it will leak
+2026-01-21 13:36:47.69
+2df17317
+User
+Upload directories initialized
+2026-01-21 13:36:47.74
+2df17317
+User
+9:36:47 PM [express] serving on port 5000
+2026-01-21 13:51:57.38
+2df17317
+System
+system: received signal terminated
+2026-01-21 16:20:05.43
+2df17317
+System
+starting up user application
+2026-01-21 16:20:05.43
+2df17317
+System
+metasidecar: loaded enterprise status from environment is_enterprise=false
+2026-01-21 16:20:05.43
+2df17317
+System
+forwarding local port 5000 to external port 80 (mapped as 1104)
+2026-01-21 16:20:07.42
+2df17317
+User
+> rest-express@1.0.0 start
+2026-01-21 16:20:07.42
+2df17317
+User
+> NODE_ENV=production node dist/index.js
+2026-01-21 16:20:12.51
+2df17317
+User
+Warning: connect.session() MemoryStore is not
