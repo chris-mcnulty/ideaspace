@@ -21,6 +21,18 @@ export default function Login() {
   useEffect(() => {
     document.title = "Nebula - Sign In | The Synozur Alliance";
     
+    // Check for error or message in URL query params (from SSO redirects)
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlError = urlParams.get('error');
+    const urlMessage = urlParams.get('message');
+    if (urlError) {
+      setError(decodeURIComponent(urlError));
+    }
+    if (urlMessage) {
+      // For success messages like "You have been signed out"
+      console.log('SSO message:', urlMessage);
+    }
+    
     // Check if OAuth/SSO is enabled
     fetch('/api/auth/oauth-status')
       .then(res => res.json())

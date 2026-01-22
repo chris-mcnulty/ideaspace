@@ -157,7 +157,7 @@ router.get('/auth/entra/callback', async (req: Request, res: Response) => {
     }
     
     if (!code) {
-      return res.redirect('/auth?error=No authorization code received');
+      return res.redirect('/login?error=No authorization code received');
     }
     
     // Validate state parameter for CSRF protection
@@ -173,12 +173,12 @@ router.get('/auth/entra/callback', async (req: Request, res: Response) => {
       delete req.session.pkceCodes;
       delete req.session.oauthState;
       delete req.session.returnTo;
-      return res.redirect('/auth?error=Security validation failed. Please try again.');
+      return res.redirect('/login?error=Security validation failed. Please try again.');
     }
     
     const pkceCodes = req.session.pkceCodes;
     if (!pkceCodes?.verifier) {
-      return res.redirect('/auth?error=Session expired. Please try again.');
+      return res.redirect('/login?error=Session expired. Please try again.');
     }
     
     const client = getMsalClient();
@@ -198,7 +198,7 @@ router.get('/auth/entra/callback', async (req: Request, res: Response) => {
     delete req.session.oauthState;
     
     if (!tokenResponse.account) {
-      return res.redirect('/auth?error=Failed to get user account from SSO');
+      return res.redirect('/login?error=Failed to get user account from SSO');
     }
     
     // Extract user info from token response
@@ -603,7 +603,7 @@ router.post('/auth/entra/logout', (req: Request, res: Response) => {
 });
 
 router.get('/auth/entra/logout-complete', (_req: Request, res: Response) => {
-  res.redirect('/auth?message=You have been signed out');
+  res.redirect('/login?message=You have been signed out');
 });
 
 export default router;
