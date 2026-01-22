@@ -163,7 +163,13 @@ router.get('/auth/entra/callback', async (req: Request, res: Response) => {
     // Validate state parameter for CSRF protection
     const storedState = req.session.oauthState;
     if (!storedState || storedState !== state) {
-      console.error('State mismatch - potential CSRF attack detected');
+      console.error('State mismatch - potential CSRF attack detected', {
+        hasStoredState: !!storedState,
+        storedStatePrefix: storedState?.substring(0, 8),
+        receivedStatePrefix: (state as string)?.substring(0, 8),
+        sessionId: req.sessionID?.substring(0, 8),
+        hasSession: !!req.session,
+      });
       delete req.session.pkceCodes;
       delete req.session.oauthState;
       delete req.session.returnTo;
