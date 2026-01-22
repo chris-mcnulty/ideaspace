@@ -20,6 +20,11 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: false }));
 
+// Trust proxy for production (Replit uses reverse proxy)
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
+
 // Session configuration
 app.use(
   session({
@@ -29,6 +34,7 @@ app.use(
     cookie: {
       secure: process.env.NODE_ENV === "production",
       httpOnly: true,
+      sameSite: "lax", // Required for OAuth redirects
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
     },
   })
