@@ -70,10 +70,21 @@ function getMsalClient(): ConfidentialClientApplication {
 // Redirect URI - dynamically constructed based on environment
 function getRedirectUri(req: Request): string {
   // In production with reverse proxy, use x-forwarded headers
-  const protocol = req.get('x-forwarded-proto') || (process.env.NODE_ENV === 'production' ? 'https' : req.protocol);
-  const host = req.get('x-forwarded-host') || req.get('host') || 'localhost:5000';
+  // Handle comma-separated values (multiple proxies)
+  const forwardedProto = req.get('x-forwarded-proto')?.split(',')[0]?.trim();
+  const forwardedHost = req.get('x-forwarded-host')?.split(',')[0]?.trim();
+  
+  const protocol = forwardedProto || (process.env.NODE_ENV === 'production' ? 'https' : req.protocol);
+  const host = forwardedHost || req.get('host') || 'localhost:5000';
   const redirectUri = `${protocol}://${host}/auth/entra/callback`;
-  console.log('[Entra SSO] Redirect URI:', redirectUri);
+  
+  console.log('[Entra SSO] Headers:', {
+    'x-forwarded-proto': req.get('x-forwarded-proto'),
+    'x-forwarded-host': req.get('x-forwarded-host'),
+    'host': req.get('host'),
+    'computed': redirectUri
+  });
+  
   return redirectUri;
 }
 
@@ -147,8 +158,10 @@ router.get('/auth/entra/login', async (req: Request, res: Response) => {
 
 // Handle Entra SSO callback
 router.get('/auth/entra/callback', async (req: Request, res: Response) => {
+  console.log('[Entra SSO Callback] Received callback request');
   try {
     const { code, error, error_description, state } = req.query;
+    console.log('[Entra SSO Callback] Query params:', { code: code ? 'present' : 'missing', error, state: state ? 'present' : 'missing' });
     
     if (error) {
       console.error('Entra SSO error:', error, error_description);

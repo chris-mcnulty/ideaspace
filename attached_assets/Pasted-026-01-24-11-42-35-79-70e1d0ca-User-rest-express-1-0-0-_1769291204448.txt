@@ -1,0 +1,192 @@
+026-01-24 11:42:35.79
+70e1d0ca
+User
+> rest-express@1.0.0 start
+2026-01-24 11:42:36.02
+70e1d0ca
+User
+> NODE_ENV=production node dist/index.js
+2026-01-24 11:42:36.02
+70e1d0ca
+User
+> rest-express@1.0.0 start
+2026-01-24 11:42:39.02
+70e1d0ca
+User
+memory, and will not scale past a single process.
+2026-01-24 11:42:39.02
+70e1d0ca
+User
+designed for a production environment, as it will leak
+2026-01-24 11:42:39.02
+70e1d0ca
+User
+Warning: connect.session() MemoryStore is not
+2026-01-24 11:42:39.02
+70e1d0ca
+User
+Upload directories initialized
+2026-01-24 11:42:39.07
+70e1d0ca
+User
+memory, and will not scale past a single process.
+2026-01-24 11:42:39.07
+70e1d0ca
+User
+designed for a production environment, as it will leak
+2026-01-24 11:42:39.07
+70e1d0ca
+User
+Warning: connect.session() MemoryStore is not
+2026-01-24 11:42:39.08
+70e1d0ca
+User
+7:42:39 PM [express] serving on port 5000
+2026-01-24 11:42:39.08
+70e1d0ca
+User
+Upload directories initialized
+2026-01-24 11:42:39.15
+70e1d0ca
+User
+7:42:39 PM [express] serving on port 5000
+2026-01-24 11:42:40.31
+70e1d0ca
+User
+7:42:40 PM [express] GET /api/auth/me 401 in 3ms :: {"error":"Not authenticated"}
+2026-01-24 11:49:22.08
+70e1d0ca
+System
+starting up user application
+2026-01-24 11:49:22.08
+70e1d0ca
+System
+metasidecar: loaded enterprise status from environment is_enterprise=false
+2026-01-24 11:49:22.08
+70e1d0ca
+System
+forwarding local port 5000 to external port 80 (mapped as 1104)
+2026-01-24 11:49:23.96
+70e1d0ca
+User
+> NODE_ENV=production node dist/index.js
+2026-01-24 11:49:23.96
+70e1d0ca
+User
+> rest-express@1.0.0 start
+2026-01-24 11:49:29.71
+70e1d0ca
+User
+memory, and will not scale past a single process.
+2026-01-24 11:49:29.71
+70e1d0ca
+User
+designed for a production environment, as it will leak
+2026-01-24 11:49:29.71
+70e1d0ca
+User
+Warning: connect.session() MemoryStore is not
+2026-01-24 11:49:29.72
+70e1d0ca
+User
+Upload directories initialized
+2026-01-24 11:49:29.85
+70e1d0ca
+User
+7:49:29 PM [express] serving on port 5000
+2026-01-24 11:49:40.70
+70e1d0ca
+System
+system: received signal terminated
+2026-01-24 11:52:47.78
+70e1d0ca
+System
+system: received signal terminated
+2026-01-24 12:07:10.56
+9fc744ec
+System
+starting up user application
+2026-01-24 12:07:10.56
+9fc744ec
+System
+forwarding local port 5000 to external port 80 (mapped as 1104)
+2026-01-24 12:07:10.56
+9fc744ec
+System
+metasidecar: loaded enterprise status from environment is_enterprise=false
+2026-01-24 12:07:12.26
+9fc744ec
+User
+> rest-express@1.0.0 start
+2026-01-24 12:07:12.26
+9fc744ec
+User
+> NODE_ENV=production node dist/index.js
+2026-01-24 12:07:17.46
+9fc744ec
+User
+memory, and will not scale past a single process.
+2026-01-24 12:07:17.46
+9fc744ec
+User
+designed for a production environment, as it will leak
+2026-01-24 12:07:17.46
+9fc744ec
+User
+Warning: connect.session() MemoryStore is not
+2026-01-24 12:07:17.47
+9fc744ec
+User
+Upload directories initialized
+2026-01-24 12:07:17.58
+9fc744ec
+User
+8:07:17 PM [express] serving on port 5000
+2026-01-24 12:08:31.90
+70e1d0ca
+System
+system: received signal terminated
+2026-01-24 13:09:36.99
+9fc744ec
+User
+[DEBUG] Looking up by ID
+2026-01-24 13:09:36.99
+9fc744ec
+User
+[DEBUG] isWorkspaceCode: false
+2026-01-24 13:09:36.99
+9fc744ec
+User
+[DEBUG] GET /api/spaces/:id - identifier: d7e7e6ac-ab80-4b72-97c1-2618e7155cd8
+2026-01-24 13:09:37.03
+9fc744ec
+User
+9:09:37 PM [express] GET /api/auth/me 401 in 2ms :: {"error":"Not authenticated"}
+2026-01-24 13:09:37.08
+9fc744ec
+User
+9:09:37 PM [express] GET /api/spaces/d7e7e6ac-ab80-4b72-97c1-2618e7155cd8/results/cohort 401 in 1ms …
+2026-01-24 13:09:37.84
+9fc744ec
+User
+[DEBUG] Space found: yes
+2026-01-24 13:09:37.84
+9fc744ec
+User
+9:09:37 PM [express] GET /api/spaces/d7e7e6ac-ab80-4b72-97c1-2618e7155cd8 200 in 852ms :: {"id":"d7e…
+2026-01-24 13:09:37.84
+9fc744ec
+User
+9:09:37 PM [express] GET /api/spaces/d7e7e6ac-ab80-4b72-97c1-2618e7155cd8/notes 304 in 791ms :: []
+2026-01-24 13:09:37.89
+9fc744ec
+User
+9:09:37 PM [express] GET /api/auth/oauth-status 304 in 705ms :: {"enabled":false}
+2026-01-24 13:09:37.90
+9fc744ec
+User
+9:09:37 PM [express] GET /api/spaces/d7e7e6ac-ab80-4b72-97c1-2618e7155cd8/modules 200 in 819ms :: [{…
+2026-01-24 13:09:37.90
+9fc744ec
+User
+9:09:37 PM [express] GET /api/auth/entra/status 304 in 708ms :: {"enabled":true,"configured":true}
