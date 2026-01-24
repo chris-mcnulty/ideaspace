@@ -115,6 +115,8 @@ function generateState(): string {
 // Initiate Entra SSO login
 router.get('/auth/entra/login', async (req: Request, res: Response) => {
   try {
+    console.log('[Entra SSO Login] Starting, sessionID:', req.sessionID);
+    
     const client = getMsalClient();
     
     // Generate PKCE codes
@@ -149,7 +151,16 @@ router.get('/auth/entra/login', async (req: Request, res: Response) => {
     };
     
     const authUrl = await client.getAuthCodeUrl(authCodeUrlParameters);
-    res.redirect(authUrl);
+    
+    // Explicitly save session before redirect to ensure PKCE codes are persisted
+    req.session.save((err) => {
+      if (err) {
+        console.error('[Entra SSO Login] Session save error:', err);
+        return res.redirect(`/auth?error=${encodeURIComponent('Session error')}`);
+      }
+      console.log('[Entra SSO Login] Session saved, redirecting to Microsoft. SessionID:', req.sessionID);
+      res.redirect(authUrl);
+    });
   } catch (error: any) {
     console.error('Error initiating Entra login:', error);
     res.redirect(`/auth?error=${encodeURIComponent(error.message || 'Failed to initiate SSO login')}`);
@@ -158,7 +169,8 @@ router.get('/auth/entra/login', async (req: Request, res: Response) => {
 
 // Handle Entra SSO callback
 router.get('/auth/entra/callback', async (req: Request, res: Response) => {
-  console.log('[Entra SSO Callback] Received callback request');
+  console.log('[Entra SSO Callback] Received callback, sessionID:', req.sessionID);
+  console.log('[Entra SSO Callback] Session has PKCE:', !!req.session.pkceCodes, 'has state:', !!req.session.oauthState);
   try {
     const { code, error, error_description, state } = req.query;
     console.log('[Entra SSO Callback] Query params:', { code: code ? 'present' : 'missing', error, state: state ? 'present' : 'missing' });

@@ -1,0 +1,140 @@
+2026-01-24 14:05:19.69
+baa5e7db
+System
+starting up user application
+2026-01-24 14:05:19.69
+baa5e7db
+System
+forwarding local port 5000 to external port 80 (mapped as 1104)
+2026-01-24 14:05:20.66
+baa5e7db
+User
+> NODE_ENV=production node dist/index.js
+2026-01-24 14:05:20.66
+baa5e7db
+User
+> rest-express@1.0.0 start
+2026-01-24 14:05:24.40
+baa5e7db
+User
+memory, and will not scale past a single process.
+2026-01-24 14:05:24.40
+baa5e7db
+User
+designed for a production environment, as it will leak
+2026-01-24 14:05:24.40
+baa5e7db
+User
+Warning: connect.session() MemoryStore is not
+2026-01-24 14:05:24.40
+baa5e7db
+User
+Upload directories initialized
+2026-01-24 14:05:24.48
+baa5e7db
+User
+10:05:24 PM [express] serving on port 5000
+2026-01-24 14:06:35.28
+926d0a31
+System
+system: received signal terminated
+2026-01-24 14:19:27.85
+baa5e7db
+User
+sessionUserId: undefined,
+2026-01-24 14:19:27.85
+baa5e7db
+User
+[Auth Check] /api/auth/me: {
+2026-01-24 14:19:27.85
+baa5e7db
+User
+}
+2026-01-24 14:19:27.85
+baa5e7db
+User
+sessionID: 'QkCYCPg-G66HbAFkE6aXRbguXzgxj0dJ',
+2026-01-24 14:19:27.85
+baa5e7db
+User
+isPassportAuth: false,
+2026-01-24 14:19:27.85
+baa5e7db
+User
+cookies: 'present'
+2026-01-24 14:19:27.85
+baa5e7db
+User
+hasSession: true,
+2026-01-24 14:19:27.85
+baa5e7db
+User
+isAuthenticated: undefined,
+2026-01-24 14:19:27.85
+baa5e7db
+User
+10:19:27 PM [express] GET /api/auth/me 401 in 3ms :: {"error":"Not authenticated"}
+2026-01-24 14:19:30.57
+baa5e7db
+User
+10:19:30 PM [express] GET /api/auth/entra/status 304 in 666ms :: {"enabled":true,"configured":true}
+2026-01-24 14:19:30.58
+baa5e7db
+User
+10:19:30 PM [express] GET /api/auth/oauth-status 304 in 694ms :: {"enabled":false}
+2026-01-24 14:19:31.55
+baa5e7db
+User
+}
+2026-01-24 14:19:31.55
+baa5e7db
+User
+computed: 'https://nebula.synozur.com/auth/entra/callback'
+2026-01-24 14:19:31.55
+baa5e7db
+User
+'x-forwarded-host': 'nebula.synozur.com',
+2026-01-24 14:19:31.55
+baa5e7db
+User
+host: 'nebula.synozur.com',
+2026-01-24 14:19:31.55
+baa5e7db
+User
+[MSAL] [Sat, 24 Jan 2026 22:19:31 GMT] : [] : @azure/msal-node@5.0.2 : Info - getAuthCodeUrl called
+2026-01-24 14:19:31.55
+baa5e7db
+User
+[Entra SSO] Headers: {
+2026-01-24 14:19:31.55
+baa5e7db
+User
+'x-forwarded-proto': 'https',
+2026-01-24 14:19:31.55
+baa5e7db
+User
+[MSAL] [Sat, 24 Jan 2026 22:19:31 GMT] : [5726960c-5e4d-40be-a842-78aadd4d15f7] : @azure/msal-node@5.0.2 : Verbose - initializeRequestScopes called
+2026-01-24 14:19:31.55
+baa5e7db
+User
+[MSAL] [Sat, 24 Jan 2026 22:19:31 GMT] : [5726960c-5e4d-40be-a842-78aadd4d15f7] : @azure/msal-node@5.0.2 : Verbose - createAuthority called
+2026-01-24 14:19:31.55
+baa5e7db
+User
+[MSAL] [Sat, 24 Jan 2026 22:19:31 GMT] : [5726960c-5e4d-40be-a842-78aadd4d15f7] : @azure/msal-node@5.0.2 : Verbose - Attempting to get cloud discovery metadata from authority configuration
+2026-01-24 14:19:31.56
+baa5e7db
+User
+[MSAL] [Sat, 24 Jan 2026 22:19:31 GMT] : [5726960c-5e4d-40be-a842-78aadd4d15f7] : @azure/msal-node@5.0.2 : Verbose - Found cloud discovery metadata from hardcoded values.
+2026-01-24 14:19:31.56
+baa5e7db
+User
+[MSAL] [Sat, 24 Jan 2026 22:19:31 GMT] : [5726960c-5e4d-40be-a842-78aadd4d15f7] : @azure/msal-node@5.0.2 : Verbose - Did not find cloud discovery metadata in the config... Attempting to get cloud discovery metadata from the hardcoded values.
+2026-01-24 14:19:31.56
+baa5e7db
+User
+[MSAL] [Sat, 24 Jan 2026 22:19:31 GMT] : [5726960c-5e4d-40be-a842-78aadd4d15f7] : @azure/msal-node@5.0.2 : Verbose - Did not find endpoint metadata in the config... Attempting to get endpoint metadata from the hardcoded values.
+2026-01-24 14:19:31.56
+baa5e7db
+User
+[MSAL] [Sat, 24 Jan 2026 22:19:31 GMT] : [5726960c-5e4d-40be-a842-78aadd4d15f7] : @azure/msal-node@5.0.2 : Verbose - Attempting to get endpoint metadata from authority configuration
