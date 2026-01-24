@@ -967,7 +967,7 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
             <Alert>
               <AlertDescription>
                 {importFormat === 'csv' 
-                  ? 'CSV format: First row should contain headers (content, category, source). Each subsequent row is an idea.'
+                  ? 'CSV formats supported: (1) Idea,Category - standard format, (2) Title,Description,Category - AI recommendations format (Category optional). First row should be headers.'
                   : 'JSON format: Array of objects with content, category (optional), and source (optional) fields.'
                 }
               </AlertDescription>

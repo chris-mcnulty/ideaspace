@@ -4395,8 +4395,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "CSV file is empty or has no data rows" });
       }
 
-      // Skip header row (CSV format: Idea,Category[,Participant,Created At])
-      // Note: Only Idea and Category fields are imported. Participant and Created At are optional and ignored.
+      // Detect format from header row
+      // Supported formats:
+      // 1. Idea,Category[,Participant,Created At] - standard format
+      // 2. Title,Description,Category - AI recommendations format (Category optional)
+      const headerLine = lines[0].toLowerCase();
+      const isAiRecommendationsFormat = headerLine.includes('title') && headerLine.includes('description');
+      
       const dataLines = lines.slice(1);
       
       // Get existing categories to map names to IDs
@@ -4450,8 +4455,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
             continue; // Skip empty rows
           }
 
-          const content = fields[0].trim();
-          const categoryName = fields[1]?.trim() || '';
+          let content: string;
+          let categoryName: string;
+          
+          if (isAiRecommendationsFormat) {
+            // Format: Title,Description,Category (Category optional)
+            const title = fields[0].trim();
+            const description = fields[1]?.trim() || '';
+            categoryName = fields[2]?.trim() || '';
+            
+            // Combine title and description for content
+            content = description ? `**${title}**\n\n${description}` : title;
+          } else {
+            // Format: Idea,Category[,Participant,Created At]
+            content = fields[0].trim();
+            categoryName = fields[1]?.trim() || '';
+          }
           
           // Find or create category
           let categoryId = null;
