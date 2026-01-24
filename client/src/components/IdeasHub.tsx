@@ -288,26 +288,78 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
   };
   
   // Parse import data
+  // Parse CSV line handling quoted fields with commas
+  const parseCSVLine = (line: string): string[] => {
+    const fields: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          // Escaped quote
+          current += '"';
+          i++;
+        } else {
+          // Toggle quote state
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        fields.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    fields.push(current.trim());
+    return fields;
+  };
+  
   const parseImportData = (): any[] => {
     try {
       if (importFormat === 'json') {
         return JSON.parse(importData);
       } else {
-        // Parse CSV
+        // Parse CSV with proper handling of quoted fields
         const lines = importData.trim().split('\n');
         if (lines.length < 2) return [];
         
-        const headers = lines[0].split(',').map(h => h.trim());
+        const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/['"]/g, '').trim());
+        
+        // Detect if this is AI recommendations format (Title, Description, Category)
+        const isAiFormat = headers.includes('title') && headers.includes('description');
+        
         return lines.slice(1).map(line => {
-          const values = line.split(',').map(v => v.trim());
-          const obj: any = {};
-          headers.forEach((header, i) => {
-            obj[header] = values[i];
-          });
-          return obj;
+          const values = parseCSVLine(line);
+          
+          if (isAiFormat) {
+            // AI recommendations format: combine title and description
+            const titleIdx = headers.indexOf('title');
+            const descIdx = headers.indexOf('description');
+            const catIdx = headers.indexOf('category');
+            
+            const title = values[titleIdx]?.replace(/^["']|["']$/g, '') || '';
+            const description = values[descIdx]?.replace(/^["']|["']$/g, '') || '';
+            const category = catIdx >= 0 ? values[catIdx]?.replace(/^["']|["']$/g, '') : '';
+            
+            return {
+              content: description ? `**${title}**\n\n${description}` : title,
+              category: category || ''
+            };
+          } else {
+            // Standard format
+            const obj: any = {};
+            headers.forEach((header, i) => {
+              obj[header] = values[i]?.replace(/^["']|["']$/g, '') || '';
+            });
+            return obj;
+          }
         });
       }
     } catch (error) {
+      console.error('Import parsing error:', error);
       toast({ title: "Invalid import format", variant: "destructive" });
       return [];
     }
