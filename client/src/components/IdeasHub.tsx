@@ -187,7 +187,7 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
   
   const importIdeasMutation = useMutation({
     mutationFn: async (ideas: any[]) => {
-      const response = await apiRequest('POST', '/api/ideas/import', { spaceId, ideas });
+      const response = await apiRequest('POST', `/api/spaces/${spaceId}/ideas/import`, { ideas });
       return response.json();
     },
     onSuccess: (data: any) => {
