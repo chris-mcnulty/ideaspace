@@ -247,28 +247,39 @@ router.get('/auth/entra/callback', async (req: Request, res: Response) => {
       return res.redirect(`/auth?error=${encodeURIComponent(result.error || 'Failed to process SSO user')}`);
     }
     
-    // Set session
-    req.session.userId = result.user!.id;
-    req.session.isAuthenticated = true;
+    const user = result.user!;
     
-    // Redirect to return URL or dashboard
-    const returnTo = (req.session as any).returnTo || '/';
-    delete (req.session as any).returnTo;
-    
-    // Explicitly save session before redirect to ensure cookie is set
-    req.session.save((err) => {
-      if (err) {
-        console.error('[Entra SSO] Session save error:', err);
-        return res.redirect('/login?error=Session error');
+    // Use passport's req.login to properly establish the session
+    // This is required for req.isAuthenticated() to work correctly
+    req.login(user, (loginErr) => {
+      if (loginErr) {
+        console.error('[Entra SSO] Passport login error:', loginErr);
+        return res.redirect(`/auth?error=${encodeURIComponent('Failed to establish session')}`);
       }
-      console.log('[Entra SSO] Session saved successfully:', {
-        sessionId: req.sessionID,
-        userId: req.session.userId,
-        isAuthenticated: req.session.isAuthenticated,
-        cookie: req.session.cookie,
-        returnTo
+      
+      // Also set our custom session fields for compatibility
+      req.session.userId = user.id;
+      req.session.isAuthenticated = true;
+      
+      // Redirect to return URL or dashboard
+      const returnTo = (req.session as any).returnTo || '/';
+      delete (req.session as any).returnTo;
+      
+      // Explicitly save session before redirect to ensure cookie is set
+      req.session.save((err) => {
+        if (err) {
+          console.error('[Entra SSO] Session save error:', err);
+          return res.redirect('/login?error=Session error');
+        }
+        console.log('[Entra SSO] Session saved successfully:', {
+          sessionId: req.sessionID,
+          userId: req.session.userId,
+          isAuthenticated: req.session.isAuthenticated,
+          passportUser: !!(req.session as any).passport?.user,
+          returnTo
+        });
+        res.redirect(returnTo);
       });
-      res.redirect(returnTo);
     });
   } catch (error: any) {
     console.error('Error processing Entra callback:', error);
