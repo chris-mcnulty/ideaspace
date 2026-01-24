@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
@@ -64,6 +64,29 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
   // Import state
   const [importData, setImportData] = useState('');
   const [importFormat, setImportFormat] = useState<'csv' | 'json'>('csv');
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Handle file selection for import
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImportFile(file);
+      // Auto-detect format from file extension
+      if (file.name.endsWith('.json')) {
+        setImportFormat('json');
+      } else if (file.name.endsWith('.csv')) {
+        setImportFormat('csv');
+      }
+      // Read file content into textarea
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const content = event.target?.result as string;
+        setImportData(content || '');
+      };
+      reader.readAsText(file);
+    }
+  };
   
   // Fetch ideas
   const { data: ideas = [], isLoading, refetch } = useQuery<Idea[]>({
@@ -935,6 +958,55 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
           </DialogHeader>
           
           <div className="space-y-4">
+            {/* File Upload */}
+            <div>
+              <Label>Select File</Label>
+              <div className="flex items-center gap-2 mt-1">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.json,text/csv,application/json"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  data-testid="input-import-file"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex-1"
+                  data-testid="button-select-import-file"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {importFile ? importFile.name : 'Choose CSV or JSON file...'}
+                </Button>
+                {importFile && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setImportFile(null);
+                      setImportData('');
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                    data-testid="button-clear-import-file"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Supported formats: CSV (.csv), JSON (.json)
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-4">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground">or paste data below</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+            
             <div>
               <Label>Format</Label>
               <Select value={importFormat} onValueChange={(v: 'csv' | 'json') => setImportFormat(v)}>
@@ -980,6 +1052,8 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
               onClick={() => {
                 setShowImportDialog(false);
                 setImportData('');
+                setImportFile(null);
+                if (fileInputRef.current) fileInputRef.current.value = '';
               }}
               data-testid="button-cancel-import"
             >
