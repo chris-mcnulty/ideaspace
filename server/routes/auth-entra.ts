@@ -69,9 +69,12 @@ function getMsalClient(): ConfidentialClientApplication {
 
 // Redirect URI - dynamically constructed based on environment
 function getRedirectUri(req: Request): string {
-  const protocol = process.env.NODE_ENV === 'production' ? 'https' : req.protocol;
-  const host = req.get('host') || 'localhost:5000';
-  return `${protocol}://${host}/auth/entra/callback`;
+  // In production with reverse proxy, use x-forwarded headers
+  const protocol = req.get('x-forwarded-proto') || (process.env.NODE_ENV === 'production' ? 'https' : req.protocol);
+  const host = req.get('x-forwarded-host') || req.get('host') || 'localhost:5000';
+  const redirectUri = `${protocol}://${host}/auth/entra/callback`;
+  console.log('[Entra SSO] Redirect URI:', redirectUri);
+  return redirectUri;
 }
 
 // Check if Entra SSO is enabled
@@ -227,7 +230,15 @@ router.get('/auth/entra/callback', async (req: Request, res: Response) => {
     const returnTo = (req.session as any).returnTo || '/';
     delete (req.session as any).returnTo;
     
-    res.redirect(returnTo);
+    // Explicitly save session before redirect to ensure cookie is set
+    req.session.save((err) => {
+      if (err) {
+        console.error('[Entra SSO] Session save error:', err);
+        return res.redirect('/login?error=Session error');
+      }
+      console.log('[Entra SSO] Session saved, redirecting to:', returnTo);
+      res.redirect(returnTo);
+    });
   } catch (error: any) {
     console.error('Error processing Entra callback:', error);
     res.redirect(`/auth?error=${encodeURIComponent(error.message || 'SSO authentication failed')}`);
