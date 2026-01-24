@@ -249,7 +249,13 @@ router.get('/auth/entra/callback', async (req: Request, res: Response) => {
         console.error('[Entra SSO] Session save error:', err);
         return res.redirect('/login?error=Session error');
       }
-      console.log('[Entra SSO] Session saved, redirecting to:', returnTo);
+      console.log('[Entra SSO] Session saved successfully:', {
+        sessionId: req.sessionID,
+        userId: req.session.userId,
+        isAuthenticated: req.session.isAuthenticated,
+        cookie: req.session.cookie,
+        returnTo
+      });
       res.redirect(returnTo);
     });
   } catch (error: any) {

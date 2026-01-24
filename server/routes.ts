@@ -549,6 +549,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/auth/me", (req, res) => {
+    // Debug session state
+    console.log('[Auth Check] /api/auth/me:', {
+      sessionID: req.sessionID,
+      hasSession: !!req.session,
+      sessionUserId: req.session?.userId,
+      isAuthenticated: req.session?.isAuthenticated,
+      isPassportAuth: req.isAuthenticated(),
+      cookies: req.headers.cookie ? 'present' : 'missing'
+    });
+    
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Not authenticated" });
     }

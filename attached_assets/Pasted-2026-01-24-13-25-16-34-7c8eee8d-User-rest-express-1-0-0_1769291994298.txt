@@ -1,0 +1,180 @@
+2026-01-24 13:25:16.34
+7c8eee8d
+User
+> rest-express@1.0.0 start
+2026-01-24 13:25:20.28
+7c8eee8d
+User
+Warning: connect.session() MemoryStore is not
+2026-01-24 13:25:20.28
+7c8eee8d
+User
+memory, and will not scale past a single process.
+2026-01-24 13:25:20.28
+7c8eee8d
+User
+designed for a production environment, as it will leak
+2026-01-24 13:25:20.28
+7c8eee8d
+User
+Upload directories initialized
+2026-01-24 13:25:20.35
+7c8eee8d
+User
+9:25:20 PM [express] serving on port 5000
+2026-01-24 13:27:00.74
+9fc744ec
+System
+system: received signal terminated
+2026-01-24 13:39:06.20
+7c8eee8d
+User
+9:39:06 PM [express] GET /api/auth/me 401 in 2ms :: {"error":"Not authenticated"}
+2026-01-24 13:39:12.13
+7c8eee8d
+User
+9:39:12 PM [express] GET /api/auth/me 401 in 1ms :: {"error":"Not authenticated"}
+2026-01-24 13:45:34.27
+7c8eee8d
+User
+9:45:34 PM [express] GET /api/auth/me 401 in 0ms :: {"error":"Not authenticated"}
+2026-01-24 13:45:37.38
+7c8eee8d
+User
+9:45:37 PM [express] GET /api/auth/oauth-status 304 in 708ms :: {"enabled":false}
+2026-01-24 13:45:37.38
+7c8eee8d
+User
+9:45:37 PM [express] GET /api/auth/entra/status 304 in 684ms :: {"enabled":true,"configured":true}
+2026-01-24 13:45:38.91
+7c8eee8d
+User
+[Entra SSO] Redirect URI: https://nebula.synozur.com/auth/entra/callback
+2026-01-24 13:45:38.91
+7c8eee8d
+User
+[MSAL] [Sat, 24 Jan 2026 21:45:38 GMT] : [4034528b-a0fb-4b2c-b4cc-f511e3cb03b2] : @azure/msal-node@5.0.2 : Verbose - createAuthority called
+2026-01-24 13:45:38.91
+7c8eee8d
+User
+[MSAL] [Sat, 24 Jan 2026 21:45:38 GMT] : [4034528b-a0fb-4b2c-b4cc-f511e3cb03b2] : @azure/msal-node@5.0.2 : Verbose - initializeRequestScopes called
+2026-01-24 13:45:38.91
+7c8eee8d
+User
+[MSAL] [Sat, 24 Jan 2026 21:45:38 GMT] : [] : @azure/msal-node@5.0.2 : Info - getAuthCodeUrl called
+2026-01-24 13:45:38.91
+7c8eee8d
+User
+[MSAL] [Sat, 24 Jan 2026 21:45:38 GMT] : [4034528b-a0fb-4b2c-b4cc-f511e3cb03b2] : @azure/msal-node@5.0.2 : Verbose - Attempting to get cloud discovery metadata from authority configuration
+2026-01-24 13:45:38.91
+7c8eee8d
+User
+[MSAL] [Sat, 24 Jan 2026 21:45:38 GMT] : [4034528b-a0fb-4b2c-b4cc-f511e3cb03b2] : @azure/msal-node@5.0.2 : Verbose - Did not find endpoint metadata in the config... Attempting to get endpoint metadata from the hardcoded values.
+2026-01-24 13:45:38.91
+7c8eee8d
+User
+[MSAL] [Sat, 24 Jan 2026 21:45:38 GMT] : [4034528b-a0fb-4b2c-b4cc-f511e3cb03b2] : @azure/msal-node@5.0.2 : Verbose - Found cloud discovery metadata from hardcoded values.
+2026-01-24 13:45:38.91
+7c8eee8d
+User
+[MSAL] [Sat, 24 Jan 2026 21:45:38 GMT] : [4034528b-a0fb-4b2c-b4cc-f511e3cb03b2] : @azure/msal-node@5.0.2 : Verbose - Attempting to get endpoint metadata from authority configuration
+2026-01-24 13:45:38.91
+7c8eee8d
+User
+[MSAL] [Sat, 24 Jan 2026 21:45:38 GMT] : [4034528b-a0fb-4b2c-b4cc-f511e3cb03b2] : @azure/msal-node@5.0.2 : Verbose - Did not find cloud discovery metadata in the config... Attempting to get cloud discovery metadata from the hardcoded values.
+2026-01-24 13:45:38.91
+7c8eee8d
+User
+[MSAL] [Sat, 24 Jan 2026 21:45:38 GMT] : [4034528b-a0fb-4b2c-b4cc-f511e3cb03b2] : @azure/msal-node@5.0.2 : Verbose - createAuthCodeUrlQueryString: Prompt is select_account, ignoring account hints
+2026-01-24 13:45:42.71
+7c8eee8d
+User
+[Entra SSO] Redirect URI: https://nebula.synozur.com/auth/entra/callback
+2026-01-24 13:45:42.71
+7c8eee8d
+User
+[MSAL] [Sat, 24 Jan 2026 21:45:42 GMT] : [] : @azure/msal-node@5.0.2 : Info - acquireTokenByCode called
+2026-01-24 13:45:42.71
+7c8eee8d
+User
+[MSAL] [Sat, 24 Jan 2026 21:45:42 GMT] : [67a9a324-d39e-4310-bb0a-99ba94d0e550] : @azure/msal-node@5.0.2 : Verbose - initializeRequestScopes called
+2026-01-24 13:45:42.71
+7c8eee8d
+User
+[MSAL] [Sat, 24 Jan 2026 21:45:42 GMT] : [67a9a324-d39e-4310-bb0a-99ba94d0e550] : @azure/msal-node@5.0.2 : Info - Building oauth client configuration with the following authority: https://login.microsoftonline.com/common/oauth2/v2.0/token.
+2026-01-24 13:45:42.71
+7c8eee8d
+User
+[MSAL] [Sat, 24 Jan 2026 21:45:42 GMT] : [67a9a324-d39e-4310-bb0a-99ba94d0e550] : @azure/msal-node@5.0.2 : Verbose - Attempting to get endpoint metadata from authority configuration
+2026-01-24 13:45:42.71
+7c8eee8d
+User
+[MSAL] [Sat, 24 Jan 2026 21:45:42 GMT] : [67a9a324-d39e-4310-bb0a-99ba94d0e550] : @azure/msal-node@5.0.2 : Verbose - Attempting to get cloud discovery metadata from authority configuration
+2026-01-24 13:45:42.71
+7c8eee8d
+User
+[MSAL] [Sat, 24 Jan 2026 21:45:42 GMT] : [67a9a324-d39e-4310-bb0a-99ba94d0e550] : @azure/msal-node@5.0.2 : Verbose - Did not find endpoint metadata in the config... Attempting to get endpoint metadata from the hardcoded values.
+2026-01-24 13:45:42.71
+7c8eee8d
+User
+[MSAL] [Sat, 24 Jan 2026 21:45:42 GMT] : [67a9a324-d39e-4310-bb0a-99ba94d0e550] : @azure/msal-node@5.0.2 : Verbose - Did not find cloud discovery metadata in the config... Attempting to get cloud discovery metadata from the hardcoded values.
+2026-01-24 13:45:42.71
+7c8eee8d
+User
+[MSAL] [Sat, 24 Jan 2026 21:45:42 GMT] : [67a9a324-d39e-4310-bb0a-99ba94d0e550] : @azure/msal-node@5.0.2 : Verbose - buildOauthClientConfiguration called
+2026-01-24 13:45:42.71
+7c8eee8d
+User
+[MSAL] [Sat, 24 Jan 2026 21:45:42 GMT] : [67a9a324-d39e-4310-bb0a-99ba94d0e550] : @azure/msal-node@5.0.2 : Verbose - createAuthority called
+2026-01-24 13:45:42.71
+7c8eee8d
+User
+[MSAL] [Sat, 24 Jan 2026 21:45:42 GMT] : [67a9a324-d39e-4310-bb0a-99ba94d0e550] : @azure/msal-node@5.0.2 : Verbose - Found cloud discovery metadata from hardcoded values.
+2026-01-24 13:45:42.71
+7c8eee8d
+User
+[MSAL] [Sat, 24 Jan 2026 21:45:42 GMT] : [67a9a324-d39e-4310-bb0a-99ba94d0e550] : @azure/msal-node@5.0.2 : Verbose - Auth code client created
+2026-01-24 13:45:42.99
+7c8eee8d
+User
+[MSAL] [Sat, 24 Jan 2026 21:45:42 GMT] : [67a9a324-d39e-4310-bb0a-99ba94d0e550] : @azure/msal-common@16.0.2 : Verbose - setCachedAccount called
+2026-01-24 13:45:43.22
+7c8eee8d
+User
+[Entra SSO] Session saved, redirecting to: /
+2026-01-24 13:45:43.74
+7c8eee8d
+User
+9:45:43 PM [express] GET /api/auth/me 401 in 1ms :: {"error":"Not authenticated"}
+2026-01-24 13:55:52.75
+926d0a31
+System
+starting up user application
+2026-01-24 13:55:52.75
+926d0a31
+System
+metasidecar: loaded enterprise status from environment is_enterprise=false
+2026-01-24 13:55:52.76
+926d0a31
+System
+forwarding local port 5000 to external port 80 (mapped as 1104)
+2026-01-24 13:55:54.22
+926d0a31
+User
+> NODE_ENV=production node dist/index.js
+2026-01-24 13:55:54.22
+926d0a31
+User
+> rest-express@1.0.0 start
+2026-01-24 13:55:59.02
+926d0a31
+User
+designed for a production environment, as it will leak
+2026-01-24 13:55:59.02
+926d0a31
+User
+memory, and will not scale past a single process.
+2026-01-24 13:55:59.02
+926d0a31
+User
+Warning: connect.session() MemoryStore is not
