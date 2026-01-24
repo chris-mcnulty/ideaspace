@@ -2896,12 +2896,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = req.user as User;
       const createdIdeas = [];
       
+      // Get existing categories to map names to IDs
+      const existingCategories = await storage.getCategoriesBySpace(spaceId);
+      const categoryNameToId = new Map(existingCategories.map(c => [c.name.toLowerCase(), c.id]));
+      
       for (const ideaData of ideas) {
+        // Look up or create category by name
+        let categoryId: string | null = null;
+        const categoryName = ideaData.category?.trim();
+        
+        if (categoryName && categoryName.toLowerCase() !== 'uncategorized') {
+          // Check if category exists
+          categoryId = categoryNameToId.get(categoryName.toLowerCase()) || null;
+          
+          // Create category if it doesn't exist
+          if (!categoryId) {
+            const newCategory = await storage.createCategory({
+              spaceId,
+              name: categoryName,
+              color: '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')
+            });
+            categoryId = newCategory.id;
+            categoryNameToId.set(categoryName.toLowerCase(), categoryId);
+          }
+        }
+        
         const idea = await storage.createIdea({
           spaceId,
           content: ideaData.content,
           contentType: 'text',
-          manualCategoryId: ideaData.category || null,
+          manualCategoryId: categoryId,
           sourceType: ideaData.source || 'imported',
           createdByUserId: user.id
         });
