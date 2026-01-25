@@ -579,10 +579,16 @@ export class DbStorage implements IStorage {
       try {
         await deletePromise;
       } catch (error: any) {
-        // Ignore "relation does not exist" errors (42P01) - table may not exist in production
-        if (error.code !== '42P01') {
+        // Ignore "relation does not exist" errors - table may not exist in production
+        // Check both error code (42P01) and message pattern for robustness
+        const isRelationNotExist = 
+          error.code === '42P01' || 
+          (error.message && error.message.includes('relation') && error.message.includes('does not exist'));
+        if (!isRelationNotExist) {
           throw error;
         }
+        // Log for debugging but don't fail
+        console.log(`Skipping delete for missing table: ${error.message || error.code}`);
       }
     };
     
