@@ -1282,7 +1282,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Protected: Require facilitator or above to update spaces
   app.patch("/api/spaces/:id", requireFacilitator, async (req, res) => {
     try {
-      const data = insertSpaceSchema.partial().parse(req.body);
+      // Coerce date strings to Date objects before validation
+      const body = { ...req.body };
+      const dateFields = ['ideationStartsAt', 'ideationEndsAt', 'votingStartsAt', 'votingEndsAt', 'rankingStartsAt', 'rankingEndsAt'];
+      for (const field of dateFields) {
+        if (body[field] && typeof body[field] === 'string') {
+          body[field] = new Date(body[field]);
+        }
+      }
+      const data = insertSpaceSchema.partial().parse(body);
       const space = await storage.updateSpace(req.params.id, data);
       if (!space) {
         return res.status(404).json({ error: "Space not found" });
