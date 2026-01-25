@@ -385,6 +385,7 @@ export const ideas = pgTable("ideas", {
   createdByParticipantId: varchar("created_by_participant_id").references(() => participants.id), // Nullable: participant source
   manualCategoryId: varchar("manual_category_id").references(() => categories.id), // Category assignment (AI or manual)
   isManualOverride: boolean("is_manual_override").notNull().default(false), // True when facilitator manually assigns category
+  showOnIdeationBoard: boolean("show_on_ideation_board").notNull().default(false), // When true, idea appears on participant ideation board as a "seed" idea
   metadata: jsonb("metadata"), // Flexible storage for source provenance, import details, formatting options
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

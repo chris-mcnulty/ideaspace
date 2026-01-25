@@ -2798,6 +2798,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============================================
   
   // Get all ideas for a workspace
+  // Query params: showOnIdeationBoard=true to filter only ideas visible on ideation board
   app.get("/api/spaces/:spaceId/ideas", async (req, res) => {
     try {
       const spaceId = await resolveWorkspaceId(req.params.spaceId);
@@ -2805,8 +2806,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Workspace not found" });
       }
       
-      const ideas = await storage.getIdeasBySpace(spaceId);
-      // TODO: Add support for includeContributions if needed
+      let ideas = await storage.getIdeasBySpace(spaceId);
+      
+      // Filter by showOnIdeationBoard if query param is set
+      if (req.query.showOnIdeationBoard === 'true') {
+        ideas = ideas.filter(idea => idea.showOnIdeationBoard);
+      }
+      
       res.json(ideas);
     } catch (error) {
       console.error("Failed to fetch ideas:", error);

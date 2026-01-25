@@ -1,4 +1,4 @@
-import { GripVertical, User, Edit2, Trash2 } from "lucide-react";
+import { GripVertical, User, Edit2, Trash2, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,7 @@ interface StickyNoteProps {
   canEdit?: boolean;
   canDelete?: boolean;
   isNew?: boolean;
+  isSeedIdea?: boolean;
 }
 
 export default function StickyNote({
@@ -35,6 +36,7 @@ export default function StickyNote({
   canEdit = false,
   canDelete = false,
   isNew = false,
+  isSeedIdea = false,
 }: StickyNoteProps) {
   // High-contrast, vibrant colors for maximum visibility in both light and dark modes
   const colors = [
@@ -54,7 +56,9 @@ export default function StickyNote({
   
   // Deterministic color based on note ID for consistency across re-renders
   const colorIndex = id ? id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length : 0;
-  const noteColor = colors[colorIndex];
+  const noteColor = isSeedIdea 
+    ? "bg-gradient-to-br from-indigo-200 to-purple-200 dark:from-indigo-500/30 dark:to-purple-500/30 border-indigo-400 dark:border-indigo-400/60 text-indigo-950 dark:text-indigo-50"
+    : colors[colorIndex];
 
   return (
     <div
@@ -63,15 +67,26 @@ export default function StickyNote({
         noteColor,
         selected && "ring-2 ring-primary ring-offset-2",
         isNew && "animate-pulse ring-2 ring-primary/50",
+        isSeedIdea && "ring-1 ring-indigo-400/50",
         className
       )}
       onClick={onClick}
       data-testid={`sticky-note-${content.substring(0, 10)}`}
     >
+      {/* Seed Idea Badge */}
+      {isSeedIdea && (
+        <div className="absolute -top-2 -right-2 z-10">
+          <Badge className="bg-indigo-600 text-white border-0 gap-1 text-xs shadow-md">
+            <Sparkles className="h-3 w-3" />
+            Seed Idea
+          </Badge>
+        </div>
+      )}
+      
       {/* Author Header */}
       <div className="mb-3 flex items-center justify-between border-b border-current/20 pb-2">
         <div className="flex items-center gap-2 text-sm font-semibold opacity-80">
-          <User className="h-4 w-4" />
+          {isSeedIdea ? <Sparkles className="h-4 w-4" /> : <User className="h-4 w-4" />}
           <span className="truncate max-w-[140px]">{author || "Anonymous"}</span>
         </div>
         <GripVertical className="h-4 w-4 opacity-40 group-hover:opacity-70 transition-opacity" />

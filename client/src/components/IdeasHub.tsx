@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { 
   Plus, Upload, Download, Trash2, Edit2, Save, X, 
   Image, FileText, Hash, Users, Calendar, Search,
-  FolderPlus, Tag, MoreVertical, Check, ArrowRight, StickyNote
+  FolderPlus, Tag, MoreVertical, Check, ArrowRight, StickyNote, Sparkles
 } from 'lucide-react';
 import { 
   DropdownMenu, 
@@ -741,6 +741,12 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
                             </div>
                             
                             <div className="flex items-center gap-2 flex-wrap">
+                              {idea.showOnIdeationBoard && (
+                                <Badge className="text-xs bg-indigo-600 text-white gap-1">
+                                  <Sparkles className="w-3 h-3" />
+                                  Seed Idea
+                                </Badge>
+                              )}
                               {category && (
                                 <Badge variant="secondary" className="text-xs">
                                   {category.name}
@@ -775,6 +781,18 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
                             >
                               <Edit2 className="w-4 h-4 mr-2" />
                               Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => {
+                                updateIdeaMutation.mutate({
+                                  ...idea,
+                                  showOnIdeationBoard: !idea.showOnIdeationBoard
+                                });
+                              }}
+                              data-testid={`menuitem-toggle-seed-${idea.id}`}
+                            >
+                              <Sparkles className="w-4 h-4 mr-2" />
+                              {idea.showOnIdeationBoard ? 'Remove from Ideation' : 'Show as Seed Idea'}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem 

@@ -24,7 +24,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { isPhaseActive } from "@/lib/phaseUtils";
-import type { Organization, Space, Note, Participant, Category, WorkspaceModule } from "@shared/schema";
+import type { Organization, Space, Note, Participant, Category, WorkspaceModule, Idea } from "@shared/schema";
 
 export default function ParticipantView() {
   const params = useParams() as { org: string; space: string };
@@ -75,6 +75,16 @@ export default function ParticipantView() {
   // Fetch notes
   const { data: notes = [] } = useQuery<Note[]>({
     queryKey: [`/api/spaces/${params.space}/notes`],
+    enabled: !!params.space,
+  });
+
+  // Fetch seed ideas (facilitator-pushed ideas visible on ideation board)
+  const { data: seedIdeas = [] } = useQuery<Idea[]>({
+    queryKey: ['/api/spaces', params.space, 'ideas', 'seed'],
+    queryFn: async () => {
+      const response = await apiRequest(`/api/spaces/${params.space}/ideas?showOnIdeationBoard=true`);
+      return response;
+    },
     enabled: !!params.space,
   });
 
@@ -153,6 +163,10 @@ export default function ParticipantView() {
       }
       if (message.type === 'category_created' || message.type === 'category_updated' || message.type === 'category_deleted') {
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/categories`] });
+      }
+      // Handle idea updates (including seed idea toggle)
+      if (message.type === 'idea_created' || message.type === 'idea_updated' || message.type === 'idea_deleted') {
+        queryClient.invalidateQueries({ queryKey: ['/api/spaces', params.space, 'ideas', 'seed'] });
       }
       // Handle phase navigation from facilitator
       if (message.type === 'navigate_to_phase') {
@@ -291,12 +305,49 @@ export default function ParticipantView() {
   const onlineCount = participants.filter(p => p.isOnline).length;
   const currentParticipant = participants.find(p => p.id === participantId);
 
-  // Group notes by category
-  const groupedNotes = notes.reduce((acc, note) => {
+  // Combine notes and seed ideas into a unified display list
+  type DisplayItem = {
+    id: string;
+    content: string;
+    authorName?: string;
+    categoryId?: string | null;
+    createdAt: Date;
+    isSeedIdea: boolean;
+    isOwner: boolean;
+    participantId?: string | null;
+  };
+
+  const displayItems: DisplayItem[] = [
+    // Add participant notes
+    ...notes.map(note => ({
+      id: note.id,
+      content: note.content,
+      authorName: participants.find(p => p.id === note.participantId)?.displayName,
+      categoryId: note.manualCategoryId,
+      createdAt: new Date(note.createdAt),
+      isSeedIdea: false,
+      isOwner: note.participantId === participantId,
+      participantId: note.participantId,
+    })),
+    // Add seed ideas from facilitator
+    ...seedIdeas.map(idea => ({
+      id: `seed-${idea.id}`,
+      content: idea.content,
+      authorName: 'Facilitator',
+      categoryId: idea.manualCategoryId,
+      createdAt: new Date(idea.createdAt),
+      isSeedIdea: true,
+      isOwner: false,
+      participantId: null,
+    })),
+  ];
+
+  // Group display items by category
+  const groupedItems = displayItems.reduce((acc, item) => {
     let categoryName = "Uncategorized";
     
-    if (note.manualCategoryId) {
-      const matchedCategory = categories.find(c => c.id === note.manualCategoryId);
+    if (item.categoryId) {
+      const matchedCategory = categories.find(c => c.id === item.categoryId);
       if (matchedCategory) {
         categoryName = matchedCategory.name;
       }
@@ -305,11 +356,11 @@ export default function ParticipantView() {
     if (!acc[categoryName]) {
       acc[categoryName] = [];
     }
-    acc[categoryName].push(note);
+    acc[categoryName].push(item);
     return acc;
-  }, {} as Record<string, Note[]>);
+  }, {} as Record<string, DisplayItem[]>);
 
-  const categoryNames = Object.keys(groupedNotes).sort((a, b) => {
+  const categoryNames = Object.keys(groupedItems).sort((a, b) => {
     // Sort: Uncategorized last, others alphabetically
     if (a === "Uncategorized") return 1;
     if (b === "Uncategorized") return -1;
@@ -510,7 +561,7 @@ export default function ParticipantView() {
             )}
 
             {/* Notes Grid (sticky notes on whiteboard) */}
-            {notes.length === 0 && !showNoteForm && (
+            {displayItems.length === 0 && !showNoteForm && (
               <div className="py-12 text-center">
                 <p className="text-gray-600 dark:text-gray-400">
                   No ideas yet. Be the first to add one!
@@ -519,7 +570,7 @@ export default function ParticipantView() {
             )}
 
             {/* Grouped by Category */}
-            {notes.length > 0 && (
+            {displayItems.length > 0 && (
               <div className="space-y-8">
                 {categoryNames.map((categoryName) => (
                   <div key={categoryName} className="space-y-4">
@@ -532,30 +583,37 @@ export default function ParticipantView() {
                         {categoryName}
                       </Badge>
                       <span className="text-sm text-gray-600 dark:text-gray-400">
-                        {groupedNotes[categoryName].length} {groupedNotes[categoryName].length === 1 ? 'idea' : 'ideas'}
+                        {groupedItems[categoryName].length} {groupedItems[categoryName].length === 1 ? 'idea' : 'ideas'}
                       </span>
                     </div>
 
-                    {/* Notes in this category - Optimized grid for maximum visibility */}
+                    {/* Notes and seed ideas in this category */}
                     <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-                      {groupedNotes[categoryName].map((note) => {
-                        // Check if participant can edit/delete this note
-                        const isOwner = note.participantId === participantId;
-                        const canEdit = isOwner && space?.status === "open";
-                        const canDelete = isOwner && space?.status === "open";
+                      {groupedItems[categoryName].map((item) => {
+                        // Seed ideas are read-only, notes can be edited by owner
+                        const canEdit = !item.isSeedIdea && item.isOwner && space?.status === "open";
+                        const canDelete = !item.isSeedIdea && item.isOwner && space?.status === "open";
 
                         return (
                           <StickyNote
-                            key={note.id}
-                            id={note.id}
-                            content={note.content}
-                            author={participants.find(p => p.id === note.participantId)?.displayName}
-                            timestamp={new Date(note.createdAt)}
+                            key={item.id}
+                            id={item.id}
+                            content={item.content}
+                            author={item.authorName}
+                            timestamp={item.createdAt}
                             canEdit={canEdit}
                             canDelete={canDelete}
-                            onEdit={() => handleEditNote(note)}
-                            onDelete={() => handleDeleteNote(note.id)}
-                            isNew={recentNoteIds.has(note.id)}
+                            onEdit={() => {
+                              if (!item.isSeedIdea) {
+                                const note = notes.find(n => n.id === item.id);
+                                if (note) handleEditNote(note);
+                              }
+                            }}
+                            onDelete={() => {
+                              if (!item.isSeedIdea) handleDeleteNote(item.id);
+                            }}
+                            isNew={recentNoteIds.has(item.id)}
+                            isSeedIdea={item.isSeedIdea}
                           />
                         );
                       })}
