@@ -1,12 +1,18 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import passport from "passport";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { setupAuth } from "./auth";
 import { ensureUploadDirs } from "./middleware/uploadMiddleware";
+import { pool } from "./db";
 
 const app = express();
+const PgStore = connectPgSimple(session);
+
+// Trust entire proxy chain (required for secure cookies behind Replit's reverse proxy)
+app.set('trust proxy', true);
 
 declare module 'http' {
   interface IncomingMessage {
@@ -20,22 +26,23 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: false }));
 
-// Trust proxy for production (Replit uses reverse proxy)
-if (process.env.NODE_ENV === "production") {
-  app.set("trust proxy", 1);
-}
-
-// Session configuration
+// Session configuration with PostgreSQL store for persistence across reboots
+// Supports multi-device SSO - each device gets its own session stored in the database
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "aurora-session-secret-change-in-production",
+    store: new PgStore({
+      pool: pool,
+      tableName: 'session',
+      createTableIfMissing: true,
+    }),
+    secret: process.env.SESSION_SECRET || "nebula-session-secret-change-in-production",
     resave: false,
     saveUninitialized: false,
     cookie: {
       secure: process.env.NODE_ENV === "production",
       httpOnly: true,
       sameSite: "lax", // Required for OAuth redirects
-      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days (matches Vega)
     },
   })
 );
