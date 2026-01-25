@@ -191,8 +191,8 @@ export default function StaircaseModule({
     return category?.color || 'hsl(var(--muted))';
   };
 
-  // Handle drag start
-  const handleDragStart = (e: React.PointerEvent, position: StaircasePosition) => {
+  // Handle drag start - works with or without existing position
+  const handleDragStart = (e: React.PointerEvent, idea: Idea, position?: StaircasePosition) => {
     if (isReadOnly) return;
     
     const canvas = canvasRef.current;
@@ -201,13 +201,15 @@ export default function StaircaseModule({
     const rect = canvas.getBoundingClientRect();
     
     setDraggedIdea({
-      id: position.id,
-      ideaId: position.ideaId,
+      id: position?.id || `new-${idea.id}`,
+      ideaId: idea.id,
       startY: e.clientY - rect.top,
       currentY: e.clientY - rect.top,
     });
     
     (e.target as Element).setPointerCapture(e.pointerId);
+    e.preventDefault();
+    e.stopPropagation();
   };
 
   // Handle drag move
@@ -396,28 +398,31 @@ export default function StaircaseModule({
                     <g
                       key={position?.id || idea.id}
                       transform={`translate(${x}, ${isDragging ? dragY : y})`}
-                      onPointerDown={(e) => position ? handleDragStart(e, position) : undefined}
-                      className={`cursor-${isReadOnly || !position ? 'default' : 'grab'} ${isDragging ? 'opacity-70' : ''}`}
+                      onPointerDown={(e) => handleDragStart(e, idea, position)}
+                      className={isReadOnly ? '' : 'cursor-grab'}
+                      style={{ opacity: isDragging ? 0.7 : 1, touchAction: 'none' }}
                       data-testid={`staircase-idea-${idea.id}`}
                     >
                       <rect
-                        x={-30}
-                        y={-15}
-                        width={60}
-                        height={30}
-                        rx={4}
+                        x={-45}
+                        y={-20}
+                        width={90}
+                        height={40}
+                        rx={6}
                         fill={getCategoryColor(idea.manualCategoryId, idea.aiCategoryId)}
-                        stroke="hsl(var(--border))"
-                        strokeWidth="1"
+                        stroke={isDragging ? 'hsl(var(--primary))' : 'hsl(var(--border))'}
+                        strokeWidth={isDragging ? 2 : 1}
                       />
                       <text
                         x={0}
                         y={5}
                         textAnchor="middle"
-                        className="fill-foreground text-xs font-medium"
+                        className="fill-foreground text-sm font-medium"
                         style={{ pointerEvents: 'none' }}
                       >
-                        {(idea.content || '').substring(0, 8)}...
+                        {(idea.content || '').length > 12 
+                          ? (idea.content || '').substring(0, 12) + '...' 
+                          : (idea.content || '')}
                       </text>
                     </g>
                   );
