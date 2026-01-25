@@ -587,7 +587,7 @@ function WorkspaceRow({
             <div>
               <h3 className="font-medium">{space.name}</h3>
               <div className="flex items-center gap-2 mt-1">
-                <Badge variant="outline" className="text-xs font-mono">
+                <Badge variant="outline" className="text-base font-mono font-bold tracking-wider px-3 py-1">
                   {space.code}
                 </Badge>
                 <Badge variant={space.status === "open" ? "default" : "secondary"} className="text-xs capitalize">
@@ -2091,7 +2091,7 @@ function DeleteWorkspaceDialog({
           <div className="space-y-4">
             <div className="rounded-lg border bg-muted/50 p-4">
               <p className="font-medium mb-2">{space.name}</p>
-              <p className="text-sm text-muted-foreground">Code: {space.code}</p>
+              <p className="text-lg font-mono font-bold tracking-wider text-foreground">Code: {space.code}</p>
             </div>
 
             {hasDependencies && dependencies && (
