@@ -96,7 +96,9 @@ export async function generateCohortResults(
   const noteCount = allNotes.length;
   const bordaScores = new Map<string, number>();
   rankingData.forEach((ranking: any) => {
-    const score = noteCount - ranking.rank + 1;
+    // Clamp rank to valid range [1, noteCount] to handle legacy data with invalid ranks
+    const clampedRank = Math.max(1, Math.min(ranking.rank, noteCount));
+    const score = noteCount - clampedRank + 1;
     bordaScores.set(ranking.noteId, (bordaScores.get(ranking.noteId) || 0) + score);
   });
 

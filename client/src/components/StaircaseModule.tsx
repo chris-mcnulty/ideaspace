@@ -29,6 +29,8 @@ interface DraggedIdea {
   ideaId: string;
   startY: number;
   currentY: number;
+  // Calculated step index for visual positioning along the staircase
+  currentStepIndex: number;
 }
 
 export default function StaircaseModule({ 
@@ -199,12 +201,18 @@ export default function StaircaseModule({
     if (!canvas) return;
     
     const rect = canvas.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    
+    // Calculate initial step index
+    const stepIndex = Math.floor((canvasHeight - margin - y) / stepHeight);
+    const clampedStep = Math.max(0, Math.min(stepCount - 1, stepIndex));
     
     setDraggedIdea({
       id: position?.id || `new-${idea.id}`,
       ideaId: idea.id,
-      startY: e.clientY - rect.top,
-      currentY: e.clientY - rect.top,
+      startY: y,
+      currentY: y,
+      currentStepIndex: clampedStep,
     });
     
     (e.target as Element).setPointerCapture(e.pointerId);
@@ -222,7 +230,11 @@ export default function StaircaseModule({
     const rect = canvas.getBoundingClientRect();
     const y = e.clientY - rect.top;
     
-    setDraggedIdea(prev => prev ? { ...prev, currentY: y } : null);
+    // Calculate step index for staircase positioning
+    const stepIndex = Math.floor((canvasHeight - margin - y) / stepHeight);
+    const clampedStep = Math.max(0, Math.min(stepCount - 1, stepIndex));
+    
+    setDraggedIdea(prev => prev ? { ...prev, currentY: y, currentStepIndex: clampedStep } : null);
   };
 
   // Handle drag end
@@ -392,12 +404,20 @@ export default function StaircaseModule({
                   const y = baseY;
                   
                   const isDragging = draggedIdea?.ideaId === idea.id;
-                  const dragY = isDragging ? draggedIdea.currentY : y;
+                  
+                  // When dragging, position along the staircase path based on current step
+                  let displayX = x;
+                  let displayY = y;
+                  if (isDragging) {
+                    const dragStepIndex = draggedIdea.currentStepIndex;
+                    displayX = margin + dragStepIndex * stepWidth + stepWidth / 2;
+                    displayY = canvasHeight - margin - dragStepIndex * stepHeight - stepHeight / 2;
+                  }
                   
                   return (
                     <g
                       key={position?.id || idea.id}
-                      transform={`translate(${x}, ${isDragging ? dragY : y})`}
+                      transform={`translate(${displayX}, ${displayY})`}
                       onPointerDown={(e) => handleDragStart(e, idea, position)}
                       className={isReadOnly ? '' : 'cursor-grab'}
                       style={{ opacity: isDragging ? 0.7 : 1, touchAction: 'none' }}
@@ -409,7 +429,7 @@ export default function StaircaseModule({
                         width={90}
                         height={40}
                         rx={6}
-                        fill={getCategoryColor(idea.manualCategoryId, idea.aiCategoryId)}
+                        fill={getCategoryColor(idea.manualCategoryId)}
                         stroke={isDragging ? 'hsl(var(--primary))' : 'hsl(var(--border))'}
                         strokeWidth={isDragging ? 2 : 1}
                       />

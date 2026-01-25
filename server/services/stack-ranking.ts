@@ -63,8 +63,10 @@ export function calculateBordaScores(
   for (const ranking of allRankings) {
     const data = scoresMap.get(ranking.noteId);
     if (data) {
+      // Clamp rank to valid range [1, totalNotes] to handle legacy data with invalid ranks
+      const clampedRank = Math.max(1, Math.min(ranking.rank, totalNotes));
       // Borda count: rank 1 gets N points, rank 2 gets N-1 points, etc.
-      const bordaPoints = totalNotes - ranking.rank + 1;
+      const bordaPoints = totalNotes - clampedRank + 1;
       data.totalScore += bordaPoints;
       data.totalRank += ranking.rank;
       data.count += 1;
