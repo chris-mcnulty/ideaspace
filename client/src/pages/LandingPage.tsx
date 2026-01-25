@@ -147,8 +147,8 @@ export default function LandingPage() {
                 </CardHeader>
                 <CardContent className="bg-card/95 backdrop-blur">
                   <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="workspace-code" className="text-center block">8-Digit Code</Label>
+                    <div className="space-y-3">
+                      <Label htmlFor="workspace-code" className="text-center block text-lg">8-Digit Code</Label>
                       <Input
                         id="workspace-code"
                         placeholder="0000-0000"
@@ -156,7 +156,7 @@ export default function LandingPage() {
                         onChange={handleCodeChange}
                         onKeyDown={(e) => e.key === "Enter" && handleCodeEntry()}
                         data-testid="input-workspace-code"
-                        className="bg-input/80 text-center text-2xl font-mono tracking-widest"
+                        className="bg-input/80 text-center text-4xl font-mono font-bold tracking-widest py-6 h-auto"
                         maxLength={9}
                         autoComplete="off"
                       />
