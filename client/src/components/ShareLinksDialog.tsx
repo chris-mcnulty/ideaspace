@@ -185,7 +185,13 @@ export function ShareLinksDialog({ orgSlug, spaceCode }: ShareLinksDialogProps) 
 
           {/* QR Code Display */}
           <div className="space-y-2">
-            <Label>QR Code</Label>
+            <div className="flex items-center justify-between">
+              <Label>QR Code</Label>
+              <div className="text-right">
+                <span className="text-xs text-muted-foreground block">Join Code</span>
+                <span className="font-mono text-2xl font-bold tracking-wider text-primary">{spaceCode}</span>
+              </div>
+            </div>
             <div className="flex flex-col items-center gap-4 p-6 bg-card rounded-lg border">
               {qrCodeDataUrl ? (
                 <>

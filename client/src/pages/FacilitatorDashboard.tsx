@@ -224,7 +224,7 @@ export default function FacilitatorDashboard() {
                   </div>
 
                   <p className="text-xs text-center text-muted-foreground" data-testid={`text-code-${workspace.id}`}>
-                    Code: <span className="font-mono">{workspace.code}</span>
+                    Code: <span className="font-mono text-2xl font-bold tracking-wider text-primary">{workspace.code}</span>
                   </p>
                 </CardContent>
               </Card>
