@@ -2960,6 +2960,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Bulk push ideas as seed notes
+  app.post("/api/ideas/bulk-push-as-seed", requireFacilitator, async (req, res) => {
+    try {
+      const { spaceId, ideaIds } = req.body as { spaceId: string; ideaIds: string[] };
+      
+      if (!spaceId || !Array.isArray(ideaIds) || ideaIds.length === 0) {
+        return res.status(400).json({ error: "Invalid request: spaceId and ideaIds required" });
+      }
+      
+      // Get existing notes to check for duplicates
+      const existingNotes = await storage.getNotesBySpace(spaceId);
+      const existingSeedIdeaIds = new Set(existingNotes.filter(n => n.sourceIdeaId).map(n => n.sourceIdeaId));
+      
+      // Get or create facilitator participant
+      const participants = await storage.getParticipantsBySpace(spaceId);
+      let facilitatorParticipant = participants.find(p => p.displayName === "Facilitator");
+      
+      if (!facilitatorParticipant) {
+        facilitatorParticipant = await storage.createParticipant({
+          spaceId,
+          userId: null,
+          displayName: "Facilitator",
+          isGuest: false,
+          isOnline: true,
+          profileData: { role: "facilitator" },
+        });
+      }
+      
+      const createdNotes: any[] = [];
+      
+      for (const ideaId of ideaIds) {
+        // Skip if seed already exists
+        if (existingSeedIdeaIds.has(ideaId)) {
+          continue;
+        }
+        
+        const idea = await storage.getIdea(ideaId);
+        if (!idea || idea.spaceId !== spaceId) {
+          continue;
+        }
+        
+        // Create seed note from idea
+        const seedNote = await storage.createNote({
+          spaceId: idea.spaceId,
+          participantId: facilitatorParticipant.id,
+          content: idea.content,
+          manualCategoryId: idea.manualCategoryId || null,
+          isSeed: true,
+          sourceIdeaId: ideaId,
+          visibleInRanking: true,
+          visibleInMarketplace: true,
+        });
+        
+        // Update the idea to mark as pushed
+        await storage.updateIdea(ideaId, { showOnIdeationBoard: true });
+        
+        createdNotes.push(seedNote);
+        
+        // Broadcast updates
+        broadcastToSpace(spaceId, { 
+          type: "note_created", 
+          data: seedNote 
+        });
+      }
+      
+      res.json({ count: createdNotes.length, notes: createdNotes });
+    } catch (error) {
+      console.error("Failed to bulk push ideas as seeds:", error);
+      res.status(500).json({ error: "Failed to bulk push ideas as seeds" });
+    }
+  });
+  
   // Remove seed idea (deletes the corresponding note)
   app.delete("/api/ideas/:id/remove-seed", requireFacilitator, async (req, res) => {
     try {

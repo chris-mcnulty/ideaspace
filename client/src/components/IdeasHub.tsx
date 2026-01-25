@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { 
   Plus, Upload, Download, Trash2, Edit2, Save, X, 
   Image, FileText, Hash, Users, Calendar, Search,
-  FolderPlus, Tag, MoreVertical, Check, ArrowRight, StickyNote, Sparkles
+  FolderPlus, Tag, MoreVertical, Check, ArrowRight, StickyNote, Sparkles, Sprout
 } from 'lucide-react';
 import { 
   DropdownMenu, 
@@ -50,7 +50,7 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
   const [editingIdea, setEditingIdea] = useState<Idea | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
-  const [bulkAction, setBulkAction] = useState<'delete' | 'categorize' | null>(null);
+  const [bulkAction, setBulkAction] = useState<'delete' | 'categorize' | 'push-as-seed' | null>(null);
   const [bulkCategoryId, setBulkCategoryId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'ideas' | 'notes'>('ideas');
   
@@ -231,6 +231,23 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
     }
   });
   
+  const bulkPushAsSeedMutation = useMutation({
+    mutationFn: async (ideaIds: string[]) => {
+      const response = await apiRequest('POST', '/api/ideas/bulk-push-as-seed', { spaceId, ideaIds });
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/ideas`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/notes`] });
+      setSelectedIdeas(new Set());
+      setBulkAction(null);
+      toast({ title: `${data.count} ideas pushed to ideation board as seeds` });
+    },
+    onError: () => {
+      toast({ title: "Failed to push ideas as seeds", variant: "destructive" });
+    }
+  });
+  
   // Promote notes to ideas mutation
   const promoteNotesMutation = useMutation({
     mutationFn: async (noteIds: string[]) => {
@@ -315,6 +332,21 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
       ideaIds: Array.from(selectedIdeas),
       categoryId: bulkCategoryId || null
     });
+  };
+  
+  const handleBulkPushAsSeed = () => {
+    if (selectedIdeas.size === 0) return;
+    // Filter out ideas that are already seeds
+    const ideasToSeed = Array.from(selectedIdeas).filter(id => {
+      const idea = ideas.find((i: Idea) => i.id === id);
+      return idea && !idea.showOnIdeationBoard;
+    });
+    if (ideasToSeed.length === 0) {
+      toast({ title: "All selected ideas are already on the ideation board", variant: "default" });
+      setBulkAction(null);
+      return;
+    }
+    bulkPushAsSeedMutation.mutate(ideasToSeed);
   };
   
   // Parse import data
@@ -600,6 +632,16 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
               
               {selectedIdeas.size > 0 && (
                 <>
+                  <Button 
+                    onClick={() => setBulkAction('push-as-seed')}
+                    size="sm"
+                    variant="default"
+                    data-testid="button-bulk-push-seed"
+                  >
+                    <Sprout className="w-4 h-4 mr-1" />
+                    Push as Seeds ({selectedIdeas.size})
+                  </Button>
+                  
                   <Button 
                     onClick={() => setBulkAction('categorize')}
                     size="sm"
@@ -1245,6 +1287,39 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
                 data-testid="button-confirm-bulk-delete"
               >
                 Delete Ideas
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+      
+      {/* Bulk Push as Seed Confirmation */}
+      {bulkAction === 'push-as-seed' && (
+        <Dialog open onOpenChange={() => setBulkAction(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Push {selectedIdeas.size} Ideas as Seeds</DialogTitle>
+              <DialogDescription>
+                These ideas will appear on the participant ideation board as starter content. 
+                They will also become notes that can go through voting, ranking, and other modules.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setBulkAction(null)}
+                data-testid="button-cancel-bulk-seed"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleBulkPushAsSeed}
+                disabled={bulkPushAsSeedMutation.isPending}
+                data-testid="button-confirm-bulk-seed"
+              >
+                <Sprout className="w-4 h-4 mr-1" />
+                {bulkPushAsSeedMutation.isPending ? 'Pushing...' : 'Push as Seeds'}
               </Button>
             </DialogFooter>
           </DialogContent>
