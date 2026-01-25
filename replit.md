@@ -7,10 +7,10 @@
   - Status: Active project on Replit.
 
 ## Backlog
-- [ ] Implement robust session handling from Vega to improve session persistence in Nebula.
-- [ ] Increase font size for 8-digit codes in Facilitator Dashboard (My Workspaces) - Completed
-- [ ] Increase font size for 8-digit codes in Share Links Dialog - Completed
-- [ ] Increase font size for 8-digit codes on Home Screen (Landing Page) - Completed
+- [x] Implement robust session handling from Vega to improve session persistence in Nebula - Completed
+- [x] Increase font size for 8-digit codes in Facilitator Dashboard (My Workspaces) - Completed
+- [x] Increase font size for 8-digit codes in Share Links Dialog - Completed
+- [x] Increase font size for 8-digit codes on Home Screen (Landing Page) - Completed
 
 ## Overview
 Nebula is a multi-tenant web application for structured collaborative envisioning sessions. It enables facilitators to guide cohorts through real-time ideation, AI-powered categorization, voting, and ranking, culminating in personalized results. The platform aims to provide a robust environment for organizations to conduct effective envisioning workshops.
@@ -40,6 +40,7 @@ The design system features a dark mode with a primary purple accent, dark blue-b
 - **Real-time Collaboration**: Utilizes WebSockets for live updates across various modules.
 - **Role-Based Access Control (RBAC)**: Defines Global Admin, Company Admin, Facilitator, and User roles.
 - **Authentication**: Supports local authentication (email verification, password reset) and Microsoft Entra ID SSO with JIT user and tenant provisioning. It includes robust handling for public domains and maps corporate email domains to organizations.
+- **Session Persistence**: Uses PostgreSQL-backed session store (connect-pg-simple) matching Vega pattern. Sessions survive server reboots and support multi-device SSO logins with 30-day expiry.
 - **AI Integration**: Leverages OpenAI API for note categorization, card rewrites, and usage tracking.
 - **Voting Mechanisms**: Implements Pairwise Voting and Stack Ranking with real-time leaderboards.
 - **Guest Access Control**: Manages workspace access with configurable permissions and notifications.
