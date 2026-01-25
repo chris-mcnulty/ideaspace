@@ -164,7 +164,7 @@ export default function PriorityMatrix({
     };
   }, [spaceId, isReadOnly]);
 
-  // Handle mouse down on idea
+  // Handle mouse/touch down on idea
   const handleMouseDown = (e: React.MouseEvent, ideaId: string) => {
     if (isReadOnly) return;
     
@@ -182,18 +182,41 @@ export default function PriorityMatrix({
     });
 
     e.preventDefault();
+    e.stopPropagation();
   };
 
-  // Handle mouse move
+  // Handle touch start on idea
+  const handleTouchStart = (e: React.TouchEvent, ideaId: string) => {
+    if (isReadOnly) return;
+    
+    const rect = matrixRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const touch = e.touches[0];
+    const currentPos = localPositions.get(ideaId) || { x: 50, y: 50 };
+    
+    setDraggedIdea({
+      id: ideaId,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      currentX: currentPos.x,
+      currentY: currentPos.y,
+    });
+
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  // Handle mouse/touch move
   useEffect(() => {
     if (!draggedIdea) return;
 
-    const handleMouseMove = (e: MouseEvent) => {
+    const handleMove = (clientX: number, clientY: number) => {
       const rect = matrixRef.current?.getBoundingClientRect();
       if (!rect) return;
 
-      const deltaX = ((e.clientX - draggedIdea.startX) / rect.width) * 100;
-      const deltaY = ((e.clientY - draggedIdea.startY) / rect.height) * 100;
+      const deltaX = ((clientX - draggedIdea.startX) / rect.width) * 100;
+      const deltaY = ((clientY - draggedIdea.startY) / rect.height) * 100;
 
       const newX = Math.max(0, Math.min(100, draggedIdea.currentX + deltaX));
       const newY = Math.max(0, Math.min(100, draggedIdea.currentY + deltaY));
@@ -216,7 +239,18 @@ export default function PriorityMatrix({
       }
     };
 
-    const handleMouseUp = () => {
+    const handleMouseMove = (e: MouseEvent) => {
+      handleMove(e.clientX, e.clientY);
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 0) {
+        handleMove(e.touches[0].clientX, e.touches[0].clientY);
+        e.preventDefault();
+      }
+    };
+
+    const handleEnd = () => {
       if (draggedIdea) {
         // Get the final position using a callback to ensure we have the latest state
         setLocalPositions(prev => {
@@ -236,11 +270,15 @@ export default function PriorityMatrix({
     };
 
     document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('mouseup', handleEnd);
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    document.addEventListener('touchend', handleEnd);
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mouseup', handleEnd);
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', handleEnd);
     };
   }, [draggedIdea, wsConnection, spaceId]);
 
@@ -355,6 +393,7 @@ export default function PriorityMatrix({
                     transition: isDragging ? 'none' : 'all 0.2s ease',
                   }}
                   onMouseDown={(e) => handleMouseDown(e, idea.id)}
+                  onTouchStart={(e) => handleTouchStart(e, idea.id)}
                   data-testid={`idea-${idea.id}`}
                 >
                   <div className={`
