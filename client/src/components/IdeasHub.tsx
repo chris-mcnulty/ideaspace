@@ -785,7 +785,7 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
                             <DropdownMenuItem 
                               onClick={() => {
                                 updateIdeaMutation.mutate({
-                                  ...idea,
+                                  id: idea.id,
                                   showOnIdeationBoard: !idea.showOnIdeationBoard
                                 });
                               }}
