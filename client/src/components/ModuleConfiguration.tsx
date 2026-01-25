@@ -282,18 +282,43 @@ export default function ModuleConfiguration({ spaceId }: ModuleConfigurationProp
     enabled: !!spaceId
   });
   
-  // Update module mutation
+  // Update module mutation with optimistic updates
   const updateModuleMutation = useMutation({
     mutationFn: async ({ id, ...data }: Partial<WorkspaceModule> & { id: string }) => {
       const response = await apiRequest('PATCH', `/api/workspace-modules/${id}`, data);
       return response.json();
     },
+    onMutate: async (variables) => {
+      // Cancel any outgoing refetches so they don't overwrite our optimistic update
+      await queryClient.cancelQueries({ queryKey: [`/api/spaces/${spaceId}/modules`] });
+      
+      // Snapshot the previous value
+      const previousModules = queryClient.getQueryData<WorkspaceModule[]>([`/api/spaces/${spaceId}/modules`]);
+      
+      // Optimistically update the cache
+      if (previousModules) {
+        const updatedModules = previousModules.map(mod => 
+          mod.id === variables.id 
+            ? { ...mod, ...variables }
+            : mod
+        );
+        queryClient.setQueryData([`/api/spaces/${spaceId}/modules`], updatedModules);
+      }
+      
+      // Return context with previous value for rollback
+      return { previousModules };
+    },
     onSuccess: () => {
+      // Refetch to ensure we have the latest data
       queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/modules`] });
       setHasChanges(false);
       toast({ title: "Module configuration updated" });
     },
-    onError: () => {
+    onError: (error, variables, context) => {
+      // Rollback to previous value on error
+      if (context?.previousModules) {
+        queryClient.setQueryData([`/api/spaces/${spaceId}/modules`], context.previousModules);
+      }
       toast({ title: "Failed to update module", variant: "destructive" });
     }
   });
