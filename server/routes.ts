@@ -1405,19 +1405,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Protected: Require company admin or above to delete spaces
   app.delete("/api/spaces/:id", requireCompanyAdmin, async (req, res) => {
     try {
+      console.log(`[deleteSpace] Attempting to delete space: ${req.params.id}`);
       const deleted = await storage.deleteSpace(req.params.id);
       if (!deleted) {
         return res.status(404).json({ error: "Space not found" });
       }
+      console.log(`[deleteSpace] Successfully deleted space: ${req.params.id}`);
       res.status(204).send();
     } catch (error: any) {
+      console.error(`[deleteSpace] Error deleting space ${req.params.id}:`, error.message, error.code, error.detail);
       // Check if it's a foreign key constraint error
       if (error.code === '23503' || error.message?.includes('foreign key')) {
         return res.status(400).json({ 
-          error: "Cannot delete workspace with existing data. Please archive it instead or delete all associated data first." 
+          error: "Cannot delete workspace with existing data. Please archive it instead or delete all associated data first.",
+          detail: error.detail || error.message
         });
       }
-      res.status(500).json({ error: "Failed to delete space" });
+      res.status(500).json({ error: "Failed to delete space", detail: error.message });
     }
   });
 

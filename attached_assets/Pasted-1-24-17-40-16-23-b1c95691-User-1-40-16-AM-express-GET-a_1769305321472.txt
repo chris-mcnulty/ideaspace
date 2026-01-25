@@ -1,0 +1,168 @@
+1-24 17:40:16.23
+b1c95691
+User
+1:40:16 AM [express] GET /api/templates/spaces 304 in 75ms :: [{"id":"7eb2c3ac-5b74-4d9d-a05d-c73c54…
+2026-01-24 17:40:16.25
+b1c95691
+User
+1:40:16 AM [express] GET /api/admin/organizations/d50f15c9-32b4-4256-94e9-689345981345/spaces 304 in…
+2026-01-24 17:40:16.25
+b1c95691
+User
+1:40:16 AM [express] GET /api/admin/organizations/J8cetEJamOoL/spaces 304 in 82ms :: [{"id":"X6Ng_hM…
+2026-01-24 17:40:16.27
+b1c95691
+User
+1:40:16 AM [express] GET /api/admin/organizations/288e53de-94a1-4c92-960b-1de7591cbe27/spaces 304 in…
+2026-01-24 17:40:16.28
+b1c95691
+User
+1:40:16 AM [express] GET /api/admin/organizations/test-org-survey-001/spaces 304 in 70ms :: [{"id":"…
+2026-01-24 17:40:16.37
+b1c95691
+User
+1:40:16 AM [express] GET /api/admin/organizations/d84815b5-f414-4714-81ab-da7a3c53c5f3/spaces 304 in…
+2026-01-24 17:40:16.39
+b1c95691
+User
+1:40:16 AM [express] GET /api/admin/organizations/6a404b96-38b3-43b8-a507-3dbaed7028b2/spaces 304 in…
+2026-01-24 17:40:16.40
+b1c95691
+User
+1:40:16 AM [express] GET /api/templates/spaces 304 in 50ms :: [{"id":"7eb2c3ac-5b74-4d9d-a05d-c73c54…
+2026-01-24 17:40:16.40
+b1c95691
+User
+1:40:16 AM [express] GET /api/admin/organizations/bdc84450-e2a4-4a5d-8771-ef538ee412aa/spaces 304 in…
+2026-01-24 17:40:16.56
+b1c95691
+User
+1:40:16 AM [express] GET /api/templates/spaces 304 in 50ms :: [{"id":"7eb2c3ac-5b74-4d9d-a05d-c73c54…
+2026-01-24 17:40:16.73
+b1c95691
+User
+1:40:16 AM [express] GET /api/templates/spaces 304 in 54ms :: [{"id":"7eb2c3ac-5b74-4d9d-a05d-c73c54…
+2026-01-24 17:40:16.90
+b1c95691
+User
+1:40:16 AM [express] GET /api/templates/spaces 304 in 50ms :: [{"id":"7eb2c3ac-5b74-4d9d-a05d-c73c54…
+2026-01-24 17:40:17.07
+b1c95691
+User
+1:40:17 AM [express] GET /api/templates/spaces 304 in 51ms :: [{"id":"7eb2c3ac-5b74-4d9d-a05d-c73c54…
+2026-01-24 17:40:17.23
+b1c95691
+User
+1:40:17 AM [express] GET /api/templates/spaces 304 in 50ms :: [{"id":"7eb2c3ac-5b74-4d9d-a05d-c73c54…
+2026-01-24 17:40:17.39
+b1c95691
+User
+1:40:17 AM [express] GET /api/templates/spaces 304 in 51ms :: [{"id":"7eb2c3ac-5b74-4d9d-a05d-c73c54…
+2026-01-24 17:40:17.55
+b1c95691
+User
+1:40:17 AM [express] GET /api/templates/spaces 304 in 50ms :: [{"id":"7eb2c3ac-5b74-4d9d-a05d-c73c54…
+2026-01-24 17:40:17.73
+b1c95691
+User
+1:40:17 AM [express] GET /api/templates/spaces 304 in 50ms :: [{"id":"7eb2c3ac-5b74-4d9d-a05d-c73c54…
+2026-01-24 17:40:17.92
+b1c95691
+User
+1:40:17 AM [express] GET /api/templates/spaces 304 in 49ms :: [{"id":"7eb2c3ac-5b74-4d9d-a05d-c73c54…
+2026-01-24 17:40:18.38
+b1c95691
+User
+1:40:18 AM [express] GET /api/admin/organizations/557b032a-1320-48f2-b2f9-a96eae838b18/spaces 304 in…
+2026-01-24 17:40:18.38
+b1c95691
+User
+1:40:18 AM [express] GET /api/admin/organizations/a4208ed6-d134-463a-b9e3-a51b574accbb/spaces 304 in…
+2026-01-24 17:40:18.39
+b1c95691
+User
+1:40:18 AM [express] GET /api/admin/organizations/5e4c033f-93b2-4ed3-9cea-0d5c3e87def8/spaces 304 in…
+2026-01-24 17:40:43.24
+b1c95691
+User
+1:40:43 AM [express] DELETE /api/organizations/d50f15c9-32b4-4256-94e9-689345981345 204 in 356ms
+2026-01-24 17:40:43.43
+b1c95691
+User
+1:40:43 AM [express] GET /api/admin/organizations/c180c3ce-0749-4713-966d-eeb874ed737d/spaces 304 in…
+2026-01-24 17:40:43.43
+b1c95691
+User
+1:40:43 AM [express] GET /api/admin/organizations/d50f15c9-32b4-4256-94e9-689345981345/spaces 304 in…
+2026-01-24 17:40:43.46
+b1c95691
+User
+1:40:43 AM [express] GET /api/admin/organizations/J8cetEJamOoL/spaces 304 in 78ms :: [{"id":"X6Ng_hM…
+2026-01-24 17:40:43.47
+b1c95691
+User
+1:40:43 AM [express] GET /api/admin/organizations/bdc84450-e2a4-4a5d-8771-ef538ee412aa/spaces 304 in…
+2026-01-24 17:40:43.47
+b1c95691
+User
+1:40:43 AM [express] GET /api/admin/organizations 200 in 100ms :: [{"id":"c180c3ce-0749-4713-966d-ee…
+2026-01-24 17:40:43.47
+b1c95691
+User
+1:40:43 AM [express] GET /api/admin/organizations/288e53de-94a1-4c92-960b-1de7591cbe27/spaces 304 in…
+2026-01-24 17:40:43.48
+b1c95691
+User
+1:40:43 AM [express] GET /api/admin/organizations/5e4c033f-93b2-4ed3-9cea-0d5c3e87def8/spaces 304 in…
+2026-01-24 17:40:43.57
+b1c95691
+User
+1:40:43 AM [express] GET /api/admin/organizations/a4208ed6-d134-463a-b9e3-a51b574accbb/spaces 304 in…
+2026-01-24 17:40:43.58
+b1c95691
+User
+1:40:43 AM [express] GET /api/admin/organizations/d84815b5-f414-4714-81ab-da7a3c53c5f3/spaces 304 in…
+2026-01-24 17:40:43.59
+b1c95691
+User
+1:40:43 AM [express] GET /api/admin/organizations/test-org-survey-001/spaces 304 in 48ms :: [{"id":"…
+2026-01-24 17:40:43.59
+b1c95691
+User
+1:40:43 AM [express] GET /api/admin/organizations/557b032a-1320-48f2-b2f9-a96eae838b18/spaces 304 in…
+2026-01-24 17:40:43.59
+b1c95691
+User
+1:40:43 AM [express] GET /api/admin/organizations/6a404b96-38b3-43b8-a507-3dbaed7028b2/spaces 304 in…
+2026-01-24 17:40:49.56
+b1c95691
+User
+1:40:49 AM [express] GET /api/spaces/X6Ng_hMNf0bI/dependencies 200 in 67ms :: {"notesCount":0,"votes…
+2026-01-24 17:40:51.01
+b1c95691
+User
+1:40:51 AM [express] DELETE /api/spaces/X6Ng_hMNf0bI 500 in 52ms :: {"error":"Failed to delete space…
+2026-01-24 17:40:53.39
+b1c95691
+User
+1:40:53 AM [express] DELETE /api/spaces/X6Ng_hMNf0bI 500 in 46ms :: {"error":"Failed to delete space…
+2026-01-24 17:40:57.73
+b1c95691
+User
+1:40:57 AM [express] GET /api/spaces/8f692638-8d91-4517-8bfa-44a14efc438b/dependencies 200 in 194ms …
+2026-01-24 17:40:59.87
+b1c95691
+User
+1:40:59 AM [express] DELETE /api/spaces/8f692638-8d91-4517-8bfa-44a14efc438b 500 in 47ms :: {"error"…
+2026-01-24 17:41:09.46
+b1c95691
+User
+1:41:09 AM [express] DELETE /api/spaces/8f692638-8d91-4517-8bfa-44a14efc438b 500 in 47ms :: {"error"…
+2026-01-24 17:41:22.65
+b1c95691
+User
+1:41:22 AM [express] GET /api/spaces/test-space-survey-001/dependencies 200 in 207ms :: {"notesCount…
+2026-01-24 17:41:24.18
+b1c95691
+User
+1:41:24 AM [express] DELETE /api/spaces/test-space-survey-001 500 in 48ms :: {"error":"Failed to del…
