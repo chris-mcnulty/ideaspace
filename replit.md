@@ -7,6 +7,7 @@
   - Status: Active project on Replit.
 
 ## Backlog
+- [ ] Import templates from CSV and edit their contents in the system
 - [x] Implement robust session handling from Vega to improve session persistence in Nebula - Completed
 - [x] Increase font size for 8-digit codes in Facilitator Dashboard (My Workspaces) - Completed
 - [x] Increase font size for 8-digit codes in Share Links Dialog - Completed
