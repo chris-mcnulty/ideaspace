@@ -219,6 +219,80 @@ export default function Results() {
 
   // Check if error is 401 (not a participant)
   const isNotParticipant = error && (error as any).message?.includes("No participant session");
+  
+  // Check if error is 404 (no results found yet) - this should show generate button
+  const isNoResultsYet = error && (
+    (error as any).status === 404 || 
+    (error as any).message?.includes("No personalized results")
+  );
+
+  // If 404 (no results found), show generate button instead of error
+  if (isNoResultsYet && !personalizedResults) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <header className="border-b bg-card sticky top-0 z-50 backdrop-blur supports-[backdrop-filter]:bg-card/60">
+          <div className="container mx-auto flex h-16 items-center justify-between px-6">
+            <div className="flex items-center gap-3">
+              <img 
+                src="/logos/synozur-horizontal-color.png" 
+                alt="Synozur Alliance" 
+                className="h-8"
+                data-testid="img-logo"
+              />
+              <div className="h-6 w-px bg-border/40" />
+              <span className="text-lg font-semibold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
+                Nebula
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              {isAuthenticated && <UserProfileMenu />}
+            </div>
+          </div>
+        </header>
+        
+        <div className="flex flex-1 items-center justify-center p-6">
+          <Card className="max-w-md text-center">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 justify-center">
+                <Sparkles className="h-5 w-5 text-primary" />
+                Generate Your Personalized Results
+              </CardTitle>
+              <CardDescription>
+                Your personalized insights are ready to be generated based on your contributions and engagement
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                onClick={() => generateMutation.mutate()}
+                disabled={generateMutation.isPending}
+                size="lg"
+                className="w-full"
+                data-testid="button-generate-results"
+              >
+                {generateMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Generating Results...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Generate My Results
+                  </>
+                )}
+              </Button>
+              {generateMutation.error && (
+                <p className="text-sm text-destructive mt-4">
+                  {(generateMutation.error as any).message || "Failed to generate results"}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   if (error && !personalizedResults) {
     return (
