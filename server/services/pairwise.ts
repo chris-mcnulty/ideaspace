@@ -12,104 +12,162 @@ export interface VotingProgress {
   isComplete: boolean;
 }
 
+// Track recent pairs to avoid repetition (in-memory, per-session)
+const recentPairsCache = new Map<string, Array<{ noteA: string; noteB: string }>>();
+const MAX_RECENT_PAIRS = 10;
+
 /**
  * Calculate the next pair of notes for a participant to vote on
- * Uses RANDOM pairing - selects two random notes that can be compared
- * Allows repeats (participants don't need to vote on all pairs)
+ * Uses weighted random pairing - prioritizes less-seen pairs while avoiding repetition
  * Randomizes left/right positioning
  * 
  * @param notes - All notes in the workspace
- * @param existingVotes - Not used (random pairs allow repeats)
+ * @param existingVotes - Votes already cast by this participant (used to track what they've seen)
  * @param scope - 'all' for cross-category voting, 'within_categories' to only pair notes in same category
+ * @param participantId - Optional participant ID for caching recent pairs
  */
 export function getNextPair(
   notes: Note[],
   existingVotes: Vote[],
-  scope: "all" | "within_categories" = "all"
+  scope: "all" | "within_categories" = "all",
+  participantId?: string
 ): NotePair | null {
   if (notes.length < 2) {
     return null;
   }
 
-  // For category-scoped voting, group notes by category
-  if (scope === "within_categories") {
-    const notesByCategory = new Map<string | null, Note[]>();
-    
-    for (const note of notes) {
-      const categoryId = note.manualCategoryId || null;
-      if (!notesByCategory.has(categoryId)) {
-        notesByCategory.set(categoryId, []);
+  // Filter to visible notes only
+  const visibleNotes = notes.filter(n => n.visibleInRanking !== false);
+  
+  if (visibleNotes.length < 2) {
+    return null;
+  }
+
+  // Get recent pairs for this participant to avoid repetition
+  const cacheKey = participantId || 'anonymous';
+  const recentPairs = recentPairsCache.get(cacheKey) || [];
+  
+  // Generate all possible pairs
+  const allPairs: Array<{ noteA: Note; noteB: Note }> = [];
+  
+  for (let i = 0; i < visibleNotes.length; i++) {
+    for (let j = i + 1; j < visibleNotes.length; j++) {
+      // For category-scoped voting, only include pairs from same category
+      if (scope === "within_categories") {
+        if (visibleNotes[i].manualCategoryId !== visibleNotes[j].manualCategoryId) {
+          continue;
+        }
       }
-      notesByCategory.get(categoryId)!.push(note);
+      allPairs.push({ noteA: visibleNotes[i], noteB: visibleNotes[j] });
     }
+  }
+  
+  if (allPairs.length === 0) {
+    return null;
+  }
+
+  // Calculate how many times each pair has been voted on by this participant
+  const pairVoteCounts = new Map<string, number>();
+  for (const vote of existingVotes) {
+    const pairKey = [vote.winnerNoteId, vote.loserNoteId].sort().join('|');
+    pairVoteCounts.set(pairKey, (pairVoteCounts.get(pairKey) || 0) + 1);
+  }
+
+  // Score pairs: lower score = less seen = higher priority
+  // Also penalize pairs that were shown recently
+  const scoredPairs = allPairs.map(pair => {
+    const pairKey = [pair.noteA.id, pair.noteB.id].sort().join('|');
+    const voteCount = pairVoteCounts.get(pairKey) || 0;
     
-    // Filter to categories with at least 2 notes
-    const validCategories = Array.from(notesByCategory.values()).filter(
-      categoryNotes => categoryNotes.length >= 2
+    // Check if this pair was shown recently
+    const recentIndex = recentPairs.findIndex(rp => 
+      (rp.noteA === pair.noteA.id && rp.noteB === pair.noteB.id) ||
+      (rp.noteA === pair.noteB.id && rp.noteB === pair.noteA.id)
     );
+    const recencyPenalty = recentIndex >= 0 ? (MAX_RECENT_PAIRS - recentIndex) * 2 : 0;
     
-    if (validCategories.length === 0) {
-      return null; // No categories have enough notes to pair
-    }
-    
-    // Randomly select a category
-    const randomCategory = validCategories[Math.floor(Math.random() * validCategories.length)];
-    
-    // Randomly select two different notes from that category
-    const index1 = Math.floor(Math.random() * randomCategory.length);
-    let index2 = Math.floor(Math.random() * randomCategory.length);
-    
-    // Ensure index2 is different from index1
-    while (index2 === index1) {
-      index2 = Math.floor(Math.random() * randomCategory.length);
-    }
-    
-    // Randomly decide which note goes on left vs right
-    const noteA = Math.random() < 0.5 ? randomCategory[index1] : randomCategory[index2];
-    const noteB = noteA === randomCategory[index1] ? randomCategory[index2] : randomCategory[index1];
-    
-    return { noteA, noteB };
-  }
-  
-  // For cross-category voting, select any two random notes
-  const index1 = Math.floor(Math.random() * notes.length);
-  let index2 = Math.floor(Math.random() * notes.length);
-  
-  // Ensure index2 is different from index1
-  while (index2 === index1) {
-    index2 = Math.floor(Math.random() * notes.length);
-  }
-  
+    return {
+      pair,
+      score: voteCount + recencyPenalty + Math.random() * 0.5 // Add small random factor for variety
+    };
+  });
+
+  // Sort by score ascending (lowest = least seen/recent)
+  scoredPairs.sort((a, b) => a.score - b.score);
+
+  // Select from the least-seen pairs with some randomization
+  // Pick randomly from the bottom 25% of pairs (or at least 3)
+  const poolSize = Math.max(3, Math.floor(scoredPairs.length * 0.25));
+  const selectedIndex = Math.floor(Math.random() * poolSize);
+  const selected = scoredPairs[selectedIndex].pair;
+
   // Randomly decide which note goes on left vs right
-  const noteA = Math.random() < 0.5 ? notes[index1] : notes[index2];
-  const noteB = noteA === notes[index1] ? notes[index2] : notes[index1];
-  
+  const [noteA, noteB] = Math.random() < 0.5 
+    ? [selected.noteA, selected.noteB] 
+    : [selected.noteB, selected.noteA];
+
+  // Update recent pairs cache
+  recentPairs.unshift({ noteA: noteA.id, noteB: noteB.id });
+  if (recentPairs.length > MAX_RECENT_PAIRS) {
+    recentPairs.pop();
+  }
+  recentPairsCache.set(cacheKey, recentPairs);
+
   return { noteA, noteB };
 }
 
 /**
  * Calculate voting progress for a participant
- * With random pairing and repeats allowed, there's no fixed "total pairs" to complete
- * Progress simply tracks number of votes cast
+ * Shows how many unique pairs have been voted on vs total possible pairs
  * 
  * @param notes - All notes in the workspace
  * @param existingVotes - Votes already cast by this participant
- * @param scope - Not used for random pairing (kept for API compatibility)
+ * @param scope - 'all' or 'within_categories'
  */
 export function calculateProgress(
   notes: Note[],
   existingVotes: Vote[],
   scope: "all" | "within_categories" = "all"
 ): VotingProgress {
-  // With random pairing and repeats, we just track vote count
-  // No concept of "total pairs" or "completion percentage"
-  const completedPairs = existingVotes.length;
+  // Filter to visible notes
+  const visibleNotes = notes.filter(n => n.visibleInRanking !== false);
   
+  // Calculate total possible pairs
+  let totalPairs = 0;
+  
+  if (scope === "within_categories") {
+    // Count pairs within each category
+    const notesByCategory = new Map<string | null, number>();
+    for (const note of visibleNotes) {
+      const catId = note.manualCategoryId || null;
+      notesByCategory.set(catId, (notesByCategory.get(catId) || 0) + 1);
+    }
+    Array.from(notesByCategory.values()).forEach(count => {
+      if (count >= 2) {
+        totalPairs += (count * (count - 1)) / 2;
+      }
+    });
+  } else {
+    // All possible pairs
+    totalPairs = (visibleNotes.length * (visibleNotes.length - 1)) / 2;
+  }
+
+  // Count unique pairs that have been voted on
+  const votedPairs = new Set<string>();
+  for (const vote of existingVotes) {
+    const pairKey = [vote.winnerNoteId, vote.loserNoteId].sort().join('|');
+    votedPairs.add(pairKey);
+  }
+  
+  const completedPairs = votedPairs.size;
+  const percentComplete = totalPairs > 0 ? Math.round((completedPairs / totalPairs) * 100) : 0;
+  const isComplete = completedPairs >= totalPairs;
+
   return {
-    totalPairs: 0, // Not applicable for random pairing
+    totalPairs,
     completedPairs,
-    percentComplete: 0, // Not applicable for random pairing
-    isComplete: false, // Never "complete" with random pairing
+    percentComplete,
+    isComplete,
   };
 }
 
@@ -135,4 +193,12 @@ export function calculateVoteStats(
   }
   
   return winCounts;
+}
+
+/**
+ * Clear recent pairs cache for a participant
+ * Call when participant leaves or session ends
+ */
+export function clearRecentPairsCache(participantId: string): void {
+  recentPairsCache.delete(participantId);
 }

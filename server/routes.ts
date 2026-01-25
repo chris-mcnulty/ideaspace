@@ -2894,6 +2894,109 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Push idea as seed note (creates a note from the idea for voting/display)
+  app.post("/api/ideas/:id/push-as-seed", requireFacilitator, async (req, res) => {
+    try {
+      const ideaId = req.params.id;
+      const idea = await storage.getIdea(ideaId);
+      
+      if (!idea) {
+        return res.status(404).json({ error: "Idea not found" });
+      }
+      
+      // Check if a seed note already exists for this idea
+      const existingNotes = await storage.getNotesBySpace(idea.spaceId);
+      const existingSeed = existingNotes.find(n => n.sourceIdeaId === ideaId);
+      
+      if (existingSeed) {
+        return res.status(400).json({ error: "Seed note already exists for this idea" });
+      }
+      
+      // Get or create a system/facilitator participant
+      const participants = await storage.getParticipantsBySpace(idea.spaceId);
+      let facilitatorParticipant = participants.find(p => p.displayName === "Facilitator");
+      
+      if (!facilitatorParticipant) {
+        // Create facilitator participant
+        facilitatorParticipant = await storage.createParticipant({
+          spaceId: idea.spaceId,
+          userId: null,
+          displayName: "Facilitator",
+          isGuest: false,
+          isOnline: true,
+          profileData: { role: "facilitator" },
+        });
+      }
+      
+      // Create seed note from idea
+      const seedNote = await storage.createNote({
+        spaceId: idea.spaceId,
+        participantId: facilitatorParticipant.id,
+        content: idea.content,
+        manualCategoryId: idea.manualCategoryId || null,
+        isSeed: true,
+        sourceIdeaId: ideaId,
+        visibleInRanking: true,
+        visibleInMarketplace: true,
+      });
+      
+      // Update the idea to mark as pushed
+      await storage.updateIdea(ideaId, { showOnIdeationBoard: true });
+      
+      // Broadcast updates
+      broadcastToSpace(idea.spaceId, { 
+        type: "note_created", 
+        data: seedNote 
+      });
+      broadcastToSpace(idea.spaceId, { 
+        type: "idea_updated", 
+        data: { ...idea, showOnIdeationBoard: true }
+      });
+      
+      res.status(201).json(seedNote);
+    } catch (error) {
+      console.error("Failed to push idea as seed:", error);
+      res.status(500).json({ error: "Failed to push idea as seed" });
+    }
+  });
+  
+  // Remove seed idea (deletes the corresponding note)
+  app.delete("/api/ideas/:id/remove-seed", requireFacilitator, async (req, res) => {
+    try {
+      const ideaId = req.params.id;
+      const idea = await storage.getIdea(ideaId);
+      
+      if (!idea) {
+        return res.status(404).json({ error: "Idea not found" });
+      }
+      
+      // Find and delete the seed note
+      const notes = await storage.getNotesBySpace(idea.spaceId);
+      const seedNote = notes.find(n => n.sourceIdeaId === ideaId);
+      
+      if (seedNote) {
+        await storage.deleteNote(seedNote.id);
+        broadcastToSpace(idea.spaceId, { 
+          type: "note_deleted", 
+          data: { id: seedNote.id }
+        });
+      }
+      
+      // Update the idea
+      await storage.updateIdea(ideaId, { showOnIdeationBoard: false });
+      
+      broadcastToSpace(idea.spaceId, { 
+        type: "idea_updated", 
+        data: { ...idea, showOnIdeationBoard: false }
+      });
+      
+      res.status(200).json({ success: true });
+    } catch (error) {
+      console.error("Failed to remove seed:", error);
+      res.status(500).json({ error: "Failed to remove seed" });
+    }
+  });
+  
   // Bulk import ideas (CSV/JSON)
   app.post("/api/spaces/:spaceId/ideas/import", requireFacilitator, async (req, res) => {
     try {
@@ -3555,7 +3658,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Calculate next pair and progress using the workspace's pairwise scope
       const pairwiseScope = (space.pairwiseScope || "all") as "all" | "within_categories";
-      const nextPair = getNextPair(notes, existingVotes, pairwiseScope);
+      const nextPair = getNextPair(notes, existingVotes, pairwiseScope, participantId);
       const progress = calculateProgress(notes, existingVotes, pairwiseScope);
       
       if (!nextPair) {

@@ -152,6 +152,36 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
     }
   });
   
+  const pushAsSeedMutation = useMutation({
+    mutationFn: async (ideaId: string) => {
+      const response = await apiRequest('POST', `/api/ideas/${ideaId}/push-as-seed`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/ideas`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/notes`] });
+      toast({ title: "Idea pushed to participant boards as seed" });
+    },
+    onError: () => {
+      toast({ title: "Failed to push seed idea", variant: "destructive" });
+    }
+  });
+  
+  const removeSeedMutation = useMutation({
+    mutationFn: async (ideaId: string) => {
+      const response = await apiRequest('DELETE', `/api/ideas/${ideaId}/remove-seed`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/ideas`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/notes`] });
+      toast({ title: "Seed idea removed from boards" });
+    },
+    onError: () => {
+      toast({ title: "Failed to remove seed idea", variant: "destructive" });
+    }
+  });
+  
   const bulkDeleteMutation = useMutation({
     mutationFn: async (ideaIds: string[]) => {
       const response = await apiRequest('DELETE', '/api/ideas/bulk', { spaceId, ideaIds });
@@ -784,15 +814,16 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
                             </DropdownMenuItem>
                             <DropdownMenuItem 
                               onClick={() => {
-                                updateIdeaMutation.mutate({
-                                  id: idea.id,
-                                  showOnIdeationBoard: !idea.showOnIdeationBoard
-                                });
+                                if (idea.showOnIdeationBoard) {
+                                  removeSeedMutation.mutate(idea.id);
+                                } else {
+                                  pushAsSeedMutation.mutate(idea.id);
+                                }
                               }}
                               data-testid={`menuitem-toggle-seed-${idea.id}`}
                             >
                               <Sparkles className="w-4 h-4 mr-2" />
-                              {idea.showOnIdeationBoard ? 'Remove from Ideation' : 'Show as Seed Idea'}
+                              {idea.showOnIdeationBoard ? 'Remove from Ideation' : 'Push as Seed Idea'}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem 

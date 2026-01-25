@@ -256,10 +256,10 @@ function ComprehensiveResultsTable({
                 <td className="p-3 text-right">
                   <div className="text-sm">
                     <div className="font-semibold">
-                      {item.pairwiseWins}/{item.pairwiseTotal}
+                      {item.pairwiseWins}W / {item.pairwiseTotal - item.pairwiseWins}L
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {item.pairwiseTotal > 0 ? `${item.winRate.toFixed(1)}% win rate` : 'No votes'}
+                      {item.pairwiseTotal > 0 ? `${item.winRate.toFixed(0)}% (${item.pairwiseTotal} matchups)` : 'No votes yet'}
                     </div>
                   </div>
                 </td>
@@ -296,6 +296,7 @@ export default function FacilitatorWorkspace() {
   const [isAddNoteDialogOpen, setIsAddNoteDialogOpen] = useState(false);
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
   const [newNoteContent, setNewNoteContent] = useState("");
+  const [newNoteCategoryId, setNewNoteCategoryId] = useState<string | null>(null);
   const [mergedNoteContent, setMergedNoteContent] = useState("");
   const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
   const [rewriteDialogNote, setRewriteDialogNote] = useState<Note | null>(null);
@@ -345,6 +346,22 @@ export default function FacilitatorWorkspace() {
         // Invalidate modules query to refetch and update tabs
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/modules`] });
         console.log('[FacilitatorWorkspace] Module configuration updated, invalidating modules query');
+        break;
+      case 'vote_recorded':
+        // Real-time vote updates for facilitator
+        queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/votes`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/voting-stats`] });
+        console.log('[FacilitatorWorkspace] Vote recorded, refreshing voting data');
+        break;
+      case 'ranking_updated':
+        // Real-time ranking updates
+        queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/stack-ranking-leaderboard`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/ranking-progress`] });
+        break;
+      case 'allocation_updated':
+        // Real-time marketplace allocation updates
+        queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/marketplace-leaderboard`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/marketplace-progress`] });
         break;
     }
   }, [params.space, toast]);
@@ -678,7 +695,7 @@ export default function FacilitatorWorkspace() {
 
   // Add note mutation
   const addNoteMutation = useMutation({
-    mutationFn: async (content: string) => {
+    mutationFn: async ({ content, categoryId }: { content: string; categoryId?: string | null }) => {
       // Always use or create a dedicated "Facilitator" participant for facilitator-created notes
       // This ensures proper attribution instead of using other participants
       let facilitatorParticipantId = participants.find(p => p.displayName === "Facilitator")?.id;
@@ -701,7 +718,7 @@ export default function FacilitatorWorkspace() {
         spaceId: params.space,
         participantId: facilitatorParticipantId,
         content,
-        category: null,
+        manualCategoryId: categoryId || null,
         isAiCategory: false,
       });
       return await response.json();
@@ -710,9 +727,10 @@ export default function FacilitatorWorkspace() {
       queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/notes`] });
       setIsAddNoteDialogOpen(false);
       setNewNoteContent("");
+      setNewNoteCategoryId(null);
       toast({
         title: "Note added",
-        description: "The note has been preloaded successfully",
+        description: "The note has been added successfully",
       });
     },
     onError: (error: Error) => {
@@ -1341,7 +1359,15 @@ export default function FacilitatorWorkspace() {
             Track participant voting progress
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={() => setIsAddNoteDialogOpen(true)}
+            data-testid="button-add-note-voting"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Note
+          </Button>
           <Button
             variant="default"
             onClick={() => navigateParticipantsMutation.mutate("vote")}
@@ -2278,6 +2304,80 @@ export default function FacilitatorWorkspace() {
                 </>
               ) : (
                 "Save Changes"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Note Dialog */}
+      <Dialog open={isAddNoteDialogOpen} onOpenChange={setIsAddNoteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Note</DialogTitle>
+            <DialogDescription>
+              Create a new note that will appear on participant boards and in voting modules.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Textarea
+              value={newNoteContent}
+              onChange={(e) => setNewNoteContent(e.target.value)}
+              rows={4}
+              placeholder="Enter note content..."
+              data-testid="input-add-note-content"
+            />
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Category (optional)</label>
+              <Select
+                value={newNoteCategoryId || "__none__"}
+                onValueChange={(value) => setNewNoteCategoryId(value === "__none__" ? null : value)}
+              >
+                <SelectTrigger data-testid="select-add-note-category">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No category</SelectItem>
+                  {manualCategories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsAddNoteDialogOpen(false);
+                setNewNoteContent("");
+                setNewNoteCategoryId(null);
+              }}
+              data-testid="button-cancel-add-note"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (newNoteContent.trim()) {
+                  addNoteMutation.mutate({
+                    content: newNoteContent.trim(),
+                    categoryId: newNoteCategoryId,
+                  });
+                }
+              }}
+              disabled={addNoteMutation.isPending || !newNoteContent.trim()}
+              data-testid="button-save-add-note"
+            >
+              {addNoteMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                "Add Note"
               )}
             </Button>
           </DialogFooter>

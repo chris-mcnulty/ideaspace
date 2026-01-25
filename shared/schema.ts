@@ -177,6 +177,8 @@ export const notes = pgTable("notes", {
   isManualOverride: boolean("is_manual_override").notNull().default(false), // True when facilitator manually assigns category
   visibleInRanking: boolean("visible_in_ranking").notNull().default(true), // Facilitator can hide from ranking phase
   visibleInMarketplace: boolean("visible_in_marketplace").notNull().default(true), // Facilitator can hide from marketplace phase
+  isSeed: boolean("is_seed").notNull().default(false), // True when note was pushed from Ideas Hub as seed idea
+  sourceIdeaId: varchar("source_idea_id").references(() => ideas.id), // Links back to source idea if this is a seed
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
