@@ -50,6 +50,7 @@ export default function PriorityMatrix({
   const [yAxisLabel, setYAxisLabel] = useState('Effort');
   const [localPositions, setLocalPositions] = useState<Map<string, Position>>(new Map());
   const [wsConnection, setWsConnection] = useState<WebSocket | null>(null);
+  const localPositionsRef = useRef<Map<string, Position>>(new Map());
 
   // Fetch ideas
   const { data: ideas = [], isLoading: ideasLoading } = useQuery<Idea[]>({
@@ -116,8 +117,8 @@ export default function PriorityMatrix({
   // Initialize axis labels from matrix data
   useEffect(() => {
     if (matrix) {
-      setXAxisLabel(matrix.xAxisLabel);
-      setYAxisLabel(matrix.yAxisLabel);
+      setXAxisLabel(prev => prev !== matrix.xAxisLabel ? matrix.xAxisLabel : prev);
+      setYAxisLabel(prev => prev !== matrix.yAxisLabel ? matrix.yAxisLabel : prev);
     }
   }, [matrix]);
 
@@ -128,6 +129,7 @@ export default function PriorityMatrix({
       posMap.set(pos.ideaId, { x: pos.xCoord, y: pos.yCoord });
     });
     setLocalPositions(posMap);
+    localPositionsRef.current = posMap;
   }, [positions]);
 
   // WebSocket connection for real-time updates
@@ -152,6 +154,8 @@ export default function PriorityMatrix({
         setLocalPositions(prev => {
           const newPositions = new Map(prev);
           newPositions.set(data.ideaId, { x: data.xCoord, y: data.yCoord });
+          // Keep ref in sync
+          localPositionsRef.current = newPositions;
           return newPositions;
         });
       }
@@ -224,6 +228,8 @@ export default function PriorityMatrix({
       setLocalPositions(prev => {
         const newPositions = new Map(prev);
         newPositions.set(draggedIdea.id, { x: newX, y: newY });
+        // Keep ref in sync for handleEnd to use
+        localPositionsRef.current = newPositions;
         return newPositions;
       });
 
@@ -252,19 +258,16 @@ export default function PriorityMatrix({
 
     const handleEnd = () => {
       if (draggedIdea) {
-        // Get the final position using a callback to ensure we have the latest state
-        setLocalPositions(prev => {
-          const finalPos = prev.get(draggedIdea.id);
-          if (finalPos) {
-            // Save to backend
-            updatePositionMutation.mutate({
-              ideaId: draggedIdea.id,
-              xCoord: finalPos.x,
-              yCoord: finalPos.y,
-            });
-          }
-          return prev;
-        });
+        // Get the final position from ref (always up-to-date without dependency)
+        const finalPos = localPositionsRef.current.get(draggedIdea.id);
+        if (finalPos) {
+          // Save to backend
+          updatePositionMutation.mutate({
+            ideaId: draggedIdea.id,
+            xCoord: finalPos.x,
+            yCoord: finalPos.y,
+          });
+        }
       }
       setDraggedIdea(null);
     };
@@ -329,44 +332,44 @@ export default function PriorityMatrix({
             data-testid="matrix-grid"
           >
             {/* Axis Labels */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full pb-2">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full pb-2 pointer-events-none">
               <span className="text-sm font-medium text-muted-foreground">
                 High {yAxisLabel}
               </span>
             </div>
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full pt-2">
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full pt-2 pointer-events-none">
               <span className="text-sm font-medium text-muted-foreground">
                 Low {yAxisLabel}
               </span>
             </div>
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full pr-2">
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full pr-2 pointer-events-none">
               <span className="text-sm font-medium text-muted-foreground">
                 Low {xAxisLabel}
               </span>
             </div>
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full pl-2">
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full pl-2 pointer-events-none">
               <span className="text-sm font-medium text-muted-foreground">
                 High {xAxisLabel}
               </span>
             </div>
 
             {/* Grid Lines */}
-            <div className="absolute inset-0">
+            <div className="absolute inset-0 pointer-events-none">
               <div className="absolute left-1/2 top-0 bottom-0 w-px bg-border" />
               <div className="absolute top-1/2 left-0 right-0 h-px bg-border" />
             </div>
 
             {/* Quadrant Labels */}
-            <div className="absolute top-2 left-2 text-xs text-muted-foreground">
+            <div className="absolute top-2 left-2 text-xs text-muted-foreground pointer-events-none">
               Low {xAxisLabel} / High {yAxisLabel}
             </div>
-            <div className="absolute top-2 right-2 text-xs text-muted-foreground">
+            <div className="absolute top-2 right-2 text-xs text-muted-foreground pointer-events-none">
               High {xAxisLabel} / High {yAxisLabel}
             </div>
-            <div className="absolute bottom-2 left-2 text-xs text-muted-foreground">
+            <div className="absolute bottom-2 left-2 text-xs text-muted-foreground pointer-events-none">
               Low {xAxisLabel} / Low {yAxisLabel}
             </div>
-            <div className="absolute bottom-2 right-2 text-xs text-muted-foreground">
+            <div className="absolute bottom-2 right-2 text-xs text-muted-foreground pointer-events-none">
               High {xAxisLabel} / Low {yAxisLabel}
             </div>
 
