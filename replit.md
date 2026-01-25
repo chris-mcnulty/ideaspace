@@ -1,5 +1,17 @@
 # Nebula - Multi-Tenant Collaborative Envisioning Platform
 
+## Related Projects
+- **Vega**: Business strategy management application.
+  - Repository: https://github.com/chris-mcnulty/synozur-vega
+  - Features: Multi-tenant, Entra SSO integration.
+  - Status: Active project on Replit.
+
+## Backlog
+- [ ] Implement robust session handling from Vega to improve session persistence in Nebula.
+- [ ] Increase font size for 8-digit codes in Facilitator Dashboard (My Workspaces) - Completed
+- [ ] Increase font size for 8-digit codes in Share Links Dialog - Completed
+- [ ] Increase font size for 8-digit codes on Home Screen (Landing Page) - Completed
+
 ## Overview
 Nebula is a multi-tenant web application for structured collaborative envisioning sessions. It enables facilitators to guide cohorts through real-time ideation, AI-powered categorization, voting, and ranking, culminating in personalized results. The platform aims to provide a robust environment for organizations to conduct effective envisioning workshops.
 
