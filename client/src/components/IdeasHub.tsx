@@ -691,17 +691,17 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
                               data-testid={`textarea-edit-${idea.id}`}
                             />
                             <Select
-                              value={editingIdea.manualCategoryId || ''}
+                              value={editingIdea.manualCategoryId || '__none__'}
                               onValueChange={(val) => setEditingIdea({
                                 ...editingIdea,
-                                manualCategoryId: val || null
+                                manualCategoryId: val === '__none__' ? null : val
                               })}
                             >
                               <SelectTrigger data-testid={`select-category-${idea.id}`}>
                                 <SelectValue placeholder="Select category" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">No category</SelectItem>
+                                <SelectItem value="__none__">No category</SelectItem>
                                 {categories.map((cat) => (
                                   <SelectItem key={cat.id} value={cat.id}>
                                     {cat.name}
@@ -942,13 +942,13 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
                 <Label htmlFor="category">Category (optional)</Label>
                 <Select
                   value={newIdea.category}
-                  onValueChange={(val) => setNewIdea({ ...newIdea, category: val })}
+                  onValueChange={(val) => setNewIdea({ ...newIdea, category: val === '__none__' ? '' : val })}
                 >
                   <SelectTrigger data-testid="select-new-idea-category">
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No category</SelectItem>
+                    <SelectItem value="__none__">No category</SelectItem>
                     {categories.map((cat) => (
                       <SelectItem key={cat.id} value={cat.id}>
                         {cat.name}
@@ -1134,12 +1134,12 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
             </DialogHeader>
             
             <div>
-              <Select value={bulkCategoryId} onValueChange={setBulkCategoryId}>
+              <Select value={bulkCategoryId || '__none__'} onValueChange={(val) => setBulkCategoryId(val === '__none__' ? '' : val)}>
                 <SelectTrigger data-testid="select-bulk-category">
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Remove category</SelectItem>
+                  <SelectItem value="__none__">Remove category</SelectItem>
                   {categories.map((cat) => (
                     <SelectItem key={cat.id} value={cat.id}>
                       {cat.name}
