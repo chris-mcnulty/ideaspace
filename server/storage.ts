@@ -575,8 +575,32 @@ export class DbStorage implements IStorage {
 
   async deleteSpace(id: string): Promise<boolean> {
     // Delete all associated data first to avoid foreign key constraints
+    // Note: Some child tables (staircase_positions, priority_matrix_positions, idea_contributions)
+    // use onDelete: "cascade" and will be automatically deleted when parent records are removed
+    
+    // Phase 1: Delete records that reference other workspace data
     await Promise.all([
-      // Delete notes and their dependencies
+      // Delete survey responses (references survey questions)
+      db.delete(surveyResponses).where(eq(surveyResponses.spaceId, id)),
+      // Delete document workspace access
+      db.delete(documentWorkspaceAccess).where(eq(documentWorkspaceAccess.spaceId, id)),
+    ]);
+    
+    // Phase 2: Delete parent records
+    await Promise.all([
+      // Delete staircase modules
+      db.delete(staircaseModules).where(eq(staircaseModules.spaceId, id)),
+      // Delete priority matrices
+      db.delete(priorityMatrices).where(eq(priorityMatrices.spaceId, id)),
+      // Delete ideas
+      db.delete(ideas).where(eq(ideas.spaceId, id)),
+      // Delete survey questions
+      db.delete(surveyQuestions).where(eq(surveyQuestions.spaceId, id)),
+      // Delete workspace module runs
+      db.delete(workspaceModuleRuns).where(eq(workspaceModuleRuns.spaceId, id)),
+      // Delete workspace modules
+      db.delete(workspaceModules).where(eq(workspaceModules.spaceId, id)),
+      // Delete notes
       db.delete(notes).where(eq(notes.spaceId, id)),
       // Delete votes
       db.delete(votes).where(eq(votes.spaceId, id)),
