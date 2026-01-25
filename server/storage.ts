@@ -574,56 +574,48 @@ export class DbStorage implements IStorage {
   }
 
   async deleteSpace(id: string): Promise<boolean> {
+    // Helper to safely delete from a table (ignores "table does not exist" errors for production compatibility)
+    const safeDelete = async (deletePromise: Promise<any>) => {
+      try {
+        await deletePromise;
+      } catch (error: any) {
+        // Ignore "relation does not exist" errors (42P01) - table may not exist in production
+        if (error.code !== '42P01') {
+          throw error;
+        }
+      }
+    };
+    
     // Delete all associated data first to avoid foreign key constraints
     // Note: Some child tables (staircase_positions, priority_matrix_positions, idea_contributions)
     // use onDelete: "cascade" and will be automatically deleted when parent records are removed
     
     // Phase 1: Delete records that reference other workspace data
     await Promise.all([
-      // Delete survey responses (references survey questions)
-      db.delete(surveyResponses).where(eq(surveyResponses.spaceId, id)),
-      // Delete document workspace access
-      db.delete(documentWorkspaceAccess).where(eq(documentWorkspaceAccess.spaceId, id)),
+      safeDelete(db.delete(surveyResponses).where(eq(surveyResponses.spaceId, id))),
+      safeDelete(db.delete(documentWorkspaceAccess).where(eq(documentWorkspaceAccess.spaceId, id))),
     ]);
     
     // Phase 2: Delete parent records
     await Promise.all([
-      // Delete staircase modules
-      db.delete(staircaseModules).where(eq(staircaseModules.spaceId, id)),
-      // Delete priority matrices
-      db.delete(priorityMatrices).where(eq(priorityMatrices.spaceId, id)),
-      // Delete ideas
-      db.delete(ideas).where(eq(ideas.spaceId, id)),
-      // Delete survey questions
-      db.delete(surveyQuestions).where(eq(surveyQuestions.spaceId, id)),
-      // Delete workspace module runs
-      db.delete(workspaceModuleRuns).where(eq(workspaceModuleRuns.spaceId, id)),
-      // Delete workspace modules
-      db.delete(workspaceModules).where(eq(workspaceModules.spaceId, id)),
-      // Delete notes
-      db.delete(notes).where(eq(notes.spaceId, id)),
-      // Delete votes
-      db.delete(votes).where(eq(votes.spaceId, id)),
-      // Delete rankings
-      db.delete(rankings).where(eq(rankings.spaceId, id)),
-      // Delete marketplace allocations
-      db.delete(marketplaceAllocations).where(eq(marketplaceAllocations.spaceId, id)),
-      // Delete participants
-      db.delete(participants).where(eq(participants.spaceId, id)),
-      // Delete access requests
-      db.delete(accessRequests).where(eq(accessRequests.spaceId, id)),
-      // Delete categories
-      db.delete(categories).where(eq(categories.spaceId, id)),
-      // Delete space facilitators
-      db.delete(spaceFacilitators).where(eq(spaceFacilitators.spaceId, id)),
-      // Delete cohort results
-      db.delete(cohortResults).where(eq(cohortResults.spaceId, id)),
-      // Delete personalized results
-      db.delete(personalizedResults).where(eq(personalizedResults.spaceId, id)),
-      // Delete knowledge base documents scoped to this workspace
-      db.delete(knowledgeBaseDocuments).where(eq(knowledgeBaseDocuments.spaceId, id)),
-      // Delete AI usage logs for this workspace
-      db.delete(aiUsageLog).where(eq(aiUsageLog.spaceId, id)),
+      safeDelete(db.delete(staircaseModules).where(eq(staircaseModules.spaceId, id))),
+      safeDelete(db.delete(priorityMatrices).where(eq(priorityMatrices.spaceId, id))),
+      safeDelete(db.delete(ideas).where(eq(ideas.spaceId, id))),
+      safeDelete(db.delete(surveyQuestions).where(eq(surveyQuestions.spaceId, id))),
+      safeDelete(db.delete(workspaceModuleRuns).where(eq(workspaceModuleRuns.spaceId, id))),
+      safeDelete(db.delete(workspaceModules).where(eq(workspaceModules.spaceId, id))),
+      safeDelete(db.delete(notes).where(eq(notes.spaceId, id))),
+      safeDelete(db.delete(votes).where(eq(votes.spaceId, id))),
+      safeDelete(db.delete(rankings).where(eq(rankings.spaceId, id))),
+      safeDelete(db.delete(marketplaceAllocations).where(eq(marketplaceAllocations.spaceId, id))),
+      safeDelete(db.delete(participants).where(eq(participants.spaceId, id))),
+      safeDelete(db.delete(accessRequests).where(eq(accessRequests.spaceId, id))),
+      safeDelete(db.delete(categories).where(eq(categories.spaceId, id))),
+      safeDelete(db.delete(spaceFacilitators).where(eq(spaceFacilitators.spaceId, id))),
+      safeDelete(db.delete(cohortResults).where(eq(cohortResults.spaceId, id))),
+      safeDelete(db.delete(personalizedResults).where(eq(personalizedResults.spaceId, id))),
+      safeDelete(db.delete(knowledgeBaseDocuments).where(eq(knowledgeBaseDocuments.spaceId, id))),
+      safeDelete(db.delete(aiUsageLog).where(eq(aiUsageLog.spaceId, id))),
     ]);
 
     // Finally, delete the workspace itself
