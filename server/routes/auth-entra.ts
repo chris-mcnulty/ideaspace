@@ -76,16 +76,7 @@ function getRedirectUri(req: Request): string {
   
   const protocol = forwardedProto || (process.env.NODE_ENV === 'production' ? 'https' : req.protocol);
   const host = forwardedHost || req.get('host') || 'localhost:5000';
-  const redirectUri = `${protocol}://${host}/auth/entra/callback`;
-  
-  console.log('[Entra SSO] Headers:', {
-    'x-forwarded-proto': req.get('x-forwarded-proto'),
-    'x-forwarded-host': req.get('x-forwarded-host'),
-    'host': req.get('host'),
-    'computed': redirectUri
-  });
-  
-  return redirectUri;
+  return `${protocol}://${host}/auth/entra/callback`;
 }
 
 // Check if Entra SSO is enabled
@@ -115,8 +106,6 @@ function generateState(): string {
 // Initiate Entra SSO login
 router.get('/auth/entra/login', async (req: Request, res: Response) => {
   try {
-    console.log('[Entra SSO Login] Starting, sessionID:', req.sessionID);
-    
     const client = getMsalClient();
     
     // Generate PKCE codes
@@ -155,10 +144,9 @@ router.get('/auth/entra/login', async (req: Request, res: Response) => {
     // Explicitly save session before redirect to ensure PKCE codes are persisted
     req.session.save((err) => {
       if (err) {
-        console.error('[Entra SSO Login] Session save error:', err);
+        console.error('[Entra SSO] Session save error:', err);
         return res.redirect(`/auth?error=${encodeURIComponent('Session error')}`);
       }
-      console.log('[Entra SSO Login] Session saved, redirecting to Microsoft. SessionID:', req.sessionID);
       res.redirect(authUrl);
     });
   } catch (error: any) {
@@ -169,11 +157,8 @@ router.get('/auth/entra/login', async (req: Request, res: Response) => {
 
 // Handle Entra SSO callback
 router.get('/auth/entra/callback', async (req: Request, res: Response) => {
-  console.log('[Entra SSO Callback] Received callback, sessionID:', req.sessionID);
-  console.log('[Entra SSO Callback] Session has PKCE:', !!req.session.pkceCodes, 'has state:', !!req.session.oauthState);
   try {
     const { code, error, error_description, state } = req.query;
-    console.log('[Entra SSO Callback] Query params:', { code: code ? 'present' : 'missing', error, state: state ? 'present' : 'missing' });
     
     if (error) {
       console.error('Entra SSO error:', error, error_description);
@@ -271,13 +256,6 @@ router.get('/auth/entra/callback', async (req: Request, res: Response) => {
           console.error('[Entra SSO] Session save error:', err);
           return res.redirect('/login?error=Session error');
         }
-        console.log('[Entra SSO] Session saved successfully:', {
-          sessionId: req.sessionID,
-          userId: req.session.userId,
-          isAuthenticated: req.session.isAuthenticated,
-          passportUser: !!(req.session as any).passport?.user,
-          returnTo
-        });
         res.redirect(returnTo);
       });
     });
