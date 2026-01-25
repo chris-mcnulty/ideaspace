@@ -1,0 +1,224 @@
+2026-01-24 17:23:27.65
+5ef9e2d8
+User
+1:23:27 AM [express] GET /api/auth/entra/status 304 in 685ms :: {"enabled":true,"configured":true}
+2026-01-24 17:23:28.23
+5ef9e2d8
+User
+1:23:28 AM [express] GET /api/auth/oauth-status 304 in 1230ms :: {"enabled":false}
+2026-01-24 17:23:29.57
+5ef9e2d8
+User
+[Entra SSO Login] Starting, sessionID: IKjraIe5y1Zw1oxmISe4VT3DD32XXNF2
+2026-01-24 17:23:29.57
+5ef9e2d8
+User
+computed: 'https://nebula.synozur.com/auth/entra/callback'
+2026-01-24 17:23:29.57
+5ef9e2d8
+User
+}
+2026-01-24 17:23:29.57
+5ef9e2d8
+User
+host: 'nebula.synozur.com',
+2026-01-24 17:23:29.57
+5ef9e2d8
+User
+[Entra SSO] Headers: {
+2026-01-24 17:23:29.57
+5ef9e2d8
+User
+'x-forwarded-proto': 'https',
+2026-01-24 17:23:29.57
+5ef9e2d8
+User
+'x-forwarded-host': 'nebula.synozur.com',
+2026-01-24 17:23:29.57
+5ef9e2d8
+User
+[MSAL] [Sun, 25 Jan 2026 01:23:29 GMT] : [7c149f6d-a6b3-4c73-b195-361e628b6835] : @azure/msal-node@5.0.2 : Verbose - createAuthority called
+2026-01-24 17:23:29.57
+5ef9e2d8
+User
+[MSAL] [Sun, 25 Jan 2026 01:23:29 GMT] : [7c149f6d-a6b3-4c73-b195-361e628b6835] : @azure/msal-node@5.0.2 : Verbose - initializeRequestScopes called
+2026-01-24 17:23:29.57
+5ef9e2d8
+User
+[MSAL] [Sun, 25 Jan 2026 01:23:29 GMT] : [] : @azure/msal-node@5.0.2 : Info - getAuthCodeUrl called
+2026-01-24 17:23:29.58
+5ef9e2d8
+User
+[MSAL] [Sun, 25 Jan 2026 01:23:29 GMT] : [7c149f6d-a6b3-4c73-b195-361e628b6835] : @azure/msal-node@5.0.2 : Verbose - Found cloud discovery metadata from hardcoded values.
+2026-01-24 17:23:29.58
+5ef9e2d8
+User
+[MSAL] [Sun, 25 Jan 2026 01:23:29 GMT] : [7c149f6d-a6b3-4c73-b195-361e628b6835] : @azure/msal-node@5.0.2 : Verbose - Did not find cloud discovery metadata in the config... Attempting to get cloud discovery metadata from the hardcoded values.
+2026-01-24 17:23:29.58
+5ef9e2d8
+User
+[MSAL] [Sun, 25 Jan 2026 01:23:29 GMT] : [7c149f6d-a6b3-4c73-b195-361e628b6835] : @azure/msal-node@5.0.2 : Verbose - Attempting to get cloud discovery metadata from authority configuration
+2026-01-24 17:23:29.58
+5ef9e2d8
+User
+[MSAL] [Sun, 25 Jan 2026 01:23:29 GMT] : [7c149f6d-a6b3-4c73-b195-361e628b6835] : @azure/msal-node@5.0.2 : Verbose - Attempting to get endpoint metadata from authority configuration
+2026-01-24 17:23:29.58
+5ef9e2d8
+User
+[MSAL] [Sun, 25 Jan 2026 01:23:29 GMT] : [7c149f6d-a6b3-4c73-b195-361e628b6835] : @azure/msal-node@5.0.2 : Verbose - Did not find endpoint metadata in the config... Attempting to get endpoint metadata from the hardcoded values.
+2026-01-24 17:23:29.58
+5ef9e2d8
+User
+[MSAL] [Sun, 25 Jan 2026 01:23:29 GMT] : [7c149f6d-a6b3-4c73-b195-361e628b6835] : @azure/msal-node@5.0.2 : Verbose - createAuthCodeUrlQueryString: Prompt is select_account, ignoring account hints
+2026-01-24 17:23:29.58
+5ef9e2d8
+User
+[Entra SSO Login] Session saved, redirecting to Microsoft. SessionID: IKjraIe5y1Zw1oxmISe4VT3DD32XXNF2
+2026-01-24 17:23:34.40
+5ef9e2d8
+User
+host: 'nebula.synozur.com',
+2026-01-24 17:23:34.40
+5ef9e2d8
+User
+[Entra SSO Callback] Query params: { code: 'present', error: undefined, state: 'present' }
+2026-01-24 17:23:34.40
+5ef9e2d8
+User
+'x-forwarded-host': 'nebula.synozur.com',
+2026-01-24 17:23:34.40
+5ef9e2d8
+User
+'x-forwarded-proto': 'https',
+2026-01-24 17:23:34.40
+5ef9e2d8
+User
+[Entra SSO Callback] Session has PKCE: true has state: true
+2026-01-24 17:23:34.40
+5ef9e2d8
+User
+[Entra SSO] Headers: {
+2026-01-24 17:23:34.40
+5ef9e2d8
+User
+}
+2026-01-24 17:23:34.40
+5ef9e2d8
+User
+[Entra SSO Callback] Received callback, sessionID: IKjraIe5y1Zw1oxmISe4VT3DD32XXNF2
+2026-01-24 17:23:34.40
+5ef9e2d8
+User
+computed: 'https://nebula.synozur.com/auth/entra/callback'
+2026-01-24 17:23:34.40
+5ef9e2d8
+User
+[MSAL] [Sun, 25 Jan 2026 01:23:34 GMT] : [] : @azure/msal-node@5.0.2 : Info - acquireTokenByCode called
+2026-01-24 17:23:34.40
+5ef9e2d8
+User
+[MSAL] [Sun, 25 Jan 2026 01:23:34 GMT] : [e885af32-c82a-4162-aaca-4e0c2bff7293] : @azure/msal-node@5.0.2 : Verbose - createAuthority called
+2026-01-24 17:23:34.40
+5ef9e2d8
+User
+[MSAL] [Sun, 25 Jan 2026 01:23:34 GMT] : [e885af32-c82a-4162-aaca-4e0c2bff7293] : @azure/msal-node@5.0.2 : Verbose - initializeRequestScopes called
+2026-01-24 17:23:34.40
+5ef9e2d8
+User
+[MSAL] [Sun, 25 Jan 2026 01:23:34 GMT] : [e885af32-c82a-4162-aaca-4e0c2bff7293] : @azure/msal-node@5.0.2 : Verbose - buildOauthClientConfiguration called
+2026-01-24 17:23:34.40
+5ef9e2d8
+User
+[MSAL] [Sun, 25 Jan 2026 01:23:34 GMT] : [e885af32-c82a-4162-aaca-4e0c2bff7293] : @azure/msal-node@5.0.2 : Verbose - Attempting to get endpoint metadata from authority configuration
+2026-01-24 17:23:34.40
+5ef9e2d8
+User
+[MSAL] [Sun, 25 Jan 2026 01:23:34 GMT] : [e885af32-c82a-4162-aaca-4e0c2bff7293] : @azure/msal-node@5.0.2 : Verbose - Found cloud discovery metadata from hardcoded values.
+2026-01-24 17:23:34.40
+5ef9e2d8
+User
+[MSAL] [Sun, 25 Jan 2026 01:23:34 GMT] : [e885af32-c82a-4162-aaca-4e0c2bff7293] : @azure/msal-node@5.0.2 : Verbose - Attempting to get cloud discovery metadata from authority configuration
+2026-01-24 17:23:34.40
+5ef9e2d8
+User
+[MSAL] [Sun, 25 Jan 2026 01:23:34 GMT] : [e885af32-c82a-4162-aaca-4e0c2bff7293] : @azure/msal-node@5.0.2 : Verbose - Did not find endpoint metadata in the config... Attempting to get endpoint metadata from the hardcoded values.
+2026-01-24 17:23:34.40
+5ef9e2d8
+User
+[MSAL] [Sun, 25 Jan 2026 01:23:34 GMT] : [e885af32-c82a-4162-aaca-4e0c2bff7293] : @azure/msal-node@5.0.2 : Verbose - Did not find cloud discovery metadata in the config... Attempting to get cloud discovery metadata from the hardcoded values.
+2026-01-24 17:23:34.40
+5ef9e2d8
+User
+[MSAL] [Sun, 25 Jan 2026 01:23:34 GMT] : [e885af32-c82a-4162-aaca-4e0c2bff7293] : @azure/msal-node@5.0.2 : Info - Building oauth client configuration with the following authority: https://login.microsoftonline.com/common/oauth2/v2.0/token.
+2026-01-24 17:23:34.40
+5ef9e2d8
+User
+[MSAL] [Sun, 25 Jan 2026 01:23:34 GMT] : [e885af32-c82a-4162-aaca-4e0c2bff7293] : @azure/msal-node@5.0.2 : Verbose - Auth code client created
+2026-01-24 17:23:34.69
+5ef9e2d8
+User
+[MSAL] [Sun, 25 Jan 2026 01:23:34 GMT] : [e885af32-c82a-4162-aaca-4e0c2bff7293] : @azure/msal-common@16.0.2 : Verbose - setCachedAccount called
+2026-01-24 17:23:34.92
+5ef9e2d8
+User
+sessionId: 'huR3cLr-OUihcs6X1xTz5T7PHC-3u0qs',
+2026-01-24 17:23:34.92
+5ef9e2d8
+User
+userId: 'f3186542-879f-4903-99d1-375a3a5dda7e',
+2026-01-24 17:23:34.92
+5ef9e2d8
+User
+}
+2026-01-24 17:23:34.92
+5ef9e2d8
+User
+isAuthenticated: true,
+2026-01-24 17:23:34.92
+5ef9e2d8
+User
+passportUser: true,
+2026-01-24 17:23:34.92
+5ef9e2d8
+User
+[Entra SSO] Session saved successfully: {
+2026-01-24 17:23:34.92
+5ef9e2d8
+User
+returnTo: '/'
+2026-01-24 17:23:35.82
+5ef9e2d8
+User
+cookies: 'present'
+2026-01-24 17:23:35.82
+5ef9e2d8
+User
+isAuthenticated: true,
+2026-01-24 17:23:35.82
+5ef9e2d8
+User
+sessionUserId: 'f3186542-879f-4903-99d1-375a3a5dda7e',
+2026-01-24 17:23:35.82
+5ef9e2d8
+User
+hasSession: true,
+2026-01-24 17:23:35.82
+5ef9e2d8
+User
+[Auth Check] /api/auth/me: {
+2026-01-24 17:23:35.82
+5ef9e2d8
+User
+}
+2026-01-24 17:23:35.82
+5ef9e2d8
+User
+isPassportAuth: true,
+2026-01-24 17:23:35.82
+5ef9e2d8
+User
+sessionID: 'huR3cLr-OUihcs6X1xTz5T7PHC-3u0qs',
+2026-01-24 17:23:35.82
+5ef9e2d8
+User
+1:23:35 AM [express] GET /api/auth/me 200 in 2ms :: {"id":"f3186542-879f-4903-99d1-375a3a5dda7e","em…
