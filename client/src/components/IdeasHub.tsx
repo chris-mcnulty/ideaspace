@@ -52,6 +52,8 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [bulkAction, setBulkAction] = useState<'delete' | 'categorize' | 'push-as-seed' | null>(null);
   const [bulkCategoryId, setBulkCategoryId] = useState<string>('');
+  const [noteBulkAction, setNoteBulkAction] = useState<'delete' | 'categorize' | null>(null);
+  const [noteBulkCategoryId, setNoteBulkCategoryId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'ideas' | 'notes'>('ideas');
   
   // Form state for new idea
@@ -265,6 +267,71 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
     }
   });
   
+  // Bulk delete notes mutation
+  const bulkDeleteNotesMutation = useMutation({
+    mutationFn: async (noteIds: string[]) => {
+      const response = await apiRequest('POST', '/api/notes/bulk-delete', { ids: noteIds });
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/notes`] });
+      setSelectedNotes(new Set());
+      setNoteBulkAction(null);
+      toast({ title: `${data.deleted || selectedNotes.size} notes deleted successfully` });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete notes", variant: "destructive" });
+    }
+  });
+  
+  // Bulk categorize notes mutation
+  const bulkCategorizeNotesMutation = useMutation({
+    mutationFn: async ({ noteIds, categoryId }: { noteIds: string[]; categoryId: string | null }) => {
+      const response = await apiRequest('POST', '/api/notes/bulk-categorize', { ids: noteIds, categoryId });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/notes`] });
+      setSelectedNotes(new Set());
+      setNoteBulkAction(null);
+      setNoteBulkCategoryId('');
+      toast({ title: `${selectedNotes.size} notes categorized successfully` });
+    },
+    onError: () => {
+      toast({ title: "Failed to categorize notes", variant: "destructive" });
+    }
+  });
+  
+  // Delete single note mutation
+  const deleteNoteMutation = useMutation({
+    mutationFn: async (noteId: string) => {
+      const response = await apiRequest('DELETE', `/api/notes/${noteId}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/notes`] });
+      toast({ title: "Note deleted successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete note", variant: "destructive" });
+    }
+  });
+  
+  // Update single note mutation
+  const updateNoteMutation = useMutation({
+    mutationFn: async ({ noteId, data }: { noteId: string; data: any }) => {
+      const response = await apiRequest('PATCH', `/api/notes/${noteId}`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/notes`] });
+      toast({ title: "Note updated successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update note", variant: "destructive" });
+    }
+  });
+  
   // Upload image mutation
   const uploadImageMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -347,6 +414,21 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
       return;
     }
     bulkPushAsSeedMutation.mutate(ideasToSeed);
+  };
+  
+  // Handler for bulk note delete
+  const handleBulkDeleteNotes = () => {
+    if (selectedNotes.size === 0) return;
+    bulkDeleteNotesMutation.mutate(Array.from(selectedNotes));
+  };
+  
+  // Handler for bulk note categorize
+  const handleBulkCategorizeNotes = () => {
+    if (selectedNotes.size === 0) return;
+    bulkCategorizeNotesMutation.mutate({
+      noteIds: Array.from(selectedNotes),
+      categoryId: noteBulkCategoryId || null
+    });
   };
   
   // Parse import data
@@ -902,16 +984,38 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
                       Promote All to Ideas
                     </Button>
                     {selectedNotes.size > 0 && (
-                      <Button 
-                        onClick={handlePromoteNotes}
-                        size="sm"
-                        variant="outline"
-                        disabled={promoteNotesMutation.isPending}
-                        data-testid="button-promote-selected-notes"
-                      >
-                        <ArrowRight className="w-4 h-4 mr-1" />
-                        Promote Selected ({selectedNotes.size})
-                      </Button>
+                      <>
+                        <Button 
+                          onClick={handlePromoteNotes}
+                          size="sm"
+                          variant="outline"
+                          disabled={promoteNotesMutation.isPending}
+                          data-testid="button-promote-selected-notes"
+                        >
+                          <ArrowRight className="w-4 h-4 mr-1" />
+                          Promote Selected ({selectedNotes.size})
+                        </Button>
+                        
+                        <Button 
+                          onClick={() => setNoteBulkAction('categorize')}
+                          size="sm"
+                          variant="outline"
+                          data-testid="button-bulk-categorize-notes"
+                        >
+                          <Tag className="w-4 h-4 mr-1" />
+                          Categorize ({selectedNotes.size})
+                        </Button>
+                        
+                        <Button 
+                          onClick={() => setNoteBulkAction('delete')}
+                          size="sm"
+                          variant="destructive"
+                          data-testid="button-bulk-delete-notes"
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Delete ({selectedNotes.size})
+                        </Button>
+                      </>
                     )}
                   </>
                 )}
@@ -949,6 +1053,7 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
                     {/* Note Items - Enhanced legibility */}
                     {notes.map((note: Note) => {
                       const participant = getParticipantById(note.participantId);
+                      const noteCategory = getCategoryById(note.manualCategoryId);
                       return (
                         <div 
                           key={note.id}
@@ -974,21 +1079,71 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
                                 <Users className="w-3 h-3 mr-1" />
                                 {participant?.displayName || 'Anonymous'}
                               </Badge>
+                              {noteCategory && (
+                                <Badge 
+                                  variant="outline" 
+                                  className="text-xs"
+                                  data-testid={`badge-note-category-${note.id}`}
+                                >
+                                  <Tag className="w-3 h-3 mr-1" />
+                                  {noteCategory.name}
+                                </Badge>
+                              )}
                               <span className="text-xs text-muted-foreground font-mono">
                                 {new Date(note.createdAt).toLocaleString()}
                               </span>
                             </div>
                           </div>
                           
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            onClick={() => promoteNotesMutation.mutate([note.id])}
-                            disabled={promoteNotesMutation.isPending}
-                            data-testid={`button-promote-note-${note.id}`}
-                          >
-                            <ArrowRight className="w-4 h-4" />
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              onClick={() => promoteNotesMutation.mutate([note.id])}
+                              disabled={promoteNotesMutation.isPending}
+                              data-testid={`button-promote-note-${note.id}`}
+                            >
+                              <ArrowRight className="w-4 h-4" />
+                            </Button>
+                            
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  data-testid={`button-note-menu-${note.id}`}
+                                >
+                                  <MoreVertical className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    const newCategory = prompt('Enter category ID or leave empty to remove:');
+                                    if (newCategory !== null) {
+                                      updateNoteMutation.mutate({
+                                        noteId: note.id,
+                                        data: { manualCategoryId: newCategory || null }
+                                      });
+                                    }
+                                  }}
+                                  data-testid={`menu-categorize-note-${note.id}`}
+                                >
+                                  <Tag className="w-4 h-4 mr-2" />
+                                  Assign Category
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => deleteNoteMutation.mutate(note.id)}
+                                  className="text-destructive"
+                                  data-testid={`menu-delete-note-${note.id}`}
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </div>
                       );
                     })}
@@ -1320,6 +1475,94 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
               >
                 <Sprout className="w-4 h-4 mr-1" />
                 {bulkPushAsSeedMutation.isPending ? 'Pushing...' : 'Push as Seeds'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+      
+      {/* Bulk Categorize Notes Dialog */}
+      {noteBulkAction === 'categorize' && (
+        <Dialog open onOpenChange={() => setNoteBulkAction(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Categorize {selectedNotes.size} Notes</DialogTitle>
+              <DialogDescription>
+                Assign a category to the selected notes
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="py-4">
+              <Label htmlFor="note-category">Category</Label>
+              <Select 
+                value={noteBulkCategoryId || '__none__'} 
+                onValueChange={(val) => setNoteBulkCategoryId(val === '__none__' ? '' : val)}
+              >
+                <SelectTrigger data-testid="select-bulk-note-category">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No category</SelectItem>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setNoteBulkAction(null);
+                  setNoteBulkCategoryId('');
+                }}
+                data-testid="button-cancel-bulk-categorize-notes"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleBulkCategorizeNotes}
+                disabled={bulkCategorizeNotesMutation.isPending}
+                data-testid="button-confirm-bulk-categorize-notes"
+              >
+                <Tag className="w-4 h-4 mr-1" />
+                {bulkCategorizeNotesMutation.isPending ? 'Categorizing...' : 'Apply Category'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+      
+      {/* Bulk Delete Notes Confirmation */}
+      {noteBulkAction === 'delete' && (
+        <Dialog open onOpenChange={() => setNoteBulkAction(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete {selectedNotes.size} Notes</DialogTitle>
+              <DialogDescription>
+                This action cannot be undone. Are you sure you want to delete these notes?
+              </DialogDescription>
+            </DialogHeader>
+            
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setNoteBulkAction(null)}
+                data-testid="button-cancel-bulk-delete-notes"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleBulkDeleteNotes}
+                disabled={bulkDeleteNotesMutation.isPending}
+                data-testid="button-confirm-bulk-delete-notes"
+              >
+                <Trash2 className="w-4 h-4 mr-1" />
+                {bulkDeleteNotesMutation.isPending ? 'Deleting...' : 'Delete Notes'}
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -2524,6 +2524,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Protected: Facilitators can bulk categorize notes
+  app.post("/api/notes/bulk-categorize", requireFacilitator, async (req, res) => {
+    try {
+      const { ids, categoryId } = req.body as { ids: string[]; categoryId: string | null };
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: "Invalid note IDs" });
+      }
+      
+      // Update each note with the category
+      let updated = 0;
+      let spaceId: string | null = null;
+      
+      for (const noteId of ids) {
+        const note = await storage.getNote(noteId);
+        if (note) {
+          spaceId = note.spaceId;
+          await storage.updateNote(noteId, { manualCategoryId: categoryId });
+          updated++;
+        }
+      }
+      
+      // Broadcast to WebSocket clients
+      if (spaceId) {
+        broadcastToSpace(spaceId, { type: "notes_updated", data: { ids, categoryId } });
+      }
+      
+      res.json({ updated, categoryId });
+    } catch (error) {
+      console.error("Failed to bulk categorize notes:", error);
+      res.status(500).json({ error: "Failed to categorize notes" });
+    }
+  });
+
   // Get all categories for a workspace
   app.get("/api/spaces/:spaceId/categories", async (req, res) => {
     try {
