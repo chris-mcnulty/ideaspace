@@ -24,6 +24,7 @@ import Marketplace from "@/pages/Marketplace";
 import Survey from "@/pages/Survey";
 import JoinPage from "@/pages/JoinPage";
 import Results from "@/pages/Results";
+import PublicResults from "@/pages/PublicResults";
 import PriorityMatrixParticipant from "@/pages/PriorityMatrixParticipant";
 import StaircaseParticipant from "@/pages/StaircaseParticipant";
 
@@ -67,6 +68,7 @@ function Router() {
       <Route path="/o/:org/s/:space/priority-matrix" component={PriorityMatrixParticipant} />
       <Route path="/o/:org/s/:space/staircase" component={StaircaseParticipant} />
       <Route path="/o/:org/s/:space/results" component={Results} />
+      <Route path="/o/:org/s/:space/public-results" component={PublicResults} />
       <Route path="/o/:org/s/:space/facilitate" component={FacilitatorWorkspace} />
       
       <Route path="/showcase" component={ComponentShowcase} />

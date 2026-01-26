@@ -61,6 +61,9 @@ import {
   Settings,
   Grid3x3,
   TrendingUp,
+  Share2,
+  Copy,
+  ExternalLink,
 } from "lucide-react";
 import type { Organization, Space, Note, Participant, Category, User, Idea, WorkspaceModule } from "@shared/schema";
 import { Leaderboard } from "@/components/Leaderboard";
@@ -1889,6 +1892,50 @@ export default function FacilitatorWorkspace() {
         </Card>
       ) : (
         <div className="space-y-6">
+          {/* Share Results Card */}
+          <Card className="bg-primary/5 border-primary/20">
+            <CardContent className="p-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <Share2 className="h-4 w-4" />
+                    Share Results Publicly
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Share a public link to results - no login required
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const url = `${window.location.origin}/o/${params.org}/s/${params.space}/public-results`;
+                      navigator.clipboard.writeText(url);
+                      toast({
+                        title: "Link Copied!",
+                        description: "Public results link copied to clipboard",
+                      });
+                    }}
+                    data-testid="button-copy-public-results-link"
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copy Link
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => window.open(`/o/${params.org}/s/${params.space}/public-results`, '_blank')}
+                    data-testid="button-view-public-results"
+                  >
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    View Public Page
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

@@ -5124,6 +5124,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Public endpoint - Get cohort results without authentication (for sharing)
+  app.get("/api/spaces/:spaceId/public-results", async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      const cohortResults = await storage.getCohortResultsBySpace(spaceId);
+
+      // Return the most recent cohort result if available
+      if (cohortResults.length > 0) {
+        const result = cohortResults[0];
+        // Return a sanitized version without sensitive data
+        res.json({
+          id: result.id,
+          spaceId: result.spaceId,
+          summary: result.summary,
+          keyThemes: result.keyThemes || [],
+          topIdeas: result.topIdeas || [],
+          insights: typeof result.insights === 'string' ? result.insights.split('\n').filter(Boolean) : [],
+          recommendations: typeof result.recommendations === 'string' ? result.recommendations.split('\n').filter(Boolean) : [],
+          generatedAt: result.createdAt,
+        });
+      } else {
+        res.status(404).json({ error: "No results available for this workspace" });
+      }
+    } catch (error) {
+      console.error("Failed to fetch public results:", error);
+      res.status(500).json({ error: "Failed to fetch results" });
+    }
+  });
+
   // Generate personalized results for a participant
   app.post("/api/spaces/:spaceId/results/personalized", createWorkspaceAccessMiddleware({ allowClosed: true }), async (req, res) => {
     try {
