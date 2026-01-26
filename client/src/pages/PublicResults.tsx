@@ -12,7 +12,15 @@ interface CohortResultData {
   spaceId: string;
   summary: string;
   keyThemes: string[];
-  topIdeas: Array<{ title: string; description: string; votes: number }>;
+  topIdeas: Array<{ 
+    noteId: string; 
+    content: string; 
+    category?: string;
+    pairwiseWins?: number;
+    bordaScore?: number;
+    marketplaceCoins?: number;
+    overallRank: number;
+  }>;
   insights: string[];
   recommendations: string[];
   participantCount: number;
@@ -184,14 +192,19 @@ export default function PublicResults() {
                       )}
                     </div>
                     <div className="flex-1">
-                      <h4 className="font-semibold">{idea.title}</h4>
-                      {idea.description && (
-                        <p className="text-sm text-muted-foreground mt-1">{idea.description}</p>
+                      <h4 className="font-semibold">{idea.content}</h4>
+                      {idea.category && (
+                        <Badge variant="secondary" className="mt-1">{idea.category}</Badge>
                       )}
                     </div>
-                    {idea.votes > 0 && (
-                      <Badge variant="outline">{idea.votes} votes</Badge>
-                    )}
+                    <div className="flex flex-col gap-1 text-right">
+                      {(idea.pairwiseWins !== undefined && idea.pairwiseWins > 0) && (
+                        <Badge variant="outline">{idea.pairwiseWins} wins</Badge>
+                      )}
+                      {(idea.bordaScore !== undefined && idea.bordaScore > 0) && (
+                        <Badge variant="outline">Borda: {idea.bordaScore}</Badge>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

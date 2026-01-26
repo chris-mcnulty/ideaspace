@@ -5137,6 +5137,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Return the most recent cohort result if available
       if (cohortResults.length > 0) {
         const result = cohortResults[0];
+        const metadata = result.metadata as { totalNotes?: number; totalVotes?: number } | null;
+        
+        // Get participant count from the space
+        const participants = await storage.getParticipantsBySpace(spaceId);
+        
         // Return a sanitized version without sensitive data
         res.json({
           id: result.id,
@@ -5146,6 +5151,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           topIdeas: result.topIdeas || [],
           insights: typeof result.insights === 'string' ? result.insights.split('\n').filter(Boolean) : [],
           recommendations: typeof result.recommendations === 'string' ? result.recommendations.split('\n').filter(Boolean) : [],
+          participantCount: participants.length,
+          totalVotes: metadata?.totalVotes || 0,
           generatedAt: result.createdAt,
         });
       } else {
