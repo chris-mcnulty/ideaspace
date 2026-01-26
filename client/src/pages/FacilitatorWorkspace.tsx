@@ -2204,7 +2204,7 @@ export default function FacilitatorWorkspace() {
               <h1 className="text-3xl font-bold tracking-tight">{space.name}</h1>
               <p className="mt-2 text-base text-muted-foreground">{space.purpose}</p>
               <div className="mt-4 flex flex-wrap gap-3">
-                <Badge variant="outline" className="gap-1 font-mono" data-testid="badge-workspace-code">
+                <Badge variant="outline" className="gap-1 font-mono text-[18px]" data-testid="badge-workspace-code">
                   Code: {space.code}
                 </Badge>
                 <Badge variant="outline" className="gap-1">
