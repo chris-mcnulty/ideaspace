@@ -16,6 +16,9 @@ export interface VotingProgress {
 const recentPairsCache = new Map<string, Array<{ noteA: string; noteB: string }>>();
 const MAX_RECENT_PAIRS = 10;
 
+// Track last shown pair with positions to avoid same note in same position
+const lastPairPositions = new Map<string, { leftNoteId: string; rightNoteId: string }>();
+
 /**
  * Calculate the next pair of notes for a participant to vote on
  * Uses weighted random pairing - prioritizes less-seen pairs while avoiding repetition
@@ -101,10 +104,44 @@ export function getNextPair(
   const selectedIndex = Math.floor(Math.random() * poolSize);
   const selected = scoredPairs[selectedIndex].pair;
 
-  // Randomly decide which note goes on left vs right
-  const [noteA, noteB] = Math.random() < 0.5 
-    ? [selected.noteA, selected.noteB] 
-    : [selected.noteB, selected.noteA];
+  // Get the last pair positions to avoid showing same note in same position
+  const lastPositions = lastPairPositions.get(cacheKey);
+  
+  let noteA: Note;
+  let noteB: Note;
+  
+  if (lastPositions) {
+    // Check if either note from selected pair was in the last pair
+    const selectedAWasLeft = selected.noteA.id === lastPositions.leftNoteId;
+    const selectedAWasRight = selected.noteA.id === lastPositions.rightNoteId;
+    const selectedBWasLeft = selected.noteB.id === lastPositions.leftNoteId;
+    const selectedBWasRight = selected.noteB.id === lastPositions.rightNoteId;
+    
+    if (selectedAWasLeft || selectedBWasRight) {
+      // If noteA was on left before, put it on right now (swap positions)
+      // If noteB was on right before, put it on left now
+      noteA = selected.noteB;
+      noteB = selected.noteA;
+    } else if (selectedAWasRight || selectedBWasLeft) {
+      // If noteA was on right before, put it on left now
+      // If noteB was on left before, put it on right now
+      noteA = selected.noteA;
+      noteB = selected.noteB;
+    } else {
+      // Neither note was in the last pair, randomize as before
+      [noteA, noteB] = Math.random() < 0.5 
+        ? [selected.noteA, selected.noteB] 
+        : [selected.noteB, selected.noteA];
+    }
+  } else {
+    // No last pair, randomize as before
+    [noteA, noteB] = Math.random() < 0.5 
+      ? [selected.noteA, selected.noteB] 
+      : [selected.noteB, selected.noteA];
+  }
+
+  // Store the positions we're showing (noteA = left, noteB = right)
+  lastPairPositions.set(cacheKey, { leftNoteId: noteA.id, rightNoteId: noteB.id });
 
   // Update recent pairs cache
   recentPairs.unshift({ noteA: noteA.id, noteB: noteB.id });
@@ -201,4 +238,5 @@ export function calculateVoteStats(
  */
 export function clearRecentPairsCache(participantId: string): void {
   recentPairsCache.delete(participantId);
+  lastPairPositions.delete(participantId);
 }
