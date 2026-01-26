@@ -7,6 +7,7 @@
   - Status: Active project on Replit.
 
 ## Backlog
+- [ ] AI Suggest New Ideas - Generate new idea suggestions based on existing content, workspace purpose, and knowledge base documents
 - [ ] Import templates from CSV (with categories) and edit their contents in the system
 - [ ] Refactor to true multi-tenant auth with Vega-style navigation control; tenants have "Projects" grouping ideaspaces (similar to current workspace grouping)
 - [ ] Show survey results impact in the Results tab - integrate survey responses into cohort results and AI summaries
