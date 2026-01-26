@@ -156,7 +156,7 @@ export default function LandingPage() {
                         onChange={handleCodeChange}
                         onKeyDown={(e) => e.key === "Enter" && handleCodeEntry()}
                         data-testid="input-workspace-code"
-                        className="bg-input/80 text-center text-4xl font-mono font-bold tracking-widest py-6 h-auto"
+                        className="bg-input/80 text-center text-7xl font-mono font-bold tracking-widest py-8 h-auto"
                         maxLength={9}
                         autoComplete="off"
                       />
