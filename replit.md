@@ -10,6 +10,7 @@
 - [ ] Import templates from CSV (with categories) and edit their contents in the system
 - [ ] Refactor to true multi-tenant auth with Vega-style navigation control; tenants have "Projects" grouping ideaspaces (similar to current workspace grouping)
 - [ ] Show survey results impact in the Results tab - integrate survey responses into cohort results and AI summaries
+- [ ] Fix 2x2 Priority Matrix and Staircase drag errors - items error out when moved
 - [x] Implement robust session handling from Vega to improve session persistence in Nebula - Completed
 - [x] Increase font size for 8-digit codes in Facilitator Dashboard (My Workspaces) - Completed
 - [x] Increase font size for 8-digit codes in Share Links Dialog - Completed
