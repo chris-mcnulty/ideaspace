@@ -34,6 +34,7 @@ const WORKSPACE_SECTIONS = [
   { value: "marketplace", label: "Marketplace Allocation", path: "/marketplace" },
   { value: "survey", label: "Survey", path: "/survey" },
   { value: "results", label: "Results", path: "/results" },
+  { value: "public-results", label: "Public Results (No Login)", path: "/public-results" },
 ] as const;
 
 export function ShareLinksDialog({ orgSlug, spaceCode }: ShareLinksDialogProps) {
