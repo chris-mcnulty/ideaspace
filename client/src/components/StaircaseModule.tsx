@@ -185,12 +185,33 @@ export default function StaircaseModule({
     positionsByScore.get(score)?.push(pos);
   });
 
-  // Get category color with fallback to AI category
-  const getCategoryColor = (manualCategoryId?: string | null, aiCategoryId?: string | null) => {
+  // Vibrant color palette for uncategorized items
+  const ideaColors = [
+    '#8B5CF6', // Purple
+    '#3B82F6', // Blue
+    '#10B981', // Emerald
+    '#F59E0B', // Amber
+    '#EF4444', // Red
+    '#EC4899', // Pink
+    '#6366F1', // Indigo
+    '#14B8A6', // Teal
+    '#F97316', // Orange
+    '#84CC16', // Lime
+  ];
+  
+  // Get category color with fallback - uses idea ID for consistent color variety
+  const getCategoryColor = (manualCategoryId?: string | null, aiCategoryId?: string | null, ideaId?: string) => {
     const categoryId = manualCategoryId || aiCategoryId;
-    if (!categoryId) return 'hsl(var(--muted))';
-    const category = categories.find(c => c.id === categoryId);
-    return category?.color || 'hsl(var(--muted))';
+    if (categoryId) {
+      const category = categories.find(c => c.id === categoryId);
+      if (category?.color) return category.color;
+    }
+    // Generate consistent color based on idea ID for variety
+    if (ideaId) {
+      const hash = ideaId.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+      return ideaColors[hash % ideaColors.length];
+    }
+    return ideaColors[0];
   };
 
   // Handle drag start - works with or without existing position
@@ -429,7 +450,7 @@ export default function StaircaseModule({
                         width={90}
                         height={40}
                         rx={6}
-                        fill={getCategoryColor(idea.manualCategoryId)}
+                        fill={getCategoryColor(idea.manualCategoryId, null, idea.id)}
                         stroke={isDragging ? 'hsl(var(--primary))' : 'hsl(var(--border))'}
                         strokeWidth={isDragging ? 2 : 1}
                       />

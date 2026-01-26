@@ -168,8 +168,8 @@ export default function PriorityMatrix({
     };
   }, [spaceId, isReadOnly]);
 
-  // Handle mouse/touch down on idea
-  const handleMouseDown = (e: React.MouseEvent, ideaId: string) => {
+  // Handle pointer down on idea
+  const handlePointerDown = (e: React.PointerEvent, ideaId: string) => {
     if (isReadOnly) return;
     
     const rect = matrixRef.current?.getBoundingClientRect();
@@ -185,105 +185,60 @@ export default function PriorityMatrix({
       currentY: currentPos.y,
     });
 
+    (e.target as Element).setPointerCapture(e.pointerId);
     e.preventDefault();
     e.stopPropagation();
   };
 
-  // Handle touch start on idea
-  const handleTouchStart = (e: React.TouchEvent, ideaId: string) => {
-    if (isReadOnly) return;
+  // Handle pointer move
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!draggedIdea) return;
     
     const rect = matrixRef.current?.getBoundingClientRect();
     if (!rect) return;
 
-    const touch = e.touches[0];
-    const currentPos = localPositions.get(ideaId) || { x: 50, y: 50 };
-    
-    setDraggedIdea({
-      id: ideaId,
-      startX: touch.clientX,
-      startY: touch.clientY,
-      currentX: currentPos.x,
-      currentY: currentPos.y,
+    const deltaX = ((e.clientX - draggedIdea.startX) / rect.width) * 100;
+    const deltaY = ((e.clientY - draggedIdea.startY) / rect.height) * 100;
+
+    const newX = Math.max(0, Math.min(100, draggedIdea.currentX + deltaX));
+    const newY = Math.max(0, Math.min(100, draggedIdea.currentY + deltaY));
+
+    setLocalPositions(prev => {
+      const newPositions = new Map(prev);
+      newPositions.set(draggedIdea.id, { x: newX, y: newY });
+      localPositionsRef.current = newPositions;
+      return newPositions;
     });
 
-    e.preventDefault();
-    e.stopPropagation();
+    // Send real-time update via WebSocket
+    if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+      wsConnection.send(JSON.stringify({
+        type: 'matrix-position-update',
+        spaceId,
+        ideaId: draggedIdea.id,
+        xCoord: newX,
+        yCoord: newY,
+      }));
+    }
   };
 
-  // Handle mouse/touch move
-  useEffect(() => {
+  // Handle pointer up
+  const handlePointerUp = (e: React.PointerEvent) => {
     if (!draggedIdea) return;
-
-    const handleMove = (clientX: number, clientY: number) => {
-      const rect = matrixRef.current?.getBoundingClientRect();
-      if (!rect) return;
-
-      const deltaX = ((clientX - draggedIdea.startX) / rect.width) * 100;
-      const deltaY = ((clientY - draggedIdea.startY) / rect.height) * 100;
-
-      const newX = Math.max(0, Math.min(100, draggedIdea.currentX + deltaX));
-      const newY = Math.max(0, Math.min(100, draggedIdea.currentY + deltaY));
-
-      setLocalPositions(prev => {
-        const newPositions = new Map(prev);
-        newPositions.set(draggedIdea.id, { x: newX, y: newY });
-        // Keep ref in sync for handleEnd to use
-        localPositionsRef.current = newPositions;
-        return newPositions;
+    
+    // Get the final position and save to backend
+    const finalPos = localPositionsRef.current.get(draggedIdea.id);
+    if (finalPos) {
+      updatePositionMutation.mutate({
+        ideaId: draggedIdea.id,
+        xCoord: finalPos.x,
+        yCoord: finalPos.y,
       });
-
-      // Send real-time update via WebSocket
-      if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
-        wsConnection.send(JSON.stringify({
-          type: 'matrix-position-update',
-          spaceId,
-          ideaId: draggedIdea.id,
-          xCoord: newX,
-          yCoord: newY,
-        }));
-      }
-    };
-
-    const handleMouseMove = (e: MouseEvent) => {
-      handleMove(e.clientX, e.clientY);
-    };
-
-    const handleTouchMove = (e: TouchEvent) => {
-      if (e.touches.length > 0) {
-        handleMove(e.touches[0].clientX, e.touches[0].clientY);
-        e.preventDefault();
-      }
-    };
-
-    const handleEnd = () => {
-      if (draggedIdea) {
-        // Get the final position from ref (always up-to-date without dependency)
-        const finalPos = localPositionsRef.current.get(draggedIdea.id);
-        if (finalPos) {
-          // Save to backend
-          updatePositionMutation.mutate({
-            ideaId: draggedIdea.id,
-            xCoord: finalPos.x,
-            yCoord: finalPos.y,
-          });
-        }
-      }
-      setDraggedIdea(null);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleEnd);
-    document.addEventListener('touchmove', handleTouchMove, { passive: false });
-    document.addEventListener('touchend', handleEnd);
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleEnd);
-      document.removeEventListener('touchmove', handleTouchMove);
-      document.removeEventListener('touchend', handleEnd);
-    };
-  }, [draggedIdea, wsConnection, spaceId]);
+    }
+    
+    setDraggedIdea(null);
+    (e.target as Element).releasePointerCapture(e.pointerId);
+  };
 
   // Handle settings save
   const handleSaveSettings = () => {
@@ -323,12 +278,15 @@ export default function PriorityMatrix({
       </div>
 
       {/* Matrix Grid */}
-      <Card className="flex-1 relative overflow-hidden">
+      <Card className="flex-1 relative">
         <CardContent className="p-0 h-full">
           <div 
             ref={matrixRef}
             className="relative w-full h-full min-h-[500px]"
-            style={{ cursor: draggedIdea ? 'grabbing' : 'default' }}
+            style={{ cursor: draggedIdea ? 'grabbing' : 'default', touchAction: 'none' }}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
             data-testid="matrix-grid"
           >
             {/* Axis Labels */}
@@ -383,6 +341,14 @@ export default function PriorityMatrix({
               
               // Use contentPlain if available, otherwise strip HTML from content
               const displayText = idea.contentPlain || idea.content.replace(/<[^>]*>?/gm, '');
+              
+              // Color palette for visual variety
+              const ideaColors = [
+                '#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444',
+                '#EC4899', '#6366F1', '#14B8A6', '#F97316', '#84CC16',
+              ];
+              const hash = idea.id.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+              const ideaColor = category?.color || ideaColors[hash % ideaColors.length];
 
               return (
                 <div
@@ -394,20 +360,30 @@ export default function PriorityMatrix({
                     left: `${position.x}%`,
                     top: `${100 - position.y}%`, // Invert Y axis (top = high)
                     transition: isDragging ? 'none' : 'all 0.2s ease',
+                    touchAction: 'none',
                   }}
-                  onMouseDown={(e) => handleMouseDown(e, idea.id)}
-                  onTouchStart={(e) => handleTouchStart(e, idea.id)}
+                  onPointerDown={(e) => handlePointerDown(e, idea.id)}
                   data-testid={`idea-${idea.id}`}
                 >
-                  <div className={`
-                    bg-card border rounded-lg p-2 shadow-sm
-                    ${isDragging ? 'shadow-lg scale-105' : 'hover:shadow-md'}
-                    ${!isReadOnly ? 'hover:border-primary/50' : ''}
-                    min-w-[100px] max-w-[200px]
-                  `}>
+                  <div 
+                    className={`
+                      bg-card rounded-lg p-2 shadow-sm
+                      ${isDragging ? 'shadow-lg scale-105' : 'hover:shadow-md'}
+                      min-w-[100px] max-w-[200px]
+                    `}
+                    style={{ 
+                      borderWidth: '2px', 
+                      borderStyle: 'solid',
+                      borderColor: ideaColor,
+                    }}
+                  >
                     <p className="text-sm font-medium line-clamp-2">{displayText}</p>
                     {category && (
-                      <Badge variant="secondary" className="mt-1 text-xs">
+                      <Badge 
+                        variant="secondary" 
+                        className="mt-1 text-xs"
+                        style={{ backgroundColor: `${ideaColor}20`, color: ideaColor }}
+                      >
                         {category.name}
                       </Badge>
                     )}
