@@ -1336,13 +1336,36 @@ export default function FacilitatorWorkspace() {
             Create questions and view participant responses
           </p>
         </div>
-        <Button
-          variant="ghost"
-          onClick={() => window.open(`/o/${params.org}/s/${params.space}/survey`, '_blank')}
-          data-testid="button-test-survey"
-        >
-          Test Survey View
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={() => {
+              navigateParticipantsMutation.mutate("ideate");
+              setActiveTab("ideas");
+            }}
+            disabled={navigateParticipantsMutation.isPending}
+            data-testid="button-survey-return-to-ideation"
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Return to Ideation
+          </Button>
+          <Button
+            variant="default"
+            onClick={() => navigateParticipantsMutation.mutate("survey")}
+            disabled={navigateParticipantsMutation.isPending}
+            data-testid="button-navigate-to-survey"
+          >
+            <Users className="mr-2 h-4 w-4" />
+            Bring Participants Here
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => window.open(`/o/${params.org}/s/${params.space}/survey`, '_blank')}
+            data-testid="button-test-survey"
+          >
+            Test Survey View
+          </Button>
+        </div>
       </div>
       <SurveyQuestionsManager spaceId={space.id} />
       <SurveyResultsGrid spaceId={space.id} />
