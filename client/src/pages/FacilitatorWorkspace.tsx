@@ -125,7 +125,8 @@ function ComprehensiveResultsTable({
   // Create Borda score map
   const bordaMap = new Map<string, number>();
   bordaLeaderboard.forEach((item: any) => {
-    bordaMap.set(item.noteId, item.averageBordaScore || item.bordaScore || 0);
+    // Backend returns totalScore as the Borda count score
+    bordaMap.set(item.noteId, item.totalScore || item.averageBordaScore || item.bordaScore || 0);
   });
 
   // Create marketplace coins map
