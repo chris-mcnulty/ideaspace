@@ -56,6 +56,11 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
   const [noteBulkCategoryId, setNoteBulkCategoryId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'ideas' | 'notes'>('ideas');
   
+  // Category creation state
+  const [showCategoryDialog, setShowCategoryDialog] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryColor, setNewCategoryColor] = useState('#8B5CF6');
+  
   // Form state for new idea
   const [newIdea, setNewIdea] = useState({
     content: '',
@@ -329,6 +334,47 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
     },
     onError: () => {
       toast({ title: "Failed to update note", variant: "destructive" });
+    }
+  });
+  
+  // AI Categorize notes mutation
+  const aiCategorizeMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', `/api/spaces/${spaceId}/categorize`);
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/notes`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/categories`] });
+      toast({ 
+        title: "AI Categorization Complete", 
+        description: `${data.categorizedNotes || 0} notes categorized into ${data.categoriesCreated || 0} categories` 
+      });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Categorization failed", 
+        description: error?.message || "Failed to categorize notes with AI",
+        variant: "destructive" 
+      });
+    }
+  });
+  
+  // Create category mutation
+  const createCategoryMutation = useMutation({
+    mutationFn: async ({ name, color }: { name: string; color: string }) => {
+      const response = await apiRequest('POST', `/api/spaces/${spaceId}/categories`, { name, color });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/categories`] });
+      setShowCategoryDialog(false);
+      setNewCategoryName('');
+      setNewCategoryColor('#8B5CF6');
+      toast({ title: "Category created successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to create category", variant: "destructive" });
     }
   });
   
@@ -972,8 +1018,29 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
             <TabsContent value="notes" className="mt-0">
               {/* Notes Toolbar */}
               <div className="flex items-center gap-2 mb-4 flex-wrap">
+                <Button 
+                  onClick={() => setShowCategoryDialog(true)}
+                  size="sm"
+                  variant="outline"
+                  data-testid="button-add-category"
+                >
+                  <FolderPlus className="w-4 h-4 mr-1" />
+                  Add Category
+                </Button>
+                
                 {notes.length > 0 && (
                   <>
+                    <Button 
+                      onClick={() => aiCategorizeMutation.mutate()}
+                      size="sm"
+                      variant="secondary"
+                      disabled={aiCategorizeMutation.isPending}
+                      data-testid="button-ai-categorize"
+                    >
+                      <Sparkles className="w-4 h-4 mr-1" />
+                      {aiCategorizeMutation.isPending ? 'Categorizing...' : 'AI Categorize'}
+                    </Button>
+                    
                     <Button 
                       onClick={handlePromoteAllNotes}
                       size="sm"
@@ -1563,6 +1630,75 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
               >
                 <Trash2 className="w-4 h-4 mr-1" />
                 {bulkDeleteNotesMutation.isPending ? 'Deleting...' : 'Delete Notes'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+      
+      {/* Create Category Dialog */}
+      {showCategoryDialog && (
+        <Dialog open onOpenChange={() => setShowCategoryDialog(false)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create New Category</DialogTitle>
+              <DialogDescription>
+                Add a new category to organize your notes and ideas
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 py-4">
+              <div>
+                <Label htmlFor="category-name">Category Name</Label>
+                <Input
+                  id="category-name"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  placeholder="Enter category name..."
+                  data-testid="input-category-name"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="category-color">Color</Label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    id="category-color"
+                    value={newCategoryColor}
+                    onChange={(e) => setNewCategoryColor(e.target.value)}
+                    className="w-10 h-10 rounded cursor-pointer"
+                    data-testid="input-category-color"
+                  />
+                  <Input
+                    value={newCategoryColor}
+                    onChange={(e) => setNewCategoryColor(e.target.value)}
+                    placeholder="#8B5CF6"
+                    className="flex-1"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowCategoryDialog(false);
+                  setNewCategoryName('');
+                  setNewCategoryColor('#8B5CF6');
+                }}
+                data-testid="button-cancel-create-category"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => createCategoryMutation.mutate({ name: newCategoryName, color: newCategoryColor })}
+                disabled={!newCategoryName.trim() || createCategoryMutation.isPending}
+                data-testid="button-confirm-create-category"
+              >
+                <FolderPlus className="w-4 h-4 mr-1" />
+                {createCategoryMutation.isPending ? 'Creating...' : 'Create Category'}
               </Button>
             </DialogFooter>
           </DialogContent>
