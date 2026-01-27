@@ -2557,6 +2557,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Protected: Facilitators can bulk import notes (one per line)
+  app.post("/api/spaces/:spaceId/notes/bulk-import", requireFacilitator, async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      
+      const { notes: noteContents } = req.body as { notes: string[] };
+      if (!Array.isArray(noteContents) || noteContents.length === 0) {
+        return res.status(400).json({ error: "No notes provided" });
+      }
+      
+      // Limit to prevent abuse
+      if (noteContents.length > 500) {
+        return res.status(400).json({ error: "Maximum 500 notes can be imported at once" });
+      }
+      
+      const createdNotes = [];
+      for (const content of noteContents) {
+        const trimmedContent = content.trim();
+        if (trimmedContent.length === 0) continue;
+        if (trimmedContent.length > 1000) continue; // Skip overly long notes
+        
+        const note = await storage.createNote({
+          spaceId,
+          content: trimmedContent,
+          participantId: null, // Facilitator-created notes have no participant
+        });
+        createdNotes.push(note);
+      }
+      
+      // Broadcast to WebSocket clients
+      if (createdNotes.length > 0) {
+        broadcastToSpace(spaceId, { type: "notes_bulk_imported", data: { count: createdNotes.length } });
+      }
+      
+      res.status(201).json({ 
+        imported: createdNotes.length,
+        skipped: noteContents.length - createdNotes.length
+      });
+    } catch (error) {
+      console.error("Failed to bulk import notes:", error);
+      res.status(500).json({ error: "Failed to import notes" });
+    }
+  });
+
   // Get all categories for a workspace
   app.get("/api/spaces/:spaceId/categories", async (req, res) => {
     try {

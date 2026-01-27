@@ -74,6 +74,12 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
   const [importFile, setImportFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Notes import state
+  const [showImportNotesDialog, setShowImportNotesDialog] = useState(false);
+  const [importNotesText, setImportNotesText] = useState('');
+  const [importNotesFile, setImportNotesFile] = useState<File | null>(null);
+  const notesFileInputRef = useRef<HTMLInputElement>(null);
+  
   // Handle file selection for import
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -92,6 +98,28 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
         setImportData(content || '');
       };
       reader.readAsText(file);
+    }
+  };
+  
+  // Handle file selection for notes import
+  const handleNotesFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImportNotesFile(file);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const content = event.target?.result as string;
+        setImportNotesText(content || '');
+      };
+      reader.readAsText(file);
+    }
+  };
+  
+  // Handle notes import
+  const handleImportNotes = () => {
+    const lines = importNotesText.split('\n').filter(line => line.trim().length > 0);
+    if (lines.length > 0) {
+      importNotesMutation.mutate(lines);
     }
   };
   
@@ -355,6 +383,32 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
       toast({ 
         title: "Categorization failed", 
         description: error?.message || "Failed to categorize notes with AI",
+        variant: "destructive" 
+      });
+    }
+  });
+  
+  // Bulk import notes mutation
+  const importNotesMutation = useMutation({
+    mutationFn: async (noteContents: string[]) => {
+      const response = await apiRequest('POST', `/api/spaces/${spaceId}/notes/bulk-import`, { notes: noteContents });
+      return response.json();
+    },
+    onSuccess: (data: { imported: number; skipped: number }) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/notes`] });
+      setShowImportNotesDialog(false);
+      setImportNotesText('');
+      setImportNotesFile(null);
+      if (notesFileInputRef.current) notesFileInputRef.current.value = '';
+      toast({ 
+        title: "Notes Imported", 
+        description: `${data.imported} notes imported${data.skipped > 0 ? `, ${data.skipped} skipped` : ''}` 
+      });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Import failed", 
+        description: error?.message || "Failed to import notes",
         variant: "destructive" 
       });
     }
@@ -1019,6 +1073,16 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
               {/* Notes Toolbar */}
               <div className="flex items-center gap-2 mb-4 flex-wrap">
                 <Button 
+                  onClick={() => setShowImportNotesDialog(true)}
+                  size="sm"
+                  variant="outline"
+                  data-testid="button-import-notes"
+                >
+                  <Upload className="w-4 h-4 mr-1" />
+                  Import Notes
+                </Button>
+                
+                <Button 
                   onClick={() => setShowCategoryDialog(true)}
                   size="sm"
                   variant="outline"
@@ -1430,6 +1494,103 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
               data-testid="button-import"
             >
               Import Ideas
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Import Notes Dialog */}
+      <Dialog open={showImportNotesDialog} onOpenChange={setShowImportNotesDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Import Notes</DialogTitle>
+            <DialogDescription>
+              Import notes from a text file or paste them directly. One note per line.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* File Upload */}
+            <div>
+              <Label>Select Text File</Label>
+              <div className="flex items-center gap-2 mt-1">
+                <input
+                  ref={notesFileInputRef}
+                  type="file"
+                  accept=".txt,text/plain"
+                  onChange={handleNotesFileSelect}
+                  className="hidden"
+                  data-testid="input-import-notes-file"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => notesFileInputRef.current?.click()}
+                  className="flex-1"
+                  data-testid="button-select-notes-file"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {importNotesFile ? importNotesFile.name : 'Choose text file...'}
+                </Button>
+                {importNotesFile && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setImportNotesFile(null);
+                      setImportNotesText('');
+                      if (notesFileInputRef.current) notesFileInputRef.current.value = '';
+                    }}
+                    data-testid="button-clear-notes-file"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-4">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground">or paste below</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+            
+            <div>
+              <Label htmlFor="import-notes-data">Notes (one per line)</Label>
+              <Textarea
+                id="import-notes-data"
+                value={importNotesText}
+                onChange={(e) => setImportNotesText(e.target.value)}
+                placeholder="Enter one note per line&#10;Second note here&#10;Third note here"
+                className="min-h-[200px] font-mono text-sm"
+                data-testid="textarea-import-notes"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                {importNotesText.split('\n').filter(line => line.trim().length > 0).length} notes detected
+              </p>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowImportNotesDialog(false);
+                setImportNotesText('');
+                setImportNotesFile(null);
+                if (notesFileInputRef.current) notesFileInputRef.current.value = '';
+              }}
+              data-testid="button-cancel-notes-import"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleImportNotes}
+              disabled={!importNotesText.trim() || importNotesMutation.isPending}
+              data-testid="button-import-notes-submit"
+            >
+              {importNotesMutation.isPending ? 'Importing...' : 'Import Notes'}
             </Button>
           </DialogFooter>
         </DialogContent>
