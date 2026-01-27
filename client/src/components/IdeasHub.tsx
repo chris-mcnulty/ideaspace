@@ -632,16 +632,19 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
       filename = `ideas-${spaceId}-${Date.now()}.json`;
       mimeType = 'application/json';
     } else {
-      // Create CSV
+      // Create CSV - include category name instead of ID
       const headers = ['id', 'content', 'contentType', 'category', 'source', 'createdAt'];
-      const rows = dataToExport.map((idea: Idea) => [
-        idea.id,
-        `"${idea.content.replace(/"/g, '""')}"`,
-        idea.contentType,
-        idea.manualCategoryId || '',
-        idea.sourceType,
-        new Date(idea.createdAt).toISOString()
-      ]);
+      const rows = dataToExport.map((idea: Idea) => {
+        const category = idea.manualCategoryId ? categories.find(c => c.id === idea.manualCategoryId) : null;
+        return [
+          idea.id,
+          `"${idea.content.replace(/"/g, '""')}"`,
+          idea.contentType,
+          category ? `"${category.name.replace(/"/g, '""')}"` : '',
+          idea.sourceType,
+          new Date(idea.createdAt).toISOString()
+        ];
+      });
       
       content = [headers.join(','), ...rows.map((r: any[]) => r.join(','))].join('\n');
       filename = `ideas-${spaceId}-${Date.now()}.csv`;
