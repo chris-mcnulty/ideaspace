@@ -2580,6 +2580,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "User not authenticated" });
       }
       
+      // Get or create participant record for this facilitator in this workspace
+      let participant = await storage.getParticipantByUserAndSpace(userId, spaceId);
+      if (!participant) {
+        participant = await storage.createParticipant({
+          spaceId,
+          odtaId: `facilitator-${userId}`,
+          displayName: (req.user as any)?.displayName || (req.user as any)?.email || 'Facilitator',
+          userId,
+        });
+      }
+      
       const createdNotes = [];
       for (const content of noteContents) {
         const trimmedContent = content.trim();
@@ -2589,7 +2600,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const note = await storage.createNote({
           spaceId,
           content: trimmedContent,
-          participantId: userId, // Use facilitator's ID for imported notes
+          participantId: participant.id,
         });
         createdNotes.push(note);
       }
