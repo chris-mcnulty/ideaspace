@@ -2581,7 +2581,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Get or create participant record for this facilitator in this workspace
-      let participant = await storage.getParticipantByUserAndSpace(userId, spaceId);
+      let participant = await storage.getParticipantBySpaceAndUserId(spaceId, userId);
       if (!participant) {
         participant = await storage.createParticipant({
           spaceId,
