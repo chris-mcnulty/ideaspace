@@ -2575,6 +2575,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Maximum 500 notes can be imported at once" });
       }
       
+      const userId = (req.user as any)?.id;
+      if (!userId) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+      
       const createdNotes = [];
       for (const content of noteContents) {
         const trimmedContent = content.trim();
@@ -2584,7 +2589,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const note = await storage.createNote({
           spaceId,
           content: trimmedContent,
-          participantId: null, // Facilitator-created notes have no participant
+          participantId: userId, // Use facilitator's ID for imported notes
         });
         createdNotes.push(note);
       }
