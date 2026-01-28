@@ -1829,6 +1829,39 @@ export default function FacilitatorWorkspace() {
 
   const renderResultsTab = () => (
     <div className="space-y-6">
+      {/* Module Header - matches pattern of other modules */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="text-2xl font-bold">Results</h2>
+          <p className="text-muted-foreground mt-1">
+            View comprehensive results, generate AI summaries, and share with participants
+          </p>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={() => {
+              navigateParticipantsMutation.mutate("ideate");
+              setActiveTab("ideas");
+            }}
+            disabled={navigateParticipantsMutation.isPending}
+            data-testid="button-results-return-to-ideation"
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Return to Ideation
+          </Button>
+          <Button
+            variant="default"
+            onClick={() => navigateParticipantsMutation.mutate("results")}
+            disabled={navigateParticipantsMutation.isPending}
+            data-testid="button-navigate-to-results"
+          >
+            <Users className="mr-2 h-4 w-4" />
+            Bring Participants Here
+          </Button>
+        </div>
+      </div>
+
       {/* Comprehensive Voting Results Table */}
       <Card>
         <CardHeader>
@@ -2105,15 +2138,6 @@ export default function FacilitatorWorkspace() {
             </Card>
             
             <div className="flex gap-3">
-              <Button
-                variant="default"
-                onClick={() => navigateParticipantsMutation.mutate("results")}
-                disabled={navigateParticipantsMutation.isPending}
-                data-testid="button-navigate-to-results"
-              >
-                <Users className="mr-2 h-4 w-4" />
-                Send to Results
-              </Button>
               <Button
                 variant="outline"
                 onClick={() => generateCohortResultsMutation.mutate()}
