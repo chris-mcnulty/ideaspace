@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -73,14 +73,15 @@ export default function PairwiseVoting() {
     }
   }, [org, space]);
 
-  // Fetch next pair
+  // Fetch next pair - with staleTime to prevent unnecessary refetches
   const { data, isLoading, error, refetch } = useQuery<NextPairResponse>({
     queryKey: [`/api/spaces/${params.space}/participants/${participantId}/next-pair`],
     enabled: !!participantId,
     refetchOnWindowFocus: false,
+    staleTime: 30000, // Consider data fresh for 30 seconds
   });
 
-  // Record vote mutation
+  // Record vote mutation with optimistic updates
   const voteMutation = useMutation({
     mutationFn: async ({ winnerId, loserId }: { winnerId: string; loserId: string }) => {
       const response = await apiRequest("POST", "/api/votes", {
@@ -91,9 +92,19 @@ export default function PairwiseVoting() {
       });
       return await response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/participants/${participantId}/next-pair`] });
-      refetch();
+    onSuccess: (responseData) => {
+      // Backend returns next pair directly - update cache immediately
+      if (responseData.nextPair !== undefined) {
+        const queryKey = [`/api/spaces/${params.space}/participants/${participantId}/next-pair`];
+        queryClient.setQueryData<NextPairResponse>(queryKey, (oldData) => ({
+          pair: responseData.nextPair,
+          progress: responseData.progress || oldData?.progress || { totalPairs: 0, completedPairs: 0, percentComplete: 0, isComplete: false },
+          message: responseData.message,
+        }));
+      } else {
+        // Fallback: invalidate to trigger refetch (but NOT both invalidate and refetch)
+        queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/participants/${participantId}/next-pair`] });
+      }
     },
     onError: (error: Error) => {
       toast({

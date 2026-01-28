@@ -3800,7 +3800,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
       
-      res.status(201).json(vote);
+      // Return the next pair directly to avoid a separate API call
+      // This eliminates one round-trip per vote for much faster UX
+      try {
+        const space = await storage.getSpace(vote.spaceId);
+        const notes = await storage.getNotesBySpace(vote.spaceId);
+        const existingVotes = await storage.getVotesByParticipant(vote.participantId);
+        
+        const pairwiseScope = (space?.pairwiseScope || "all") as "all" | "within_categories";
+        const nextPair = getNextPair(notes, existingVotes, pairwiseScope, vote.participantId);
+        const progress = calculateProgress(notes, existingVotes, pairwiseScope);
+        
+        res.status(201).json({
+          ...vote,
+          nextPair: nextPair,
+          progress,
+          message: !nextPair ? (progress.isComplete ? "All pairs voted" : "Not enough notes to vote") : undefined,
+        });
+      } catch (nextPairError) {
+        // If getting next pair fails, still return the vote successfully
+        console.error("Failed to get next pair after vote:", nextPairError);
+        res.status(201).json(vote);
+      }
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: error.errors });
