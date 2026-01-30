@@ -1,6 +1,6 @@
 import { openai } from "./openai";
 import { db } from "../db";
-import { notes, votes, rankings, marketplaceAllocations, participants, spaces, knowledgeBaseDocuments, cohortResults, personalizedResults, categories } from "@shared/schema";
+import { notes, votes, rankings, marketplaceAllocations, participants, spaces, knowledgeBaseDocuments, cohortResults, personalizedResults, categories, workspaceModules } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { CohortResult, PersonalizedResult } from "@shared/schema";
@@ -52,6 +52,23 @@ export async function generateCohortResults(
   if (!space) {
     throw new Error("Workspace not found");
   }
+
+  // Fetch enabled modules from the workspace_modules table
+  const enabledModulesData = await db
+    .select()
+    .from(workspaceModules)
+    .where(and(
+      eq(workspaceModules.spaceId, spaceId),
+      eq(workspaceModules.enabled, true)
+    ));
+  
+  const enabledModuleTypes = enabledModulesData.map(m => m.moduleType);
+  const hasPairwiseVoting = enabledModuleTypes.includes('pairwise-voting');
+  const hasStackRanking = enabledModuleTypes.includes('stack-ranking');
+  const hasMarketplace = enabledModuleTypes.includes('marketplace');
+  const hasSurvey = enabledModuleTypes.includes('survey');
+  const hasPriorityMatrix = enabledModuleTypes.includes('priority-matrix');
+  const hasStaircase = enabledModuleTypes.includes('staircase');
 
   // Fetch all notes for this workspace
   const allNotes = await db
@@ -148,22 +165,35 @@ export async function generateCohortResults(
     ? `\n\nRelevant Knowledge Base Documents:\n${kbDocs.map((doc: any) => `- ${doc.title}: ${doc.description || 'No description'}`).join('\n')}`
     : '';
 
+  // Build module-aware data summary
+  const enabledModulesDescription = [
+    hasPairwiseVoting && 'Pairwise Voting',
+    hasStackRanking && 'Stack Ranking (Borda Count)',
+    hasMarketplace && 'Marketplace Allocation',
+    hasSurvey && 'Survey',
+    hasPriorityMatrix && '2x2 Priority Matrix',
+    hasStaircase && 'Staircase Rating',
+  ].filter(Boolean).join(', ');
+
   // Prepare data summary for AI
   const dataSummary = `
 Workspace: ${space.name}
 Purpose: ${space.purpose}
 
+ENABLED MODULES: ${enabledModulesDescription || 'Ideation only'}
+(Only discuss the modules that were enabled. Do NOT mention or analyze modules that were not used.)
+
 Total Ideas: ${allNotes.length}
-Total Pairwise Votes: ${pairwiseVotes.length}
-Total Rankings Submitted: ${new Set(rankingData.map((r: any) => r.participantId)).size}
-Total Marketplace Allocations: ${marketplaceData.length}
+${hasPairwiseVoting ? `Total Pairwise Votes: ${pairwiseVotes.length}` : ''}
+${hasStackRanking ? `Total Rankings Submitted: ${new Set(rankingData.map((r: any) => r.participantId)).size}` : ''}
+${hasMarketplace ? `Total Marketplace Allocations: ${marketplaceData.length}` : ''}
 
 All Ideas Ranked by Combined Score:
 ${notesWithScores.map((note: any, idx: any) => `
-${idx + 1}. "${note.content}" (Category: ${note.manualCategoryId ? categoryMap.get(note.manualCategoryId) || 'Uncategorized' : 'Uncategorized'})
-   - Pairwise Wins: ${note.pairwiseWins}
-   - Borda Score: ${note.bordaScore}
-   - Marketplace Coins: ${note.marketplaceCoins}
+${idx + 1}. "${note.content}" (Category: ${note.manualCategoryId ? categoryMap.get(note.manualCategoryId) || 'Uncategorized' : 'Uncategorized'})${hasPairwiseVoting ? `
+   - Pairwise Wins: ${note.pairwiseWins}` : ''}${hasStackRanking ? `
+   - Borda Score: ${note.bordaScore}` : ''}${hasMarketplace ? `
+   - Marketplace Coins: ${note.marketplaceCoins}` : ''}
    - Combined Score: ${note.combinedScore.toFixed(3)}
 `).join('')}
 
@@ -188,7 +218,13 @@ ${kbContext}
     messages: [
       {
         role: "system",
-        content: `You are an expert facilitator analyzing collaborative envisioning session results. Generate comprehensive cohort insights based on voting data, idea categorization, and participant engagement. Focus on identifying patterns, themes, and actionable recommendations.`,
+        content: `You are an expert facilitator analyzing collaborative envisioning session results. Generate comprehensive cohort insights based on voting data, idea categorization, and participant engagement. Focus on identifying patterns, themes, and actionable recommendations.
+
+CRITICAL FORMATTING RULES:
+1. Only discuss and analyze the modules that were ENABLED for this session. Do NOT mention modules that were not used.
+2. Use clear paragraph breaks (\\n\\n) between distinct points for readability.
+3. For recommendations, format as a numbered list with each recommendation on its own line.
+4. Keep summaries focused on what WAS done, not what wasn't.`,
       },
       {
         role: "user",
@@ -198,7 +234,7 @@ ${dataSummary}
 
 Please provide your analysis in the following JSON format:
 {
-  "summary": "A 2-3 paragraph high-level summary of the session outcomes",
+  "summary": "A 2-3 paragraph high-level summary of the session outcomes. Use \\n\\n between paragraphs. Focus only on the modules that were enabled - do not mention or analyze modules that were not used.",
   "keyThemes": ["theme1", "theme2", "theme3", ...],
   "topIdeas": [
     {
@@ -211,8 +247,8 @@ Please provide your analysis in the following JSON format:
       "overallRank": number (1-based rank)
     }
   ],
-  "insights": "3-4 paragraphs of deep insights about patterns, alignment, diversity of thought, and key findings",
-  "recommendations": "Actionable next steps for the cohort based on these results"
+  "insights": "3-4 paragraphs of deep insights about patterns, alignment, diversity of thought, and key findings. Use \\n\\n between paragraphs for readability. Focus only on enabled modules.",
+  "recommendations": "Format as a numbered list:\\n\\n1. First recommendation\\n\\n2. Second recommendation\\n\\n3. Third recommendation\\n\\nEach recommendation should be actionable and specific."
 }
 
 Include ALL ideas in the topIdeas array, ranked by combined score (highest to lowest).`,

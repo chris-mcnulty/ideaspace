@@ -247,17 +247,31 @@ export async function generateCohortResultsPDF(
   doc.setFontSize(14);
   doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
   doc.text('Executive Summary', 15, yPos);
-  yPos += 8;
+  yPos += 10;
 
   setBrandFont(doc, false, fontsAvailable);
   doc.setFontSize(10);
-  doc.setTextColor(0, 0, 0);
-  const summaryLines = doc.splitTextToSize(
-    cohortResult.summary || '',
-    doc.internal.pageSize.getWidth() - 30
-  );
-  doc.text(summaryLines, 15, yPos);
-  yPos += summaryLines.length * 5 + 10;
+  doc.setTextColor(40, 40, 40); // Darker text for better contrast
+  
+  // Split summary into paragraphs for better readability
+  const summaryParagraphs = (cohortResult.summary || '').split(/\n\n|\.\s+(?=[A-Z])/);
+  summaryParagraphs.forEach((paragraph, index) => {
+    if (paragraph.trim()) {
+      const paragraphText = paragraph.trim() + (paragraph.trim().endsWith('.') ? '' : '.');
+      const summaryLines = doc.splitTextToSize(
+        paragraphText,
+        doc.internal.pageSize.getWidth() - 30
+      );
+      doc.text(summaryLines, 15, yPos);
+      yPos += summaryLines.length * 5 + (index < summaryParagraphs.length - 1 ? 8 : 0);
+      
+      if (yPos > 260) {
+        doc.addPage();
+        yPos = 20;
+      }
+    }
+  });
+  yPos += 12;
 
   // Add key themes
   const keyThemes = cohortResult.keyThemes as string[] | undefined;
@@ -271,20 +285,20 @@ export async function generateCohortResultsPDF(
     doc.setFontSize(14);
     doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text('Key Themes', 15, yPos);
-    yPos += 8;
+    yPos += 10;
 
     setBrandFont(doc, false, fontsAvailable);
     doc.setFontSize(10);
-    doc.setTextColor(0, 0, 0);
+    doc.setTextColor(40, 40, 40); // Darker text for better contrast
     keyThemes.forEach((theme) => {
       if (yPos > 270) {
         doc.addPage();
         yPos = 20;
       }
       doc.text(`• ${theme}`, 20, yPos);
-      yPos += 6;
+      yPos += 7; // Increased spacing between items
     });
-    yPos += 5;
+    yPos += 8;
   }
 
   // Add top ideas table
@@ -359,21 +373,29 @@ export async function generateCohortResultsPDF(
     doc.setFontSize(14);
     doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text('Key Insights', 15, yPos);
-    yPos += 8;
+    yPos += 10;
 
     setBrandFont(doc, false, fontsAvailable);
     doc.setFontSize(10);
-    doc.setTextColor(0, 0, 0);
+    doc.setTextColor(40, 40, 40); // Darker text for better contrast
     
     // Split insights into paragraphs for better readability
-    const paragraphs = cohortResult.insights.split('\n\n');
+    // Handle both double newlines and numbered points
+    const paragraphs = cohortResult.insights.split(/\n\n+|\n(?=\d+\.\s)|(?<=\.)\s+(?=\d+\.)/);
     paragraphs.forEach((paragraph, index) => {
+      const trimmedPara = paragraph.trim();
+      if (!trimmedPara) return;
+      
+      // Check if this is a numbered point
+      const isNumberedPoint = /^\d+\.\s/.test(trimmedPara);
+      const xPos = isNumberedPoint ? 20 : 15;
+      
       const insightLines = doc.splitTextToSize(
-        paragraph.trim(),
-        doc.internal.pageSize.getWidth() - 30
+        trimmedPara,
+        doc.internal.pageSize.getWidth() - (isNumberedPoint ? 35 : 30)
       );
-      doc.text(insightLines, 15, yPos);
-      yPos += insightLines.length * 5 + (index < paragraphs.length - 1 ? 8 : 10);
+      doc.text(insightLines, xPos, yPos);
+      yPos += insightLines.length * 5 + 10; // More spacing between paragraphs
       
       // Check if we need a new page
       if (yPos > 240) {
@@ -381,6 +403,7 @@ export async function generateCohortResultsPDF(
         yPos = 20;
       }
     });
+    yPos += 5;
   }
 
   // Add recommendations
@@ -394,21 +417,46 @@ export async function generateCohortResultsPDF(
     doc.setFontSize(14);
     doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text('Recommendations', 15, yPos);
-    yPos += 8;
+    yPos += 10;
 
     setBrandFont(doc, false, fontsAvailable);
     doc.setFontSize(10);
-    doc.setTextColor(0, 0, 0);
+    doc.setTextColor(40, 40, 40); // Darker text for better contrast
     
-    // Split recommendations into paragraphs for better readability
-    const paragraphs = cohortResult.recommendations.split('\n\n');
-    paragraphs.forEach((paragraph, index) => {
+    // Parse recommendations - handle numbered lists, bullet points, and paragraphs
+    // Split on double newlines, or before numbered items
+    const recItems = cohortResult.recommendations
+      .split(/\n\n+|\n(?=\d+\.\s)|(?<=\.)\s+(?=\d+\.)/)
+      .filter((item: string) => item.trim());
+    
+    recItems.forEach((item: string) => {
+      const trimmedItem = item.trim();
+      if (!trimmedItem) return;
+      
+      // Check if this is a numbered point
+      const isNumberedPoint = /^\d+\.\s/.test(trimmedItem);
+      // Check if this starts with a bullet
+      const isBulletPoint = /^[-•]\s/.test(trimmedItem);
+      
+      let xPos = 15;
+      let displayText = trimmedItem;
+      
+      if (isNumberedPoint) {
+        xPos = 20;
+      } else if (isBulletPoint) {
+        xPos = 20;
+      } else if (!isNumberedPoint && !isBulletPoint && recItems.length > 1) {
+        // Convert regular paragraphs to bullet points if there are multiple items
+        displayText = `• ${trimmedItem}`;
+        xPos = 20;
+      }
+      
       const recLines = doc.splitTextToSize(
-        paragraph.trim(),
-        doc.internal.pageSize.getWidth() - 30
+        displayText,
+        doc.internal.pageSize.getWidth() - (xPos + 15)
       );
-      doc.text(recLines, 15, yPos);
-      yPos += recLines.length * 5 + (index < paragraphs.length - 1 ? 8 : 10);
+      doc.text(recLines, xPos, yPos);
+      yPos += recLines.length * 5 + 10; // More spacing between items
       
       // Check if we need a new page
       if (yPos > 240) {
