@@ -13,6 +13,7 @@ import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import VerifyEmail from "@/pages/VerifyEmail";
 import AdminPanel from "@/pages/AdminPanel";
+import AdminMigrations from "@/pages/AdminMigrations";
 import FacilitatorDashboard from "@/pages/FacilitatorDashboard";
 import OrganizationHome from "@/pages/OrganizationHome";
 import WaitingRoom from "@/pages/WaitingRoom";
@@ -57,6 +58,7 @@ function Router() {
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/verify-email" component={VerifyEmail} />
       <Route path="/admin" component={AdminPanel} />
+      <Route path="/admin/migrations" component={AdminMigrations} />
       <Route path="/dashboard" component={FacilitatorDashboard} />
       <Route path="/o/:org" component={OrganizationHome} />
       <Route path="/o/:org/s/:space" component={WaitingRoom} />

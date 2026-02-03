@@ -803,6 +803,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Run projects migration (global admin only)
+  // Creates default projects for orgs and links orphaned workspaces
+  app.post("/api/admin/migrations/projects", requireGlobalAdmin, async (req, res) => {
+    try {
+      const results = {
+        organizationsChecked: 0,
+        projectsCreated: 0,
+        workspacesLinked: 0,
+        errors: [] as string[],
+      };
+
+      // Step 1: Create default projects for orgs without one
+      const allOrgs = await storage.getAllOrganizations();
+      results.organizationsChecked = allOrgs.length;
+
+      for (const org of allOrgs) {
+        const existingDefault = await storage.getDefaultProject(org.id);
+        if (!existingDefault) {
+          try {
+            await storage.createProject({
+              organizationId: org.id,
+              name: "Default Project",
+              slug: "default",
+              description: "Default project for workspaces",
+              isDefault: true,
+            });
+            results.projectsCreated++;
+          } catch (err) {
+            results.errors.push(`Failed to create project for org ${org.name}: ${err}`);
+          }
+        }
+      }
+
+      // Step 2: Link orphaned workspaces to default projects
+      const allSpaces = await storage.getAllSpaces();
+      for (const space of allSpaces) {
+        if (!space.projectId && space.organizationId) {
+          const defaultProject = await storage.getDefaultProject(space.organizationId);
+          if (defaultProject) {
+            try {
+              await storage.updateSpace(space.id, { projectId: defaultProject.id });
+              results.workspacesLinked++;
+            } catch (err) {
+              results.errors.push(`Failed to link workspace ${space.name}: ${err}`);
+            }
+          }
+        }
+      }
+
+      res.json({
+        success: true,
+        message: "Migration completed",
+        results,
+      });
+    } catch (error) {
+      console.error("Migration failed:", error);
+      res.status(500).json({ error: "Migration failed", details: String(error) });
+    }
+  });
+
+  // Get migration status (global admin only)
+  app.get("/api/admin/migrations/projects/status", requireGlobalAdmin, async (req, res) => {
+    try {
+      const allOrgs = await storage.getAllOrganizations();
+      const allSpaces = await storage.getAllSpaces();
+      
+      let orgsWithDefaultProject = 0;
+      for (const org of allOrgs) {
+        const defaultProject = await storage.getDefaultProject(org.id);
+        if (defaultProject) orgsWithDefaultProject++;
+      }
+
+      const spacesWithProject = allSpaces.filter(s => s.projectId !== null).length;
+      const spacesNeedingProject = allSpaces.filter(s => s.projectId === null && s.organizationId !== null).length;
+
+      res.json({
+        totalOrganizations: allOrgs.length,
+        orgsWithDefaultProject,
+        orgsNeedingDefaultProject: allOrgs.length - orgsWithDefaultProject,
+        totalWorkspaces: allSpaces.length,
+        workspacesWithProject: spacesWithProject,
+        workspacesNeedingProject: spacesNeedingProject,
+        migrationNeeded: (allOrgs.length - orgsWithDefaultProject) > 0 || spacesNeedingProject > 0,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to check migration status" });
+    }
+  });
+
   // List all organizations (global admin only)
   app.get("/api/admin/organizations", requireGlobalAdmin, async (req, res) => {
     try {
