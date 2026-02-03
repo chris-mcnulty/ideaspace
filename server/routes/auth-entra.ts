@@ -570,6 +570,20 @@ async function processEntraUser(userInfo: EntraUserInfo): Promise<ProcessUserRes
     });
   }
   
+  // Assign user to organization's default project (if exists)
+  try {
+    const orgProjects = await storage.getProjectsByOrganization(org.id);
+    const defaultProject = orgProjects.find(p => p.isDefault) || orgProjects[0];
+    if (defaultProject) {
+      const memberRole = userRole === 'company_admin' ? 'admin' : 'member';
+      await storage.addProjectMember(defaultProject.id, newUser.id, memberRole);
+      console.log(`[Entra SSO] User ${email} added to default project: ${defaultProject.name}`);
+    }
+  } catch (projError) {
+    console.error('[Entra SSO] Failed to add user to default project:', projError);
+    // Don't fail user creation if project assignment fails
+  }
+  
   console.log(`[Entra SSO] New user provisioned: ${email}, org: ${org.name}, role: ${userRole}`);
   
   return {

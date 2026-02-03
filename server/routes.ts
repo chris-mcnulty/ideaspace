@@ -373,6 +373,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         password: hashedPassword,
       });
       
+      // Assign user to organization's default project (if organization exists)
+      if (user.organizationId) {
+        try {
+          const orgProjects = await storage.getProjectsByOrganization(user.organizationId);
+          const defaultProject = orgProjects.find(p => p.isDefault) || orgProjects[0];
+          if (defaultProject) {
+            const memberRole = data.role === 'company_admin' ? 'admin' : 'member';
+            await storage.addProjectMember(defaultProject.id, user.id, memberRole);
+          }
+        } catch (projError) {
+          console.error("Failed to add user to default project:", projError);
+          // Don't fail user creation if project assignment fails
+        }
+      }
+      
       // Remove password from response
       const { password, ...userWithoutPassword } = user;
       res.status(201).json(userWithoutPassword);
