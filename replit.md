@@ -10,7 +10,7 @@
 - [ ] AI Suggest New Ideas - Generate new idea suggestions based on existing content, workspace purpose, and knowledge base documents
 - [ ] Import templates from CSV (with categories) and edit their contents in the system
 - [x] Phase 1: Add Projects table and API (completed) - Schema, storage, and API routes for project CRUD
-- [ ] Phase 2: UI/Navigation for Projects - Sidebar hierarchy (Org→Projects→Workspaces) and project management UI
+- [x] Phase 2: UI/Navigation for Projects (completed) - Projects tab in Admin Panel, workspace grouping by project in Dashboard
 - [ ] Phase 3: Auth/SSO project scoping - Update auth to enforce project membership
 - [ ] Show survey results impact in the Results tab - integrate survey responses into cohort results and AI summaries
 - [ ] Fix 2x2 Priority Matrix and Staircase drag errors - items error out when moved

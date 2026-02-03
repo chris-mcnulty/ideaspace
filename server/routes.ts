@@ -1228,6 +1228,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Projects
+  
+  // Get all projects for the authenticated user (across all their organizations)
+  app.get("/api/projects", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as User;
+      const orgId = req.query.organizationId as string | undefined;
+      
+      if (orgId) {
+        // Filter by specific org
+        const projects = await storage.getProjectsByOrganization(orgId);
+        return res.json(projects);
+      }
+      
+      // Get all projects for all organizations the user has access to
+      let organizations: Organization[];
+      if (user.role === "admin") {
+        organizations = await storage.getAllOrganizations();
+      } else {
+        const userOrgs = await storage.getUserOrganizations(user.id);
+        organizations = userOrgs.map(uo => uo.organization).filter(Boolean) as Organization[];
+      }
+      
+      const allProjects: Project[] = [];
+      for (const org of organizations) {
+        const orgProjects = await storage.getProjectsByOrganization(org.id);
+        allProjects.push(...orgProjects);
+      }
+      
+      res.json(allProjects);
+    } catch (error) {
+      console.error("Failed to fetch projects:", error);
+      res.status(500).json({ error: "Failed to fetch projects" });
+    }
+  });
+  
   app.get("/api/organizations/:orgId/projects", requireAuth, async (req, res) => {
     try {
       const projects = await storage.getProjectsByOrganization(req.params.orgId);
@@ -1411,18 +1446,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         spaces = [];
       }
 
-      // Enrich each workspace with stats
+      // Enrich each workspace with stats and project info
       const enrichedSpaces = await Promise.all(
         spaces.map(async (space: any) => {
-          const [participants, notes, org] = await Promise.all([
+          const [participants, notes, org, project] = await Promise.all([
             storage.getParticipantsBySpace(space.id),
             storage.getNotesBySpace(space.id),
             storage.getOrganization(space.organizationId),
+            space.projectId ? storage.getProject(space.projectId) : null,
           ]);
 
           return {
             ...space,
             organization: org,
+            project: project || null,
             stats: {
               participantCount: participants.length,
               noteCount: notes.length,

@@ -3,12 +3,13 @@ import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Users, StickyNote, ArrowRight, Plus } from "lucide-react";
+import { Users, StickyNote, ArrowRight, Plus, FolderKanban, ChevronDown, ChevronRight } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
-import { useEffect } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface WorkspaceWithStats {
   id: string;
@@ -17,20 +18,41 @@ interface WorkspaceWithStats {
   code: string;
   status: string;
   organizationId: string;
+  projectId: string | null;
   createdAt: string;
   organization: {
     id: string;
     name: string;
     slug: string;
   };
+  project: {
+    id: string;
+    name: string;
+    slug: string;
+    description: string | null;
+    isDefault: boolean;
+  } | null;
   stats: {
     participantCount: number;
     noteCount: number;
   };
 }
 
+interface GroupedWorkspaces {
+  orgId: string;
+  orgName: string;
+  orgSlug: string;
+  projects: {
+    projectId: string | null;
+    projectName: string;
+    isDefault: boolean;
+    workspaces: WorkspaceWithStats[];
+  }[];
+}
+
 export default function FacilitatorDashboard() {
   const { user } = useAuth();
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     document.title = "Nebula - Dashboard | The Synozur Alliance";
@@ -40,6 +62,80 @@ export default function FacilitatorDashboard() {
     queryKey: ["/api/my-workspaces"],
     enabled: !!user,
   });
+
+  const groupedWorkspaces = useMemo(() => {
+    if (!workspaces) return [];
+
+    const orgMap = new Map<string, GroupedWorkspaces>();
+
+    for (const workspace of workspaces) {
+      const orgId = workspace.organizationId;
+      
+      if (!orgMap.has(orgId)) {
+        orgMap.set(orgId, {
+          orgId,
+          orgName: workspace.organization.name,
+          orgSlug: workspace.organization.slug,
+          projects: [],
+        });
+      }
+
+      const org = orgMap.get(orgId)!;
+      const projectId = workspace.projectId || "no-project";
+      const projectName = workspace.project?.name || "Unassigned";
+      const isDefault = workspace.project?.isDefault || false;
+
+      let projectGroup = org.projects.find(p => (p.projectId || "no-project") === projectId);
+      if (!projectGroup) {
+        projectGroup = {
+          projectId: workspace.projectId,
+          projectName,
+          isDefault,
+          workspaces: [],
+        };
+        org.projects.push(projectGroup);
+      }
+
+      projectGroup.workspaces.push(workspace);
+    }
+
+    const result = Array.from(orgMap.values());
+    
+    for (const org of result) {
+      org.projects.sort((a, b) => {
+        if (a.isDefault && !b.isDefault) return -1;
+        if (!a.isDefault && b.isDefault) return 1;
+        return a.projectName.localeCompare(b.projectName);
+      });
+    }
+
+    return result.sort((a, b) => a.orgName.localeCompare(b.orgName));
+  }, [workspaces]);
+
+  useEffect(() => {
+    if (groupedWorkspaces.length > 0 && expandedProjects.size === 0) {
+      const allProjectIds = new Set<string>();
+      for (const org of groupedWorkspaces) {
+        for (const project of org.projects) {
+          allProjectIds.add(`${org.orgId}-${project.projectId || "no-project"}`);
+        }
+      }
+      setExpandedProjects(allProjectIds);
+    }
+  }, [groupedWorkspaces]);
+
+  const toggleProject = (orgId: string, projectId: string | null) => {
+    const key = `${orgId}-${projectId || "no-project"}`;
+    setExpandedProjects(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -153,81 +249,126 @@ export default function FacilitatorDashboard() {
             )}
           </Card>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {workspaces.map((workspace) => (
-              <Card
-                key={workspace.id}
-                className="hover-elevate transition-all"
-                data-testid={`card-workspace-${workspace.id}`}
-              >
-                <CardHeader className="space-y-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-lg truncate" data-testid={`text-workspace-name-${workspace.id}`}>
-                        {workspace.name}
-                      </CardTitle>
-                      <p className="text-xs text-muted-foreground mt-1" data-testid={`text-workspace-org-${workspace.id}`}>
-                        {workspace.organization.name}
-                      </p>
-                    </div>
-                    <Badge
-                      variant="outline"
-                      className={getStatusColor(workspace.status)}
-                      data-testid={`badge-status-${workspace.id}`}
+          <div className="space-y-8">
+            {groupedWorkspaces.map((org) => (
+              <div key={org.orgId} className="space-y-4">
+                {groupedWorkspaces.length > 1 && (
+                  <h2 className="text-xl font-semibold text-foreground" data-testid={`text-org-name-${org.orgId}`}>
+                    {org.orgName}
+                  </h2>
+                )}
+
+                {org.projects.map((project) => {
+                  const projectKey = `${org.orgId}-${project.projectId || "no-project"}`;
+                  const isExpanded = expandedProjects.has(projectKey);
+
+                  return (
+                    <Collapsible
+                      key={projectKey}
+                      open={isExpanded}
+                      onOpenChange={() => toggleProject(org.orgId, project.projectId)}
                     >
-                      {getStatusLabel(workspace.status)}
-                    </Badge>
-                  </div>
+                      <CollapsibleTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          className="w-full justify-start gap-2 h-auto py-3 px-4 hover-elevate"
+                          data-testid={`button-toggle-project-${project.projectId || "unassigned"}`}
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="h-4 w-4 shrink-0" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 shrink-0" />
+                          )}
+                          <FolderKanban className="h-4 w-4 shrink-0 text-primary" />
+                          <span className="font-medium">{project.projectName}</span>
+                          {project.isDefault && (
+                            <Badge variant="secondary" className="ml-2">Default</Badge>
+                          )}
+                          <Badge variant="outline" className="ml-auto">
+                            {project.workspaces.length} workspace{project.workspaces.length !== 1 ? "s" : ""}
+                          </Badge>
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mt-4 ml-6">
+                          {project.workspaces.map((workspace) => (
+                            <Card
+                              key={workspace.id}
+                              className="hover-elevate transition-all"
+                              data-testid={`card-workspace-${workspace.id}`}
+                            >
+                              <CardHeader className="space-y-3">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <CardTitle className="text-lg truncate" data-testid={`text-workspace-name-${workspace.id}`}>
+                                      {workspace.name}
+                                    </CardTitle>
+                                  </div>
+                                  <Badge
+                                    variant="outline"
+                                    className={getStatusColor(workspace.status)}
+                                    data-testid={`badge-status-${workspace.id}`}
+                                  >
+                                    {getStatusLabel(workspace.status)}
+                                  </Badge>
+                                </div>
 
-                  {workspace.description && (
-                    <CardDescription className="line-clamp-2" data-testid={`text-description-${workspace.id}`}>
-                      {workspace.description}
-                    </CardDescription>
-                  )}
+                                {workspace.description && (
+                                  <CardDescription className="line-clamp-2" data-testid={`text-description-${workspace.id}`}>
+                                    {workspace.description}
+                                  </CardDescription>
+                                )}
 
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-1" data-testid={`stat-participants-${workspace.id}`}>
-                      <Users className="w-4 h-4" />
-                      <span>{workspace.stats.participantCount}</span>
-                    </div>
-                    <div className="flex items-center gap-1" data-testid={`stat-notes-${workspace.id}`}>
-                      <StickyNote className="w-4 h-4" />
-                      <span>{workspace.stats.noteCount}</span>
-                    </div>
-                  </div>
-                </CardHeader>
+                                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                  <div className="flex items-center gap-1" data-testid={`stat-participants-${workspace.id}`}>
+                                    <Users className="w-4 h-4" />
+                                    <span>{workspace.stats.participantCount}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1" data-testid={`stat-notes-${workspace.id}`}>
+                                    <StickyNote className="w-4 h-4" />
+                                    <span>{workspace.stats.noteCount}</span>
+                                  </div>
+                                </div>
+                              </CardHeader>
 
-                <CardContent className="space-y-2">
-                  <Button
-                    asChild
-                    className="w-full"
-                    data-testid={`button-manage-${workspace.id}`}
-                  >
-                    <Link href={`/o/${workspace.organization.slug}/s/${workspace.code}/facilitate`}>
-                      Manage Workspace
-                      <ArrowRight className="w-4 h-4 ml-2" />
-                    </Link>
-                  </Button>
+                              <CardContent className="space-y-2">
+                                <Button
+                                  asChild
+                                  className="w-full"
+                                  data-testid={`button-manage-${workspace.id}`}
+                                >
+                                  <Link href={`/o/${workspace.organization.slug}/s/${workspace.code}/facilitate`}>
+                                    Manage Workspace
+                                    <ArrowRight className="w-4 h-4 ml-2" />
+                                  </Link>
+                                </Button>
 
-                  <div className="flex gap-2">
-                    <Button
-                      asChild
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      data-testid={`button-join-${workspace.id}`}
-                    >
-                      <Link href={`/join/${workspace.code}`}>
-                        Join as Participant
-                      </Link>
-                    </Button>
-                  </div>
+                                <div className="flex gap-2">
+                                  <Button
+                                    asChild
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex-1"
+                                    data-testid={`button-join-${workspace.id}`}
+                                  >
+                                    <Link href={`/join/${workspace.code}`}>
+                                      Join as Participant
+                                    </Link>
+                                  </Button>
+                                </div>
 
-                  <p className="text-xs text-center text-muted-foreground" data-testid={`text-code-${workspace.id}`}>
-                    Code: <span className="font-mono text-2xl font-bold tracking-wider text-primary">{workspace.code}</span>
-                  </p>
-                </CardContent>
-              </Card>
+                                <p className="text-xs text-center text-muted-foreground" data-testid={`text-code-${workspace.id}`}>
+                                  Code: <span className="font-mono text-2xl font-bold tracking-wider text-primary">{workspace.code}</span>
+                                </p>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  );
+                })}
+              </div>
             ))}
           </div>
         )}
