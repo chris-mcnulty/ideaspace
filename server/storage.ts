@@ -4,6 +4,8 @@ import {
   type InsertOrganization,
   type Project,
   type InsertProject,
+  type ProjectMember,
+  type InsertProjectMember,
   type User,
   type InsertUser,
   type Space,
@@ -71,6 +73,7 @@ import {
   type InsertServicePlan,
   organizations,
   projects,
+  projectMembers,
   systemSettings,
   servicePlans,
   users,
@@ -150,6 +153,14 @@ export interface IStorage {
   createProject(project: InsertProject): Promise<Project>;
   updateProject(id: string, project: Partial<InsertProject>): Promise<Project | undefined>;
   deleteProject(id: string): Promise<boolean>;
+  
+  // Project Members
+  getProjectMembers(projectId: string): Promise<(ProjectMember & { user: User })[]>;
+  getProjectMembersByUser(userId: string): Promise<(ProjectMember & { project: Project })[]>;
+  isProjectMember(projectId: string, userId: string): Promise<boolean>;
+  addProjectMember(projectId: string, userId: string, role?: string): Promise<ProjectMember>;
+  removeProjectMember(projectId: string, userId: string): Promise<boolean>;
+  updateProjectMemberRole(projectId: string, userId: string, role: string): Promise<ProjectMember | undefined>;
 
   // Users
   getUser(id: string): Promise<User | undefined>;
@@ -540,6 +551,76 @@ export class DbStorage implements IStorage {
   async deleteProject(id: string): Promise<boolean> {
     const result = await db.delete(projects).where(eq(projects.id, id)).returning();
     return result.length > 0;
+  }
+
+  // Project Members
+  async getProjectMembers(projectId: string): Promise<(ProjectMember & { user: User })[]> {
+    const rows = await db.select({
+      projectMember: projectMembers,
+      user: users,
+    })
+      .from(projectMembers)
+      .innerJoin(users, eq(projectMembers.userId, users.id))
+      .where(eq(projectMembers.projectId, projectId))
+      .orderBy(users.displayName);
+    
+    return rows.map(row => ({
+      ...row.projectMember,
+      user: row.user,
+    }));
+  }
+
+  async getProjectMembersByUser(userId: string): Promise<(ProjectMember & { project: Project })[]> {
+    const rows = await db.select({
+      projectMember: projectMembers,
+      project: projects,
+    })
+      .from(projectMembers)
+      .innerJoin(projects, eq(projectMembers.projectId, projects.id))
+      .where(eq(projectMembers.userId, userId))
+      .orderBy(projects.name);
+    
+    return rows.map(row => ({
+      ...row.projectMember,
+      project: row.project,
+    }));
+  }
+
+  async isProjectMember(projectId: string, userId: string): Promise<boolean> {
+    const [member] = await db.select().from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)))
+      .limit(1);
+    return !!member;
+  }
+
+  async addProjectMember(projectId: string, userId: string, role: string = "member"): Promise<ProjectMember> {
+    const [created] = await db.insert(projectMembers)
+      .values({ projectId, userId, role })
+      .onConflictDoNothing()
+      .returning();
+    
+    if (!created) {
+      const [existing] = await db.select().from(projectMembers)
+        .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)))
+        .limit(1);
+      return existing;
+    }
+    return created;
+  }
+
+  async removeProjectMember(projectId: string, userId: string): Promise<boolean> {
+    const result = await db.delete(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)))
+      .returning();
+    return result.length > 0;
+  }
+
+  async updateProjectMemberRole(projectId: string, userId: string, role: string): Promise<ProjectMember | undefined> {
+    const [updated] = await db.update(projectMembers)
+      .set({ role })
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)))
+      .returning();
+    return updated;
   }
 
   // Users
