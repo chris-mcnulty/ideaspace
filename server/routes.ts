@@ -969,6 +969,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertOrganizationSchema.parse(req.body);
       const org = await storage.createOrganization(data);
+      
+      // Automatically create a default project for the new organization
+      await storage.createProject({
+        organizationId: org.id,
+        name: 'Default Project',
+        slug: 'default',
+        description: 'Default project for workspaces',
+        isDefault: true,
+      });
+      
       res.status(201).json(org);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1352,12 +1362,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // If templateId is provided, clone from template workspace
       if (templateId) {
         try {
+          // Auto-assign to default project if organizationId is provided but no projectId
+          let projectId = spaceData.projectId;
+          if (!projectId && spaceData.organizationId) {
+            const defaultProject = await storage.getDefaultProject(spaceData.organizationId);
+            if (defaultProject) {
+              projectId = defaultProject.id;
+            }
+          }
+          
           // Check if this is a workspace template (new system with isTemplate flag)
           const templateWorkspace = await storage.getSpace(templateId);
           if (templateWorkspace && templateWorkspace.isTemplate) {
             // Use new simplified template system
             const newWorkspace = await storage.cloneWorkspaceFromTemplate(templateId, {
               ...spaceData,
+              projectId,
               code: data.code || await generateWorkspaceCode(),
             });
             return res.status(201).json(newWorkspace);
@@ -1366,6 +1386,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const code = data.code || await generateWorkspaceCode();
             const space = await storage.createSpace({
               ...spaceData,
+              projectId,
               code,
             });
             await storage.cloneTemplateIntoWorkspace(templateId, space.id, "Template");
@@ -1379,8 +1400,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // No template - create blank workspace
       const code = data.code || await generateWorkspaceCode();
+      
+      // Auto-assign to default project if organizationId is provided but no projectId
+      let projectId = spaceData.projectId;
+      if (!projectId && spaceData.organizationId) {
+        const defaultProject = await storage.getDefaultProject(spaceData.organizationId);
+        if (defaultProject) {
+          projectId = defaultProject.id;
+        }
+      }
+      
       const space = await storage.createSpace({
         ...spaceData,
+        projectId,
         code,
       });
       

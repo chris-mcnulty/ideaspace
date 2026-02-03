@@ -9,7 +9,9 @@
 ## Backlog
 - [ ] AI Suggest New Ideas - Generate new idea suggestions based on existing content, workspace purpose, and knowledge base documents
 - [ ] Import templates from CSV (with categories) and edit their contents in the system
-- [ ] Refactor to true multi-tenant auth with Vega-style navigation control; tenants have "Projects" grouping ideaspaces (similar to current workspace grouping)
+- [x] Phase 1: Add Projects table and API (completed) - Schema, storage, and API routes for project CRUD
+- [ ] Phase 2: UI/Navigation for Projects - Sidebar hierarchy (Org→Projects→Workspaces) and project management UI
+- [ ] Phase 3: Auth/SSO project scoping - Update auth to enforce project membership
 - [ ] Show survey results impact in the Results tab - integrate survey responses into cohort results and AI summaries
 - [ ] Fix 2x2 Priority Matrix and Staircase drag errors - items error out when moved
 - [ ] Add Recommendations section to facilitator Results screen and PDF export (currently only on public results page)
