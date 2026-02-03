@@ -1482,6 +1482,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get organizations accessible to current user
+  app.get("/api/my-organizations", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as User;
+      let organizations: any[] = [];
+
+      // Global admins see all organizations
+      if (user.role === "global_admin") {
+        organizations = await storage.getAllOrganizations();
+      }
+      // Company admins see their organization
+      else if (user.role === "company_admin" && user.organizationId) {
+        const org = await storage.getOrganization(user.organizationId);
+        if (org) organizations = [org];
+      }
+      // Facilitators see orgs where they have workspace assignments
+      else if (user.role === "facilitator") {
+        const assignments = await storage.getSpaceFacilitatorsByUser(user.id);
+        const orgIds = new Set<string>();
+        for (const assignment of assignments) {
+          const space = await storage.getSpace(assignment.spaceId);
+          if (space?.organizationId) {
+            orgIds.add(space.organizationId);
+          }
+        }
+        for (const orgId of orgIds) {
+          const org = await storage.getOrganization(orgId);
+          if (org) organizations.push(org);
+        }
+      }
+      // Regular users see their primary organization
+      else if (user.organizationId) {
+        const org = await storage.getOrganization(user.organizationId);
+        if (org) organizations = [org];
+      }
+
+      // Enrich with project counts
+      const enriched = await Promise.all(
+        organizations.map(async (org) => {
+          const projects = await storage.getProjectsByOrganization(org.id);
+          const spaces = await storage.getSpacesByOrganization(org.id);
+          return {
+            ...org,
+            projectCount: projects.length,
+            workspaceCount: spaces.length,
+          };
+        })
+      );
+
+      res.json(enriched);
+    } catch (error) {
+      console.error("Failed to fetch user organizations:", error);
+      res.status(500).json({ error: "Failed to fetch organizations" });
+    }
+  });
+
   // Get projects for current user (filtered by membership for non-admins)
   app.get("/api/my-projects", requireAuth, async (req, res) => {
     try {
