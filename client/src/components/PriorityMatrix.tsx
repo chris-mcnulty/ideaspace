@@ -114,23 +114,37 @@ export default function PriorityMatrix({
     },
   });
 
-  // Initialize axis labels from matrix data
+  // Initialize axis labels from matrix data - only once when matrix first loads
+  const matrixId = matrix?.id;
+  const matrixXLabel = matrix?.xAxisLabel;
+  const matrixYLabel = matrix?.yAxisLabel;
+  
   useEffect(() => {
-    if (matrix) {
-      setXAxisLabel(prev => prev !== matrix.xAxisLabel ? matrix.xAxisLabel : prev);
-      setYAxisLabel(prev => prev !== matrix.yAxisLabel ? matrix.yAxisLabel : prev);
+    if (matrixXLabel && matrixXLabel !== xAxisLabel) {
+      setXAxisLabel(matrixXLabel);
     }
-  }, [matrix]);
+    if (matrixYLabel && matrixYLabel !== yAxisLabel) {
+      setYAxisLabel(matrixYLabel);
+    }
+    // Only run when matrix id changes to avoid re-syncing on every refetch
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matrixId]);
 
-  // Initialize local positions from fetched positions
+  // Initialize local positions from fetched positions - only update if data actually changed
+  const positionsKey = positions.map(p => `${p.ideaId}:${p.xCoord}:${p.yCoord}`).join('|');
+  
   useEffect(() => {
+    if (positions.length === 0) return;
+    
     const posMap = new Map<string, Position>();
     positions.forEach(pos => {
       posMap.set(pos.ideaId, { x: pos.xCoord, y: pos.yCoord });
     });
     setLocalPositions(posMap);
     localPositionsRef.current = posMap;
-  }, [positions]);
+    // Using positionsKey to only run when actual position data changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [positionsKey]);
 
   // WebSocket connection for real-time updates
   useEffect(() => {
@@ -168,6 +182,9 @@ export default function PriorityMatrix({
     };
   }, [spaceId, isReadOnly]);
 
+  // Ref to track the current dragged idea ID for cleanup
+  const draggedIdeaRef = useRef<string | null>(null);
+
   // Handle pointer down on idea
   const handlePointerDown = (e: React.PointerEvent, ideaId: string) => {
     if (isReadOnly) return;
@@ -177,6 +194,7 @@ export default function PriorityMatrix({
 
     const currentPos = localPositions.get(ideaId) || { x: 50, y: 50 };
     
+    draggedIdeaRef.current = ideaId;
     setDraggedIdea({
       id: ideaId,
       startX: e.clientX,
@@ -185,12 +203,15 @@ export default function PriorityMatrix({
       currentY: currentPos.y,
     });
 
-    (e.target as Element).setPointerCapture(e.pointerId);
+    // Capture pointer on the matrix container for reliable tracking
+    if (matrixRef.current) {
+      matrixRef.current.setPointerCapture(e.pointerId);
+    }
     e.preventDefault();
     e.stopPropagation();
   };
 
-  // Handle pointer move
+  // Handle pointer move - on matrix container
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!draggedIdea) return;
     
@@ -222,22 +243,33 @@ export default function PriorityMatrix({
     }
   };
 
-  // Handle pointer up
+  // Handle pointer up - always save position
   const handlePointerUp = (e: React.PointerEvent) => {
-    if (!draggedIdea) return;
+    const currentDraggedId = draggedIdeaRef.current;
+    if (!currentDraggedId) return;
     
     // Get the final position and save to backend
-    const finalPos = localPositionsRef.current.get(draggedIdea.id);
+    const finalPos = localPositionsRef.current.get(currentDraggedId);
     if (finalPos) {
+      console.log('[PriorityMatrix] Saving position:', { ideaId: currentDraggedId, x: finalPos.x, y: finalPos.y });
       updatePositionMutation.mutate({
-        ideaId: draggedIdea.id,
+        ideaId: currentDraggedId,
         xCoord: finalPos.x,
         yCoord: finalPos.y,
       });
     }
     
+    draggedIdeaRef.current = null;
     setDraggedIdea(null);
-    (e.target as Element).releasePointerCapture(e.pointerId);
+    
+    // Release pointer capture from matrix container
+    if (matrixRef.current) {
+      try {
+        matrixRef.current.releasePointerCapture(e.pointerId);
+      } catch {
+        // Pointer may already be released
+      }
+    }
   };
 
   // Handle settings save

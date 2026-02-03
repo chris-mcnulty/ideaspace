@@ -3927,7 +3927,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Get all idea positions in the matrix
+  // Get all idea positions in the matrix (by matrixId)
   app.get("/api/priority-matrices/:matrixId/positions", async (req, res) => {
     try {
       const positions = await storage.getPriorityMatrixPositions(req.params.matrixId);
@@ -3938,7 +3938,116 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Update idea position (upsert)
+  // Get all idea positions by spaceId (client-friendly route)
+  app.get("/api/spaces/:spaceId/priority-matrix/positions", createWorkspaceAccessMiddleware({}), async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      
+      const matrix = await storage.getPriorityMatrix(spaceId);
+      if (!matrix) {
+        return res.json([]);
+      }
+      
+      const positions = await storage.getPriorityMatrixPositions(matrix.id);
+      // Convert from 0-1 (database) to 0-100 (client percentages)
+      const clientPositions = positions.map(pos => ({
+        ...pos,
+        xCoord: pos.xCoord * 100,
+        yCoord: pos.yCoord * 100
+      }));
+      res.json(clientPositions);
+    } catch (error) {
+      console.error("Failed to fetch priority matrix positions:", error);
+      res.status(500).json({ error: "Failed to fetch matrix positions" });
+    }
+  });
+  
+  // Update idea position by spaceId (PUT for client compatibility)
+  app.put("/api/spaces/:spaceId/priority-matrix/positions", createWorkspaceAccessMiddleware({ requireOpen: false }), async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      
+      // Get or create matrix for this workspace
+      let matrix = await storage.getPriorityMatrix(spaceId);
+      if (!matrix) {
+        // Auto-create with default configuration
+        matrix = await storage.createPriorityMatrix({
+          spaceId,
+          xAxisLabel: "Impact",
+          yAxisLabel: "Effort",
+          xMin: "Low",
+          xMax: "High",
+          yMin: "Low",
+          yMax: "High",
+          snapToGrid: false,
+          gridSize: 4
+        });
+      }
+      
+      const { ideaId, xCoord, yCoord } = req.body;
+      
+      // Validate coordinates are within bounds (client sends 0-100 percentages)
+      if (xCoord < 0 || xCoord > 100 || yCoord < 0 || yCoord > 100) {
+        return res.status(400).json({ error: "Coordinates must be between 0 and 100" });
+      }
+      
+      // Normalize coordinates from 0-100 to 0-1 for database storage
+      const normalizedX = xCoord / 100;
+      const normalizedY = yCoord / 100;
+      
+      // Check user role - facilitators can always update, participants need open workspace
+      const user = req.user as User | undefined;
+      const isFacilitator = user && ["facilitator", "company_admin", "global_admin"].includes(user.role);
+      
+      const positionData: any = {
+        matrixId: matrix.id,
+        ideaId,
+        xCoord: normalizedX,
+        yCoord: normalizedY
+      };
+      
+      if (!isFacilitator) {
+        // For participants, require open workspace and participant session
+        const space = await storage.getSpace(spaceId);
+        if (space && space.status !== 'open') {
+          return res.status(403).json({ 
+            error: "This workspace is not currently open for participation",
+            code: "WORKSPACE_NOT_OPEN"
+          });
+        }
+        
+        const participantId = req.session?.participantId;
+        if (!participantId) {
+          return res.status(401).json({ error: "No participant session found" });
+        }
+        positionData.participantId = participantId;
+      }
+      
+      const position = await storage.upsertPriorityMatrixPosition(positionData);
+      
+      // Broadcast position update for real-time collaboration
+      broadcastToSpace(spaceId, { 
+        type: "matrix_position_updated", 
+        data: position 
+      });
+      
+      res.json(position);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Failed to update priority matrix position:", error);
+      res.status(500).json({ error: "Failed to update matrix position" });
+    }
+  });
+  
+  // Update idea position (upsert) - legacy route
   app.post("/api/priority-matrix-positions", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
     try {
       const positionData = insertPriorityMatrixPositionSchema.parse(req.body);
@@ -4070,17 +4179,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Update idea position on staircase (upsert)
-  app.post("/api/spaces/:spaceId/staircase-positions", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
+  app.post("/api/spaces/:spaceId/staircase-positions", createWorkspaceAccessMiddleware({ requireOpen: false }), async (req, res) => {
     try {
       const spaceId = await resolveWorkspaceId(req.params.spaceId);
       if (!spaceId) {
         return res.status(404).json({ error: "Workspace not found" });
       }
       
-      // Get staircase for this workspace
-      const staircase = await storage.getStaircaseModule(spaceId);
+      // Get or create staircase for this workspace (auto-create with defaults if not exists)
+      let staircase = await storage.getStaircaseModule(spaceId);
       if (!staircase) {
-        return res.status(404).json({ error: "Staircase module not configured for this workspace" });
+        // Auto-create with default configuration
+        staircase = await storage.createStaircaseModule({
+          spaceId,
+          minScore: 0,
+          maxScore: 10,
+          stepCount: 11,
+          allowDecimals: false,
+          minLabel: "Lowest",
+          maxLabel: "Highest",
+          showDistribution: true
+        });
       }
       
       const positionData = insertStaircasePositionSchema.parse({
@@ -4095,9 +4214,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Use session participant if not facilitator
+      // Check user role - facilitators can always update, participants need open workspace
       const user = req.user as User | undefined;
-      if (!user || !["facilitator", "company_admin", "global_admin"].includes(user.role)) {
+      const isFacilitator = user && ["facilitator", "company_admin", "global_admin"].includes(user.role);
+      
+      if (!isFacilitator) {
+        // For participants, require open workspace and participant session
+        const space = await storage.getSpace(spaceId);
+        if (space && space.status !== 'open') {
+          return res.status(403).json({ 
+            error: "This workspace is not currently open for participation",
+            code: "WORKSPACE_NOT_OPEN"
+          });
+        }
+        
         const participantId = req.session?.participantId;
         if (!participantId) {
           return res.status(401).json({ error: "No participant session found" });

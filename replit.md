@@ -13,7 +13,7 @@
 - [x] Phase 2: UI/Navigation for Projects (completed) - Projects tab in Admin Panel, workspace grouping by project in Dashboard
 - [x] Phase 3: Auth/SSO project scoping (completed) - Project membership enforcement in workspace access middleware, SSO/JIT assigns to default project, Project Members UI in Admin Panel
 - [ ] Show survey results impact in the Results tab - integrate survey responses into cohort results and AI summaries
-- [ ] Fix 2x2 Priority Matrix and Staircase drag errors - items error out when moved
+- [x] Fix 2x2 Priority Matrix and Staircase drag errors - items error out when moved - Fixed: Added spaceId-based routes, coordinate validation 0-100 range, auto-create modules, fixed React infinite loop in PriorityMatrix
 - [ ] Add Recommendations section to facilitator Results screen and PDF export (currently only on public results page)
 - [ ] Better format Recommendations with line breaks between numbered sections
 - [x] Implement robust session handling from Vega to improve session persistence in Nebula - Completed
