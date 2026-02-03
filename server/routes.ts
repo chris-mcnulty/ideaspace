@@ -96,10 +96,11 @@ function createWorkspaceAccessMiddleware(options: {
         return res.status(404).json({ error: "Workspace not found" });
       }
 
-      // Check if user is authenticated (admin/facilitator)
+      // Check if user is authenticated (admin/facilitator/project member)
       const currentUser = req.user as User | undefined;
       let isAdmin = false;
       let isFacilitator = false;
+      let isProjectMember = false;
 
       if (currentUser) {
         if (currentUser.role === 'global_admin') {
@@ -109,6 +110,11 @@ function createWorkspaceAccessMiddleware(options: {
         } else {
           const facilitators = await storage.getSpaceFacilitatorsBySpace(spaceId);
           isFacilitator = facilitators.some(f => f.userId === currentUser.id);
+          
+          // Check project membership for non-admin/non-facilitator authenticated users
+          if (!isFacilitator && space.projectId) {
+            isProjectMember = await storage.isProjectMember(space.projectId, currentUser.id);
+          }
         }
       }
 
@@ -116,6 +122,9 @@ function createWorkspaceAccessMiddleware(options: {
       if (isAdmin || isFacilitator) {
         return next();
       }
+      
+      // Authenticated users who are project members get access (but still subject to status checks below)
+      // Non-project members will fall through to guest access checks
 
       // Check workspace status
       if (space.status === 'closed') {
@@ -142,7 +151,13 @@ function createWorkspaceAccessMiddleware(options: {
       // Check guest access
       const participantId = req.session?.participantId;
       if (!participantId) {
-        // No participant session - check if guest access is allowed
+        // No participant session - check if authenticated user is project member
+        if (isProjectMember) {
+          // Project members can access without participant session
+          return next();
+        }
+        
+        // Not a project member - check if guest access is allowed
         if (!space.guestAllowed) {
           return res.status(403).json({ 
             error: "Guest access is not allowed for this workspace",
@@ -153,6 +168,10 @@ function createWorkspaceAccessMiddleware(options: {
         // Has participant session - verify they're in this workspace
         const participant = await storage.getParticipant(participantId);
         if (!participant || participant.spaceId !== spaceId) {
+          // Check if authenticated user is project member (fallback)
+          if (isProjectMember) {
+            return next();
+          }
           return res.status(403).json({ 
             error: "You do not have access to this workspace",
             code: "NO_ACCESS"
@@ -160,7 +179,7 @@ function createWorkspaceAccessMiddleware(options: {
         }
 
         // Check if guest user trying to access workspace where guests aren't allowed
-        if (participant.isGuest && !space.guestAllowed) {
+        if (participant.isGuest && !space.guestAllowed && !isProjectMember) {
           return res.status(403).json({ 
             error: "Guest access has been disabled for this workspace",
             code: "GUEST_ACCESS_REVOKED"
