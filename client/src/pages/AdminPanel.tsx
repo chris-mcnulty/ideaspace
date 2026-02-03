@@ -1679,6 +1679,11 @@ function NewWorkspaceDialog({
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   
+  // Fetch projects for this organization
+  const { data: projects = [] } = useQuery<Project[]>({
+    queryKey: ["/api/organizations", organizationId, "projects"],
+  });
+  
   // Fetch workspace templates (new simplified system)
   // Include organizationId in query key to prevent cache collision between orgs
   const { data: allTemplates = [] } = useQuery<Space[]>({
@@ -1694,11 +1699,15 @@ function NewWorkspaceDialog({
   const templates = allTemplates.filter(t => 
     t.templateScope === 'system' || t.organizationId === organizationId
   );
+
+  // Find the default project for this organization
+  const defaultProject = projects.find(p => p.isDefault);
   
   const form = useForm<z.infer<typeof createSpaceApiSchema>>({
     resolver: zodResolver(createSpaceApiSchema),
     defaultValues: {
       organizationId,
+      projectId: defaultProject?.id || undefined,
       name: "",
       purpose: "",
       guestAllowed: false,
@@ -1777,6 +1786,42 @@ function NewWorkspaceDialog({
                 </FormItem>
               )}
             />
+            {projects.length > 0 && (
+              <FormField
+                control={form.control}
+                name="projectId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Project</FormLabel>
+                    <Select 
+                      onValueChange={(value) => field.onChange(value === "none" ? undefined : value)} 
+                      value={field.value || "none"}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-project">
+                          <SelectValue placeholder="Select a project" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none" data-testid="project-option-none">
+                          No project
+                        </SelectItem>
+                        {projects.map((project) => (
+                          <SelectItem 
+                            key={project.id} 
+                            value={project.id}
+                            data-testid={`project-option-${project.id}`}
+                          >
+                            {project.name} {project.isDefault ? '(Default)' : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             {templates.length > 0 && (
               <FormField
                 control={form.control}
@@ -1900,21 +1945,29 @@ function EditWorkspaceDialog({
 }) {
   const { toast } = useToast();
   
-  const form = useForm<{ name: string; purpose: string; guestAllowed: boolean }>({
+  // Fetch projects for this organization
+  const { data: projects = [] } = useQuery<Project[]>({
+    queryKey: ["/api/organizations", organizationId, "projects"],
+    enabled: open,
+  });
+  
+  const form = useForm<{ name: string; purpose: string; guestAllowed: boolean; projectId: string | null }>({
     resolver: zodResolver(z.object({
       name: z.string().min(1, "Name is required"),
       purpose: z.string().min(1, "Purpose is required"),
       guestAllowed: z.boolean(),
+      projectId: z.string().nullable(),
     })),
     defaultValues: {
       name: space.name,
       purpose: space.purpose || "",
       guestAllowed: space.guestAllowed ?? false,
+      projectId: space.projectId || null,
     },
   });
 
   const updateSpaceMutation = useMutation({
-    mutationFn: async (data: { name: string; purpose: string; guestAllowed: boolean }) => {
+    mutationFn: async (data: { name: string; purpose: string; guestAllowed: boolean; projectId: string | null }) => {
       const response = await apiRequest("PATCH", `/api/spaces/${space.id}`, data);
       return await response.json();
     },
@@ -1963,6 +2016,42 @@ function EditWorkspaceDialog({
                 </FormItem>
               )}
             />
+            {projects.length > 0 && (
+              <FormField
+                control={form.control}
+                name="projectId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Project</FormLabel>
+                    <Select 
+                      onValueChange={(value) => field.onChange(value === "none" ? null : value)} 
+                      value={field.value || "none"}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-edit-project">
+                          <SelectValue placeholder="Select a project" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none" data-testid="edit-project-option-none">
+                          No project
+                        </SelectItem>
+                        {projects.map((project) => (
+                          <SelectItem 
+                            key={project.id} 
+                            value={project.id}
+                            data-testid={`edit-project-option-${project.id}`}
+                          >
+                            {project.name} {project.isDefault ? '(Default)' : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             <FormField
               control={form.control}
               name="purpose"
