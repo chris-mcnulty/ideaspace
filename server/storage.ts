@@ -2,6 +2,8 @@ import { db } from "./db";
 import {
   type Organization,
   type InsertOrganization,
+  type Project,
+  type InsertProject,
   type User,
   type InsertUser,
   type Space,
@@ -68,6 +70,7 @@ import {
   type ServicePlan,
   type InsertServicePlan,
   organizations,
+  projects,
   systemSettings,
   servicePlans,
   users,
@@ -139,6 +142,15 @@ export interface IStorage {
   createOrganization(org: InsertOrganization): Promise<Organization>;
   updateOrganization(id: string, org: Partial<InsertOrganization>): Promise<Organization | undefined>;
 
+  // Projects
+  getProject(id: string): Promise<Project | undefined>;
+  getProjectBySlug(organizationId: string, slug: string): Promise<Project | undefined>;
+  getProjectsByOrganization(organizationId: string): Promise<Project[]>;
+  getDefaultProject(organizationId: string): Promise<Project | undefined>;
+  createProject(project: InsertProject): Promise<Project>;
+  updateProject(id: string, project: Partial<InsertProject>): Promise<Project | undefined>;
+  deleteProject(id: string): Promise<boolean>;
+
   // Users
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
@@ -155,6 +167,7 @@ export interface IStorage {
   getSpaceByCode(code: string): Promise<Space | undefined>;
   getAllSpaces(): Promise<Space[]>;
   getSpacesByOrganization(organizationId: string): Promise<Space[]>;
+  getSpacesByProject(projectId: string): Promise<Space[]>;
   createSpace(space: InsertSpace): Promise<Space>;
   updateSpace(id: string, space: Partial<InsertSpace>): Promise<Space | undefined>;
   deleteSpace(id: string): Promise<boolean>;
@@ -485,6 +498,50 @@ export class DbStorage implements IStorage {
     return updated;
   }
 
+  // Projects
+  async getProject(id: string): Promise<Project | undefined> {
+    const [project] = await db.select().from(projects).where(eq(projects.id, id)).limit(1);
+    return project;
+  }
+
+  async getProjectBySlug(organizationId: string, slug: string): Promise<Project | undefined> {
+    const [project] = await db.select().from(projects)
+      .where(and(eq(projects.organizationId, organizationId), eq(projects.slug, slug)))
+      .limit(1);
+    return project;
+  }
+
+  async getProjectsByOrganization(organizationId: string): Promise<Project[]> {
+    return db.select().from(projects)
+      .where(eq(projects.organizationId, organizationId))
+      .orderBy(projects.name);
+  }
+
+  async getDefaultProject(organizationId: string): Promise<Project | undefined> {
+    const [project] = await db.select().from(projects)
+      .where(and(eq(projects.organizationId, organizationId), eq(projects.isDefault, true)))
+      .limit(1);
+    return project;
+  }
+
+  async createProject(project: InsertProject): Promise<Project> {
+    const [created] = await db.insert(projects).values(project).returning();
+    return created;
+  }
+
+  async updateProject(id: string, project: Partial<InsertProject>): Promise<Project | undefined> {
+    const [updated] = await db.update(projects)
+      .set({ ...project, updatedAt: new Date() })
+      .where(eq(projects.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteProject(id: string): Promise<boolean> {
+    const result = await db.delete(projects).where(eq(projects.id, id)).returning();
+    return result.length > 0;
+  }
+
   // Users
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
@@ -558,6 +615,15 @@ export class DbStorage implements IStorage {
     return db.select().from(spaces).where(
       and(
         eq(spaces.organizationId, organizationId),
+        eq(spaces.isTemplate, false)
+      )
+    ).orderBy(desc(spaces.createdAt));
+  }
+
+  async getSpacesByProject(projectId: string): Promise<Space[]> {
+    return db.select().from(spaces).where(
+      and(
+        eq(spaces.projectId, projectId),
         eq(spaces.isTemplate, false)
       )
     ).orderBy(desc(spaces.createdAt));

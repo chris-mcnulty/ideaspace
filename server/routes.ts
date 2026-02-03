@@ -1128,6 +1128,120 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Projects
+  app.get("/api/organizations/:orgId/projects", requireAuth, async (req, res) => {
+    try {
+      const projects = await storage.getProjectsByOrganization(req.params.orgId);
+      res.json(projects);
+    } catch (error) {
+      console.error("Failed to fetch projects:", error);
+      res.status(500).json({ error: "Failed to fetch projects" });
+    }
+  });
+
+  app.get("/api/projects/:id", requireAuth, async (req, res) => {
+    try {
+      const project = await storage.getProject(req.params.id);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      res.json(project);
+    } catch (error) {
+      console.error("Failed to fetch project:", error);
+      res.status(500).json({ error: "Failed to fetch project" });
+    }
+  });
+
+  app.post("/api/organizations/:orgId/projects", requireCompanyAdmin, async (req, res) => {
+    try {
+      const { name, description } = req.body;
+      if (!name) {
+        return res.status(400).json({ error: "Project name is required" });
+      }
+      
+      // Generate slug from name
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      
+      // Check if slug already exists for this org
+      const existing = await storage.getProjectBySlug(req.params.orgId, slug);
+      if (existing) {
+        return res.status(400).json({ error: "A project with this name already exists" });
+      }
+      
+      const project = await storage.createProject({
+        organizationId: req.params.orgId,
+        name,
+        slug,
+        description: description || null,
+        isDefault: false,
+      });
+      res.status(201).json(project);
+    } catch (error) {
+      console.error("Failed to create project:", error);
+      res.status(500).json({ error: "Failed to create project" });
+    }
+  });
+
+  app.patch("/api/projects/:id", requireCompanyAdmin, async (req, res) => {
+    try {
+      const { name, description } = req.body;
+      const updates: Record<string, any> = {};
+      
+      if (name !== undefined) {
+        updates.name = name;
+        updates.slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      }
+      if (description !== undefined) {
+        updates.description = description;
+      }
+      
+      const project = await storage.updateProject(req.params.id, updates);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      res.json(project);
+    } catch (error) {
+      console.error("Failed to update project:", error);
+      res.status(500).json({ error: "Failed to update project" });
+    }
+  });
+
+  app.delete("/api/projects/:id", requireCompanyAdmin, async (req, res) => {
+    try {
+      const project = await storage.getProject(req.params.id);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      
+      // Don't allow deleting the default project
+      if (project.isDefault) {
+        return res.status(400).json({ error: "Cannot delete the default project" });
+      }
+      
+      // Check if project has workspaces
+      const workspaces = await storage.getSpacesByProject(req.params.id);
+      if (workspaces.length > 0) {
+        return res.status(400).json({ error: "Cannot delete project with existing workspaces" });
+      }
+      
+      await storage.deleteProject(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Failed to delete project:", error);
+      res.status(500).json({ error: "Failed to delete project" });
+    }
+  });
+
+  app.get("/api/projects/:projectId/spaces", requireAuth, async (req, res) => {
+    try {
+      const spaces = await storage.getSpacesByProject(req.params.projectId);
+      res.json(spaces);
+    } catch (error) {
+      console.error("Failed to fetch project spaces:", error);
+      res.status(500).json({ error: "Failed to fetch project spaces" });
+    }
+  });
+
   // Spaces
   app.get("/api/organizations/:orgId/spaces", async (req, res) => {
     try {
