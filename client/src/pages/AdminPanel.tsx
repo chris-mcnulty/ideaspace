@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Building2, Plus, LogOut, Loader2, Mail, Clock, Check, X, BookOpen, FileStack, Activity, Users, Edit, Trash2, FolderKanban } from "lucide-react";
-import type { Organization, Space, User, AccessRequest, WorkspaceTemplate, SystemSetting, Project } from "@shared/schema";
+import type { Organization, Space, User, AccessRequest, WorkspaceTemplate, SystemSetting, Project, ProjectMember } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -3298,6 +3298,7 @@ function ProjectsTab({ organizations, currentUser }: ProjectsTabProps) {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [deleteProject, setDeleteProject] = useState<Project | null>(null);
+  const [membersProject, setMembersProject] = useState<Project | null>(null);
   const { toast } = useToast();
 
   const projectsUrl = selectedOrgId === "all" 
@@ -3448,7 +3449,16 @@ function ProjectsTab({ organizations, currentUser }: ProjectsTabProps) {
                     {project.description}
                   </p>
                 )}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setMembersProject(project)}
+                    data-testid={`button-members-project-${project.id}`}
+                  >
+                    <Users className="h-3 w-3 mr-1" />
+                    Members
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
@@ -3502,6 +3512,15 @@ function ProjectsTab({ organizations, currentUser }: ProjectsTabProps) {
           project={deleteProject}
           onConfirm={() => deleteProjectMutation.mutate(deleteProject.id)}
           isPending={deleteProjectMutation.isPending}
+        />
+      )}
+
+      {membersProject && (
+        <ProjectMembersDialog
+          open={!!membersProject}
+          onOpenChange={(open) => !open && setMembersProject(null)}
+          project={membersProject}
+          organizationId={membersProject.organizationId}
         />
       )}
     </div>
@@ -3751,6 +3770,210 @@ function DeleteProjectDialog({ open, onOpenChange, project, onConfirm, isPending
             {isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Delete Project
           </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface ProjectMembersDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  project: Project;
+  organizationId: string;
+}
+
+type ProjectMemberWithUser = ProjectMember & { user: User };
+
+function ProjectMembersDialog({ open, onOpenChange, project, organizationId }: ProjectMembersDialogProps) {
+  const [addUserEmail, setAddUserEmail] = useState("");
+  const [addUserRole, setAddUserRole] = useState<"member" | "admin">("member");
+  const { toast } = useToast();
+
+  const { data: members = [], isLoading: membersLoading } = useQuery<ProjectMemberWithUser[]>({
+    queryKey: ["/api/projects", project.id, "members"],
+    enabled: open,
+  });
+
+  const { data: orgUsers = [] } = useQuery<User[]>({
+    queryKey: ["/api/organizations", organizationId, "users"],
+    enabled: open,
+  });
+
+  const addMemberMutation = useMutation({
+    mutationFn: async (data: { userId: string; role: string }) => {
+      const response = await apiRequest("POST", `/api/projects/${project.id}/members`, data);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to add member");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id, "members"] });
+      setAddUserEmail("");
+      setAddUserRole("member");
+      toast({ title: "Member added successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to add member", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const removeMemberMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const response = await apiRequest("DELETE", `/api/projects/${project.id}/members/${userId}`);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to remove member");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id, "members"] });
+      toast({ title: "Member removed successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to remove member", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateRoleMutation = useMutation({
+    mutationFn: async (data: { userId: string; role: string }) => {
+      const response = await apiRequest("PATCH", `/api/projects/${project.id}/members/${data.userId}`, { role: data.role });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update role");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id, "members"] });
+      toast({ title: "Role updated successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to update role", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleAddMember = () => {
+    const user = orgUsers.find(u => u.email.toLowerCase() === addUserEmail.toLowerCase());
+    if (!user) {
+      toast({ title: "User not found", description: "User must be a member of the organization", variant: "destructive" });
+      return;
+    }
+    if (members.some(m => m.userId === user.id)) {
+      toast({ title: "Already a member", description: "This user is already a project member", variant: "destructive" });
+      return;
+    }
+    addMemberMutation.mutate({ userId: user.id, role: addUserRole });
+  };
+
+  const availableUsers = orgUsers.filter(u => !members.some(m => m.userId === u.id));
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Manage Project Members</DialogTitle>
+          <DialogDescription>
+            Add or remove members for "{project.name}"
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="flex gap-2 items-end">
+            <div className="flex-1">
+              <Label htmlFor="add-member-email">Add Member</Label>
+              <Select
+                value={addUserEmail}
+                onValueChange={setAddUserEmail}
+              >
+                <SelectTrigger data-testid="select-add-member-email">
+                  <SelectValue placeholder="Select user..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableUsers.length === 0 ? (
+                    <SelectItem value="__none__" disabled>No users available</SelectItem>
+                  ) : (
+                    availableUsers.map(user => (
+                      <SelectItem key={user.id} value={user.email}>
+                        {user.displayName || user.username} ({user.email})
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="w-28">
+              <Label htmlFor="add-member-role">Role</Label>
+              <Select value={addUserRole} onValueChange={(v) => setAddUserRole(v as "member" | "admin")}>
+                <SelectTrigger data-testid="select-add-member-role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="member">Member</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              onClick={handleAddMember}
+              disabled={!addUserEmail || addMemberMutation.isPending}
+              data-testid="button-add-member"
+            >
+              {addMemberMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+            </Button>
+          </div>
+
+          <div className="border rounded-md">
+            {membersLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : members.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p>No members yet</p>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {members.map((member) => (
+                  <div key={member.userId} className="flex items-center justify-between p-3 gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">
+                        {member.user.displayName || member.user.username}
+                      </p>
+                      <p className="text-sm text-muted-foreground truncate">
+                        {member.user.email}
+                      </p>
+                    </div>
+                    <Select
+                      value={member.role}
+                      onValueChange={(role) => updateRoleMutation.mutate({ userId: member.userId, role })}
+                    >
+                      <SelectTrigger className="w-24" data-testid={`select-member-role-${member.userId}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="member">Member</SelectItem>
+                        <SelectItem value="admin">Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeMemberMutation.mutate(member.userId)}
+                      disabled={removeMemberMutation.isPending}
+                      data-testid={`button-remove-member-${member.userId}`}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

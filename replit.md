@@ -11,7 +11,7 @@
 - [ ] Import templates from CSV (with categories) and edit their contents in the system
 - [x] Phase 1: Add Projects table and API (completed) - Schema, storage, and API routes for project CRUD
 - [x] Phase 2: UI/Navigation for Projects (completed) - Projects tab in Admin Panel, workspace grouping by project in Dashboard
-- [ ] Phase 3: Auth/SSO project scoping - Update auth to enforce project membership
+- [x] Phase 3: Auth/SSO project scoping (completed) - Project membership enforcement in workspace access middleware, SSO/JIT assigns to default project, Project Members UI in Admin Panel
 - [ ] Show survey results impact in the Results tab - integrate survey responses into cohort results and AI summaries
 - [ ] Fix 2x2 Priority Matrix and Staircase drag errors - items error out when moved
 - [ ] Add Recommendations section to facilitator Results screen and PDF export (currently only on public results page)
