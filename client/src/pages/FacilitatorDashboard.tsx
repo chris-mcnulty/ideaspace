@@ -3,12 +3,13 @@ import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Users, StickyNote, ArrowRight, Plus, FolderKanban, ChevronDown, ChevronRight } from "lucide-react";
+import { Users, StickyNote, ArrowRight, Plus, FolderKanban, ChevronDown, ChevronRight, Building2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
-import { useEffect, useState, useMemo } from "react";
+import { OrgSwitcher } from "@/components/OrgSwitcher";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface WorkspaceWithStats {
@@ -50,25 +51,80 @@ interface GroupedWorkspaces {
   }[];
 }
 
+interface OrganizationWithCounts {
+  id: string;
+  name: string;
+  slug: string;
+  projectCount: number;
+  workspaceCount: number;
+}
+
+interface Project {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  isDefault: boolean;
+  organizationId: string;
+}
+
 export default function FacilitatorDashboard() {
   const { user } = useAuth();
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
 
   useEffect(() => {
     document.title = "Nebula - Dashboard | The Synozur Alliance";
   }, []);
+
+  const { data: organizations } = useQuery<OrganizationWithCounts[]>({
+    queryKey: ["/api/my-organizations"],
+    enabled: !!user,
+  });
 
   const { data: workspaces, isLoading } = useQuery<WorkspaceWithStats[]>({
     queryKey: ["/api/my-workspaces"],
     enabled: !!user,
   });
 
+  const { data: allProjects } = useQuery<Project[]>({
+    queryKey: ["/api/organizations", selectedOrgId, "projects"],
+    enabled: !!user && !!selectedOrgId,
+  });
+
+  const handleOrgChange = useCallback((orgId: string | null) => {
+    setSelectedOrgId(orgId);
+  }, []);
+
   const groupedWorkspaces = useMemo(() => {
     if (!workspaces) return [];
 
+    // Filter workspaces by selected org if one is chosen
+    const filteredWorkspaces = selectedOrgId 
+      ? workspaces.filter(w => w.organizationId === selectedOrgId)
+      : workspaces;
+
     const orgMap = new Map<string, GroupedWorkspaces>();
 
-    for (const workspace of workspaces) {
+    // If a specific org is selected and we have projects data, initialize with all projects
+    if (selectedOrgId && allProjects && organizations) {
+      const selectedOrg = organizations.find(o => o.id === selectedOrgId);
+      if (selectedOrg) {
+        orgMap.set(selectedOrgId, {
+          orgId: selectedOrgId,
+          orgName: selectedOrg.name,
+          orgSlug: selectedOrg.slug,
+          projects: allProjects.map(project => ({
+            projectId: project.id,
+            projectName: project.name,
+            isDefault: project.isDefault,
+            workspaces: [],
+          })),
+        });
+      }
+    }
+
+    for (const workspace of filteredWorkspaces) {
       const orgId = workspace.organizationId;
       
       if (!orgMap.has(orgId)) {
@@ -110,7 +166,7 @@ export default function FacilitatorDashboard() {
     }
 
     return result.sort((a, b) => a.orgName.localeCompare(b.orgName));
-  }, [workspaces]);
+  }, [workspaces, selectedOrgId, allProjects, organizations]);
 
   useEffect(() => {
     if (groupedWorkspaces.length > 0 && expandedProjects.size === 0) {
@@ -179,7 +235,12 @@ export default function FacilitatorDashboard() {
               Nebula
             </span>
           </Link>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <OrgSwitcher 
+              selectedOrgId={selectedOrgId} 
+              onOrgChange={handleOrgChange} 
+            />
+            <div className="h-6 w-px bg-border/40" />
             <ThemeToggle />
             <UserProfileMenu />
           </div>
@@ -291,7 +352,25 @@ export default function FacilitatorDashboard() {
                       </CollapsibleTrigger>
                       <CollapsibleContent>
                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mt-4 ml-6">
-                          {project.workspaces.map((workspace) => (
+                          {project.workspaces.length === 0 ? (
+                            <Card className="border-dashed" data-testid={`card-empty-project-${project.projectId}`}>
+                              <CardHeader>
+                                <CardDescription className="text-center py-4">
+                                  No workspaces in this project yet.
+                                </CardDescription>
+                              </CardHeader>
+                              {(user.role === "global_admin" || user.role === "company_admin") && (
+                                <CardContent className="pt-0">
+                                  <Button asChild variant="outline" className="w-full" data-testid={`button-create-workspace-${project.projectId}`}>
+                                    <Link href="/admin">
+                                      <Plus className="w-4 h-4 mr-2" />
+                                      Create Workspace
+                                    </Link>
+                                  </Button>
+                                </CardContent>
+                              )}
+                            </Card>
+                          ) : project.workspaces.map((workspace) => (
                             <Card
                               key={workspace.id}
                               className="hover-elevate transition-all"
