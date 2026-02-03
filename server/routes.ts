@@ -1376,6 +1376,110 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Project Members
+  app.get("/api/projects/:projectId/members", requireAuth, async (req, res) => {
+    try {
+      const members = await storage.getProjectMembers(req.params.projectId);
+      res.json(members);
+    } catch (error) {
+      console.error("Failed to fetch project members:", error);
+      res.status(500).json({ error: "Failed to fetch project members" });
+    }
+  });
+
+  app.post("/api/projects/:projectId/members", requireCompanyAdmin, async (req, res) => {
+    try {
+      const { userId, role = "member" } = req.body;
+      if (!userId) {
+        return res.status(400).json({ error: "userId is required" });
+      }
+      
+      // Verify project exists
+      const project = await storage.getProject(req.params.projectId);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      
+      // Verify user exists and belongs to the same org
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      if (user.organizationId !== project.organizationId) {
+        return res.status(400).json({ error: "User must belong to the same organization as the project" });
+      }
+      
+      const member = await storage.addProjectMember(req.params.projectId, userId, role);
+      res.status(201).json(member);
+    } catch (error) {
+      console.error("Failed to add project member:", error);
+      res.status(500).json({ error: "Failed to add project member" });
+    }
+  });
+
+  app.delete("/api/projects/:projectId/members/:userId", requireCompanyAdmin, async (req, res) => {
+    try {
+      const success = await storage.removeProjectMember(req.params.projectId, req.params.userId);
+      if (!success) {
+        return res.status(404).json({ error: "Member not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Failed to remove project member:", error);
+      res.status(500).json({ error: "Failed to remove project member" });
+    }
+  });
+
+  app.patch("/api/projects/:projectId/members/:userId", requireCompanyAdmin, async (req, res) => {
+    try {
+      const { role } = req.body;
+      if (!role || !["admin", "member"].includes(role)) {
+        return res.status(400).json({ error: "Valid role (admin or member) is required" });
+      }
+      
+      const member = await storage.updateProjectMemberRole(req.params.projectId, req.params.userId, role);
+      if (!member) {
+        return res.status(404).json({ error: "Member not found" });
+      }
+      res.json(member);
+    } catch (error) {
+      console.error("Failed to update project member role:", error);
+      res.status(500).json({ error: "Failed to update project member role" });
+    }
+  });
+
+  // Get projects for current user (filtered by membership for non-admins)
+  app.get("/api/my-projects", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as User;
+      
+      // Admins see all projects in their organizations
+      if (user.role === "admin" || user.role === "global_admin" || user.role === "company_admin") {
+        const orgId = user.organizationId;
+        if (orgId) {
+          const projects = await storage.getProjectsByOrganization(orgId);
+          return res.json(projects);
+        }
+        // Global admin gets all
+        const allOrgs = await storage.getAllOrganizations();
+        const allProjects = [];
+        for (const org of allOrgs) {
+          const orgProjects = await storage.getProjectsByOrganization(org.id);
+          allProjects.push(...orgProjects);
+        }
+        return res.json(allProjects);
+      }
+      
+      // Regular users see only projects they're members of
+      const memberships = await storage.getProjectMembersByUser(user.id);
+      const projects = memberships.map(m => m.project);
+      res.json(projects);
+    } catch (error) {
+      console.error("Failed to fetch user projects:", error);
+      res.status(500).json({ error: "Failed to fetch user projects" });
+    }
+  });
+
   // Spaces
   app.get("/api/organizations/:orgId/spaces", async (req, res) => {
     try {
