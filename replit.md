@@ -75,6 +75,14 @@ The design system features a dark mode with a primary purple accent, dark blue-b
 - **Backend**: Express.js, WebSocket (`ws`).
 - **Database**: PostgreSQL (Neon) with Drizzle ORM.
 
+### Database Migrations
+- **Schema Changes**: Use `npm run db:push` to sync Drizzle schema to database
+- **Data Migrations**: Use scripts in `scripts/` folder for data transformations
+  - `scripts/migrate-projects.ts` - Creates default projects for orgs and links workspaces (idempotent)
+- **Production Deployment**:
+  1. Push schema: `npm run db:push`
+  2. Run data migrations: `npx tsx scripts/migrate-projects.ts`
+
 ## External Dependencies
 - **Database**: PostgreSQL (Neon)
 - **ORM**: Drizzle ORM
