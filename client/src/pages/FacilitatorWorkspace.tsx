@@ -64,6 +64,7 @@ import {
   Share2,
   Copy,
   ExternalLink,
+  Target,
 } from "lucide-react";
 import type { Organization, Space, Note, Participant, Category, User, Idea, WorkspaceModule } from "@shared/schema";
 import { Leaderboard } from "@/components/Leaderboard";
@@ -2042,6 +2043,27 @@ export default function FacilitatorWorkspace() {
               <CardContent>
                 <div className="prose prose-sm max-w-none dark:prose-invert">
                   <p className="whitespace-pre-wrap">{cohortResults.insights}</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {cohortResults.recommendations && (
+            <Card data-testid="card-cohort-recommendations">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="h-5 w-5 text-primary" />
+                  Recommendations
+                </CardTitle>
+                <CardDescription>Suggested next steps based on the results</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="prose prose-sm max-w-none dark:prose-invert space-y-4" data-testid="recommendations-content">
+                  {cohortResults.recommendations.split(/\n\n+/).filter((p: string) => p.trim()).map((paragraph: string, index: number) => (
+                    <p key={index} className="whitespace-pre-wrap leading-relaxed" data-testid={`recommendation-item-${index}`}>
+                      {paragraph.trim()}
+                    </p>
+                  ))}
                 </div>
               </CardContent>
             </Card>

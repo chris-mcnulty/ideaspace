@@ -14,8 +14,8 @@
 - [x] Phase 3: Auth/SSO project scoping (completed) - Project membership enforcement in workspace access middleware, SSO/JIT assigns to default project, Project Members UI in Admin Panel
 - [ ] Show survey results impact in the Results tab - integrate survey responses into cohort results and AI summaries
 - [x] Fix 2x2 Priority Matrix and Staircase drag errors - items error out when moved - Fixed: Added spaceId-based routes, coordinate validation 0-100 range, auto-create modules, fixed React infinite loop in PriorityMatrix
-- [ ] Add Recommendations section to facilitator Results screen and PDF export (currently only on public results page)
-- [ ] Better format Recommendations with line breaks between numbered sections
+- [x] Add Recommendations section to facilitator Results screen and PDF export - Added Recommendations card with Target icon after Key Insights in FacilitatorWorkspace.tsx, PDF export already had recommendations support
+- [x] Better format Recommendations with line breaks between numbered sections - Implemented split on double newlines with proper paragraph spacing in both UI and PDF
 - [x] Implement robust session handling from Vega to improve session persistence in Nebula - Completed
 - [x] Increase font size for 8-digit codes in Facilitator Dashboard (My Workspaces) - Completed
 - [x] Increase font size for 8-digit codes in Share Links Dialog - Completed
