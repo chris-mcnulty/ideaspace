@@ -28,6 +28,7 @@ import Results from "@/pages/Results";
 import PublicResults from "@/pages/PublicResults";
 import PriorityMatrixParticipant from "@/pages/PriorityMatrixParticipant";
 import StaircaseParticipant from "@/pages/StaircaseParticipant";
+import MyProjects from "@/pages/MyProjects";
 
 import LandingPageExample from "@/components/examples/LandingPage";
 import OrganizationHomeExample from "@/components/examples/OrganizationHome";
@@ -60,6 +61,7 @@ function Router() {
       <Route path="/admin" component={AdminPanel} />
       <Route path="/admin/migrations" component={AdminMigrations} />
       <Route path="/dashboard" component={FacilitatorDashboard} />
+      <Route path="/projects" component={MyProjects} />
       <Route path="/o/:org" component={OrganizationHome} />
       <Route path="/o/:org/s/:space" component={WaitingRoom} />
       <Route path="/o/:org/s/:space/participate" component={ParticipantView} />

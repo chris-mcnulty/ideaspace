@@ -1570,6 +1570,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get detailed projects for current user (with organization and workspace counts)
+  app.get("/api/my-projects/detailed", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as User;
+      let projects: any[] = [];
+      
+      // Admins see all projects in their organizations
+      if (user.role === "admin" || user.role === "global_admin" || user.role === "company_admin") {
+        const orgId = user.organizationId;
+        if (orgId) {
+          projects = await storage.getProjectsByOrganization(orgId);
+        } else if (user.role === "global_admin") {
+          // Global admin gets all
+          const allOrgs = await storage.getAllOrganizations();
+          for (const org of allOrgs) {
+            const orgProjects = await storage.getProjectsByOrganization(org.id);
+            projects.push(...orgProjects);
+          }
+        }
+      } else {
+        // Regular users see only projects they're members of
+        const memberships = await storage.getProjectMembersByUser(user.id);
+        projects = memberships.map(m => m.project);
+      }
+      
+      // Enrich with organization and workspace counts
+      const enriched = await Promise.all(
+        projects.map(async (project) => {
+          const org = await storage.getOrganization(project.organizationId);
+          const spaces = await storage.getSpacesByProject(project.id);
+          return {
+            ...project,
+            organization: org ? { id: org.id, name: org.name, slug: org.slug } : null,
+            workspaceCount: spaces.length,
+          };
+        })
+      );
+      
+      res.json(enriched);
+    } catch (error) {
+      console.error("Failed to fetch detailed user projects:", error);
+      res.status(500).json({ error: "Failed to fetch user projects" });
+    }
+  });
+
   // Spaces
   app.get("/api/organizations/:orgId/spaces", async (req, res) => {
     try {

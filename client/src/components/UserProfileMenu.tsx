@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { User, Settings, LogOut, Shield, LayoutDashboard } from "lucide-react";
+import { User, Settings, LogOut, Shield, LayoutDashboard, FolderKanban } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 
@@ -126,14 +126,24 @@ export function UserProfileMenu() {
         <DropdownMenuSeparator />
         
         {(user.role === "facilitator" || user.role === "company_admin" || user.role === "global_admin") && (
-          <DropdownMenuItem
-            onClick={() => setLocation("/dashboard")}
-            data-testid="menu-item-dashboard"
-            className="cursor-pointer"
-          >
-            <LayoutDashboard className="mr-2 h-4 w-4" />
-            <span>My Workspaces</span>
-          </DropdownMenuItem>
+          <>
+            <DropdownMenuItem
+              onClick={() => setLocation("/dashboard")}
+              data-testid="menu-item-dashboard"
+              className="cursor-pointer"
+            >
+              <LayoutDashboard className="mr-2 h-4 w-4" />
+              <span>My Workspaces</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => setLocation("/projects")}
+              data-testid="menu-item-projects"
+              className="cursor-pointer"
+            >
+              <FolderKanban className="mr-2 h-4 w-4" />
+              <span>My Projects</span>
+            </DropdownMenuItem>
+          </>
         )}
         
         {isAdmin && (
