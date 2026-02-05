@@ -145,9 +145,9 @@ export default function MyProjects() {
             </div>
             <div className="flex items-center gap-3">
               <Link href="/dashboard">
-                <Button variant="outline" data-testid="button-view-workspaces">
+                <Button variant="outline" data-testid="button-my-workspaces">
                   <Layers className="h-4 w-4 mr-2" />
-                  View Workspaces
+                  My Workspaces
                 </Button>
               </Link>
             </div>
