@@ -1342,6 +1342,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         slug,
         description: description || null,
         isDefault: false,
+        createdBy: req.user!.id,
       });
       res.status(201).json(project);
     } catch (error) {
@@ -1744,6 +1745,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               ...spaceData,
               projectId,
               code: data.code || await generateWorkspaceCode(),
+              createdBy: req.user!.id,
             });
             return res.status(201).json(newWorkspace);
           } else {
@@ -1753,6 +1755,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               ...spaceData,
               projectId,
               code,
+              createdBy: req.user!.id,
             });
             await storage.cloneTemplateIntoWorkspace(templateId, space.id, "Template");
             return res.status(201).json(space);
@@ -1779,6 +1782,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...spaceData,
         projectId,
         code,
+        createdBy: req.user!.id,
       });
       
       res.status(201).json(space);

@@ -84,6 +84,7 @@ export const projects = pgTable("projects", {
   slug: text("slug").notNull(),
   description: text("description"),
   isDefault: boolean("is_default").notNull().default(false), // True for the auto-created default project
+  createdBy: varchar("created_by").references(() => users.id), // Nullable for backward compatibility
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
@@ -153,6 +154,7 @@ export const spaces = pgTable("spaces", {
   icon: text("icon").notNull().default("brain"), // Workspace icon identifier
   sessionMode: text("session_mode").notNull().default("live"), // 'live' or 'async'
   pairwiseScope: text("pairwise_scope").notNull().default("all"), // 'all' = compare all ideas, 'within_categories' = compare only within same category
+  createdBy: varchar("created_by").references(() => users.id), // Nullable for backward compatibility
   ideationStartsAt: timestamp("ideation_starts_at"),
   ideationEndsAt: timestamp("ideation_ends_at"),
   votingStartsAt: timestamp("voting_starts_at"),
