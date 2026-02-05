@@ -3,7 +3,9 @@ import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Users, StickyNote, ArrowRight, Plus, FolderKanban, ChevronDown, ChevronRight, Building2 } from "lucide-react";
+import { Users, StickyNote, ArrowRight, Plus, FolderKanban, ChevronDown, ChevronRight, Building2, User } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -20,6 +22,7 @@ interface WorkspaceWithStats {
   status: string;
   organizationId: string;
   projectId: string | null;
+  createdBy: string | null;
   createdAt: string;
   organization: {
     id: string;
@@ -72,6 +75,7 @@ export default function FacilitatorDashboard() {
   const { user } = useAuth();
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
+  const [showOnlyMine, setShowOnlyMine] = useState(false);
 
   useEffect(() => {
     document.title = "Nebula - Dashboard | The Synozur Alliance";
@@ -99,10 +103,14 @@ export default function FacilitatorDashboard() {
   const groupedWorkspaces = useMemo(() => {
     if (!workspaces) return [];
 
-    // Filter workspaces by selected org if one is chosen
-    const filteredWorkspaces = selectedOrgId 
+    // Filter workspaces by selected org and "created by me" if enabled
+    let filteredWorkspaces = selectedOrgId 
       ? workspaces.filter(w => w.organizationId === selectedOrgId)
       : workspaces;
+    
+    if (showOnlyMine && user) {
+      filteredWorkspaces = filteredWorkspaces.filter(w => w.createdBy === user.id);
+    }
 
     const orgMap = new Map<string, GroupedWorkspaces>();
 
@@ -166,7 +174,7 @@ export default function FacilitatorDashboard() {
     }
 
     return result.sort((a, b) => a.orgName.localeCompare(b.orgName));
-  }, [workspaces, selectedOrgId, allProjects, organizations]);
+  }, [workspaces, selectedOrgId, allProjects, organizations, showOnlyMine, user]);
 
   useEffect(() => {
     if (groupedWorkspaces.length > 0 && expandedProjects.size === 0) {
@@ -259,14 +267,28 @@ export default function FacilitatorDashboard() {
                 Manage your envisioning sessions
               </p>
             </div>
-            {(user.role === "global_admin" || user.role === "company_admin" || user.role === "facilitator") && (
-              <Button asChild data-testid="button-create-workspace">
-                <Link href="/admin">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Workspace
-                </Link>
-              </Button>
-            )}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="show-only-mine"
+                  checked={showOnlyMine}
+                  onCheckedChange={setShowOnlyMine}
+                  data-testid="switch-created-by-me"
+                />
+                <Label htmlFor="show-only-mine" className="text-sm text-muted-foreground cursor-pointer">
+                  <User className="w-4 h-4 inline mr-1" />
+                  Created by me
+                </Label>
+              </div>
+              {(user.role === "global_admin" || user.role === "company_admin" || user.role === "facilitator") && (
+                <Button asChild data-testid="button-create-workspace">
+                  <Link href="/admin">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create Workspace
+                  </Link>
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </div>

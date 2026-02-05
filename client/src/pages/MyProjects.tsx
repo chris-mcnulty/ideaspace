@@ -3,7 +3,9 @@ import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FolderKanban, Building2, Layers, ChevronRight } from "lucide-react";
+import { FolderKanban, Building2, Layers, ChevronRight, User } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -17,6 +19,7 @@ interface Project {
   description: string | null;
   organizationId: string;
   isDefault: boolean;
+  createdBy: string | null;
   createdAt: string;
   organization?: {
     id: string;
@@ -37,6 +40,7 @@ interface Organization {
 export default function MyProjects() {
   const { user, isLoading: authLoading } = useAuth();
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
+  const [showOnlyMine, setShowOnlyMine] = useState(false);
 
   useEffect(() => {
     document.title = "My Projects - Nebula | The Synozur Alliance";
@@ -58,10 +62,14 @@ export default function MyProjects() {
     setSelectedOrgId(orgId);
   };
 
-  // Filter projects by selected organization
-  const filteredProjects = selectedOrgId
+  // Filter projects by selected organization and "created by me"
+  let filteredProjects = selectedOrgId
     ? projects.filter(p => p.organizationId === selectedOrgId)
     : projects;
+  
+  if (showOnlyMine && user) {
+    filteredProjects = filteredProjects.filter(p => p.createdBy === user.id);
+  }
 
   // Group projects by organization
   const projectsByOrg = filteredProjects.reduce((acc, project) => {
@@ -143,7 +151,19 @@ export default function MyProjects() {
                 View and manage your project collections across organizations
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="show-only-mine"
+                  checked={showOnlyMine}
+                  onCheckedChange={setShowOnlyMine}
+                  data-testid="switch-created-by-me"
+                />
+                <Label htmlFor="show-only-mine" className="text-sm text-muted-foreground cursor-pointer">
+                  <User className="w-4 h-4 inline mr-1" />
+                  Created by me
+                </Label>
+              </div>
               <Link href="/dashboard">
                 <Button variant="outline" data-testid="button-my-workspaces">
                   <Layers className="h-4 w-4 mr-2" />
