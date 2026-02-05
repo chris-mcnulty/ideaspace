@@ -22,6 +22,8 @@
 - [x] Increase font size for 8-digit codes on Home Screen (Landing Page) - Completed
 - [x] Public Results sharing without login - Added `/public-results` page with shareable link and QR code via Share Links dialog - Completed
 - [x] Organization Switcher in Dashboard - Added Vega-style org switcher dropdown to filter workspaces by organization, shows empty projects with "Create Workspace" button
+- [x] My Projects page (/projects) - Dedicated page showing projects grouped by organization with workspace counts and navigation link in user menu
+- [x] "Created by me" filter - Toggle filter on both My Workspaces and My Projects pages to show only items you personally created (uses createdBy field on spaces/projects tables)
 
 ## Overview
 Nebula is a multi-tenant web application for structured collaborative envisioning sessions. It enables facilitators to guide cohorts through real-time ideation, AI-powered categorization, voting, and ranking, culminating in personalized results. The platform aims to provide a robust environment for organizations to conduct effective envisioning workshops.
