@@ -9,6 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { useModuleNavigation } from "@/hooks/useModuleNavigation";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { CheckCircle2, Loader2 } from "lucide-react";
@@ -38,6 +39,8 @@ export default function PairwiseVoting() {
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
   const [participantId, setParticipantId] = useState<string | null>(null);
+
+  useModuleNavigation({ spaceId: params.space!, orgSlug: params.org! });
 
   // Get participantId from sessionStorage
   useEffect(() => {

@@ -315,8 +315,14 @@ export async function generateCohortResults(
     };
   });
 
-  // Sort by combined score
-  notesWithScores.sort((a: any, b: any) => b.combinedScore - a.combinedScore);
+  // Sort by combined score with deterministic tiebreakers
+  notesWithScores.sort((a: any, b: any) => {
+    const scoreDiff = b.combinedScore - a.combinedScore;
+    if (Math.abs(scoreDiff) > 0.0001) return scoreDiff;
+    const contentCmp = (a.content || '').localeCompare(b.content || '');
+    if (contentCmp !== 0) return contentCmp;
+    return (a.id || '').localeCompare(b.id || '');
+  });
 
   // Fetch knowledge base documents for context (workspace, organization, and system level)
   const kbDocs = await db

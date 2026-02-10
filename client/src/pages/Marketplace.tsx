@@ -10,6 +10,7 @@ import { CheckCircle2, Coins, AlertCircle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { useModuleNavigation } from "@/hooks/useModuleNavigation";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import BrandHeader from "@/components/BrandHeader";
@@ -47,6 +48,8 @@ export default function Marketplace() {
     }
   }, [org, space]);
   
+  useModuleNavigation({ spaceId: params.space!, orgSlug: params.org! });
+
   // Get participant ID from session storage
   const participantId = sessionStorage.getItem("participantId");
 
@@ -54,6 +57,17 @@ export default function Marketplace() {
     queryKey: [`/api/spaces/${params.space}/notes`],
     enabled: !!participantId,
   });
+
+  const { data: userRankings } = useQuery<Array<{ noteId: string; rank: number }>>({
+    queryKey: [`/api/spaces/${params.space}/participants/${participantId}/rankings`],
+    enabled: !!participantId,
+    select: (data: any) => data.map((r: any) => ({ noteId: r.noteId, rank: r.rank })),
+  });
+
+  const rankMap = new Map<string, number>();
+  if (userRankings) {
+    userRankings.forEach(r => rankMap.set(r.noteId, r.rank));
+  }
 
   const { data: existingAllocations } = useQuery<Array<{ noteId: string; coinsAllocated: number }>>({
     queryKey: [`/api/spaces/${params.space}/participants/${participantId}/marketplace-allocations`],
@@ -224,52 +238,60 @@ export default function Marketplace() {
       </header>
       
       <main className="flex-1 container mx-auto px-4 py-8 max-w-4xl">
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="text-3xl font-bold mb-2">Marketplace Allocation</h1>
-          <p className="text-muted-foreground mb-6">
+          <p className="text-muted-foreground">
             Distribute your {coinBudget} coins among the ideas below. Allocate more coins to ideas you value most.
           </p>
+        </div>
 
-          <div className="sticky top-0 z-50 pb-4 -mx-4 px-4 bg-background">
-            <Card className="p-6">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Coins className="h-5 w-5 text-primary" />
-                    <span className="font-medium">Budget Status</span>
+        <div className="sticky top-16 z-40 pb-4 -mx-4 px-4 bg-background">
+          <Card className="p-6">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <Coins className="h-5 w-5 text-primary" />
+                  <span className="font-medium">Budget Status</span>
+                </div>
+                <div className="text-right">
+                  <div className={`text-2xl font-bold ${isOverBudget ? 'text-destructive' : 'text-primary'}`}>
+                    {remainingBudget} / {coinBudget}
                   </div>
-                  <div className="text-right">
-                    <div className={`text-2xl font-bold ${isOverBudget ? 'text-destructive' : 'text-primary'}`}>
-                      {remainingBudget} / {coinBudget}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      Coins Remaining
-                    </div>
+                  <div className="text-sm text-muted-foreground">
+                    Coins Remaining
                   </div>
                 </div>
-                
-                <div>
-                  <div className="flex justify-between text-sm mb-2">
-                    <span>Allocated: {totalAllocated}</span>
-                    <span>{Math.round((totalAllocated / coinBudget) * 100)}%</span>
-                  </div>
-                  <Progress value={(totalAllocated / coinBudget) * 100} className="h-2" />
-                </div>
-
-                {isOverBudget && (
-                  <div className="flex items-center gap-2 text-destructive text-sm">
-                    <AlertCircle className="h-4 w-4" />
-                    <span>You've exceeded your budget by {totalAllocated - coinBudget} coins</span>
-                  </div>
-                )}
               </div>
-            </Card>
-          </div>
+              
+              <div>
+                <div className="flex justify-between gap-2 text-sm mb-2">
+                  <span>Allocated: {totalAllocated}</span>
+                  <span>{Math.round((totalAllocated / coinBudget) * 100)}%</span>
+                </div>
+                <Progress value={(totalAllocated / coinBudget) * 100} className="h-2" />
+              </div>
+
+              {isOverBudget && (
+                <div className="flex items-center gap-2 text-destructive text-sm">
+                  <AlertCircle className="h-4 w-4" />
+                  <span>You've exceeded your budget by {totalAllocated - coinBudget} coins</span>
+                </div>
+              )}
+            </div>
+          </Card>
         </div>
 
         <div className="space-y-4 mb-8">
           {notesData
             .filter(note => note.visibleInMarketplace !== false)
+            .sort((a, b) => {
+              if (rankMap.size > 0) {
+                const rankA = rankMap.get(a.id) ?? 9999;
+                const rankB = rankMap.get(b.id) ?? 9999;
+                if (rankA !== rankB) return rankA - rankB;
+              }
+              return a.id.localeCompare(b.id);
+            })
             .map((note) => {
             const coins = allocations.get(note.id) || 0;
             return (

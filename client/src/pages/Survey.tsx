@@ -5,11 +5,14 @@ import { Button } from "@/components/ui/button";
 import { SurveyView } from "@/components/SurveyView";
 import BrandHeader from "@/components/BrandHeader";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useModuleNavigation } from "@/hooks/useModuleNavigation";
 import type { Space, Participant } from "@shared/schema";
 
 export default function Survey() {
   const params = useParams() as { org: string; space: string };
   const [, navigate] = useLocation();
+
+  useModuleNavigation({ spaceId: params.space, orgSlug: params.org });
 
   // Fetch workspace data
   const { data: space } = useQuery<Space>({

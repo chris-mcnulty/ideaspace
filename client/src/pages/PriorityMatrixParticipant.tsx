@@ -4,10 +4,13 @@ import { useQuery } from "@tanstack/react-query";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import PriorityMatrix from "@/components/PriorityMatrix";
+import { useModuleNavigation } from "@/hooks/useModuleNavigation";
 import type { Organization, Space } from "@shared/schema";
 
 export default function PriorityMatrixParticipant() {
   const params = useParams<{ org: string; space: string }>();
+
+  useModuleNavigation({ spaceId: params.space!, orgSlug: params.org! });
   
   // Fetch organization data
   const { data: org } = useQuery<Organization>({

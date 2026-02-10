@@ -12,6 +12,7 @@ import { CheckCircle2, GripVertical, Trophy } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { useModuleNavigation } from "@/hooks/useModuleNavigation";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import BrandHeader from "@/components/BrandHeader";
@@ -98,6 +99,8 @@ export default function StackRanking() {
     }
   }, [org, space]);
   
+  useModuleNavigation({ spaceId: params.space!, orgSlug: params.org! });
+
   // Get participant ID from session storage (consistent with WaitingRoom/ParticipantView)
   const participantId = sessionStorage.getItem("participantId");
 
