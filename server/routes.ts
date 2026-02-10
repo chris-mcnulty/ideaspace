@@ -3431,7 +3431,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Create a new idea
+  // Create a new idea (legacy route without spaceId in URL)
   app.post("/api/ideas", requireFacilitator, async (req, res) => {
     try {
       const ideaData = insertIdeaSchema.parse(req.body);
@@ -3439,6 +3439,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Set createdByUserId to current user
       ideaData.createdByUserId = user.id;
+      
+      const idea = await storage.createIdea(ideaData);
+      
+      // Broadcast to WebSocket clients
+      broadcastToSpace(idea.spaceId, { 
+        type: "idea_created", 
+        data: idea 
+      });
+      
+      res.status(201).json(idea);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Failed to create idea:", error);
+      res.status(500).json({ error: "Failed to create idea" });
+    }
+  });
+
+  // Create a new idea (spaceId in URL - used by IdeasHub)
+  app.post("/api/spaces/:spaceId/ideas", requireFacilitator, async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      const user = req.user as User;
+      
+      const ideaData = insertIdeaSchema.parse({
+        ...req.body,
+        spaceId,
+        createdByUserId: user.id
+      });
       
       const idea = await storage.createIdea(ideaData);
       
@@ -3705,6 +3738,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const categoryNameToId = new Map(existingCategories.map(c => [c.name.toLowerCase(), c.id]));
       
       for (const ideaData of ideas) {
+        const ideaContent = ideaData.content?.trim();
+        if (!ideaContent) continue;
+        
         // Look up or create category by name
         let categoryId: string | null = null;
         const categoryName = ideaData.category?.trim();
@@ -3727,7 +3763,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         const idea = await storage.createIdea({
           spaceId,
-          content: ideaData.content,
+          content: ideaContent,
           contentType: 'text',
           manualCategoryId: categoryId,
           sourceType: ideaData.source || 'imported',

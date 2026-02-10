@@ -1,0 +1,220 @@
+2026-02-10 11:02:16.17
+4eccb680
+User
+where: undefined,
+2026-02-10 11:02:16.17
+4eccb680
+User
+}
+2026-02-10 11:02:16.17
+4eccb680
+User
+severity: 'ERROR',
+2026-02-10 11:02:16.17
+4eccb680
+User
+hint: undefined,
+2026-02-10 11:02:16.17
+4eccb680
+User
+schema: 'public',
+2026-02-10 11:02:16.17
+4eccb680
+User
+at async NeonPreparedQuery.execute (file:///home/runner/workspace/node_modules/drizzle-orm/neon-serverless/session.js:76:20)
+2026-02-10 11:02:16.17
+4eccb680
+User
+table: 'ideas',
+2026-02-10 11:02:16.17
+4eccb680
+User
+code: '23502',
+2026-02-10 11:02:16.17
+4eccb680
+User
+where: undefined,
+2026-02-10 11:02:16.17
+4eccb680
+User
+file: 'execMain.c',
+2026-02-10 11:02:18.36
+4eccb680
+User
+7:02:18 PM [express] POST /api/spaces/1ba07711-c497-4136-9cff-4f78428378e2/ideas/import 500 in 2321m…
+2026-02-10 11:03:08.61
+4eccb680
+User
+dataType: undefined,
+2026-02-10 11:03:08.61
+4eccb680
+User
+where: undefined,
+2026-02-10 11:03:08.61
+4eccb680
+User
+at file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1345:74
+2026-02-10 11:03:08.61
+4eccb680
+User
+internalPosition: undefined,
+2026-02-10 11:03:08.61
+4eccb680
+User
+detail: 'Failing row contains (f1b8af5a-fabb-4ff7-992a-4b6dd35db9f8, 1ba07711-c497-4136-9cff-4f78428378e2, null, imported, null, f3186542-879f-4903-99d1-375a3a5dda7e, null, null, f, null, 2026-02-10 19:03:08.592701, 2026-02-10 19:03:08.592701, null, text, null, null, null, f).',
+2026-02-10 11:03:08.61
+4eccb680
+User
+at file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1345:74
+2026-02-10 11:03:08.61
+4eccb680
+User
+where: undefined,
+2026-02-10 11:03:08.61
+4eccb680
+User
+internalQuery: undefined,
+2026-02-10 11:03:08.61
+4eccb680
+User
+file: 'execMain.c',
+2026-02-10 11:03:08.61
+4eccb680
+User
+Failed to import ideas: error: null value in column "content" of relation "ideas" violates not-null constraint
+2026-02-10 11:03:08.61
+4eccb680
+User
+at async file:///home/runner/workspace/dist/index.js:8096:22 {
+2026-02-10 11:03:08.61
+4eccb680
+User
+detail: 'Failing row contains (f1b8af5a-fabb-4ff7-992a-4b6dd35db9f8, 1ba07711-c497-4136-9cff-4f78428378e2, null, imported, null, f3186542-879f-4903-99d1-375a3a5dda7e, null, null, f, null, 2026-02-10 19:03:08.592701, 2026-02-10 19:03:08.592701, null, text, null, null, null, f).',
+2026-02-10 11:03:08.61
+4eccb680
+User
+line: '2067',
+2026-02-10 11:03:08.61
+4eccb680
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-10 11:03:08.61
+4eccb680
+User
+table: 'ideas',
+2026-02-10 11:03:08.61
+4eccb680
+User
+length: 436,
+2026-02-10 11:03:08.61
+4eccb680
+User
+Failed to import ideas: error: null value in column "content" of relation "ideas" violates not-null constraint
+2026-02-10 11:03:08.61
+4eccb680
+User
+internalQuery: undefined,
+2026-02-10 11:03:08.61
+4eccb680
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-10 11:03:08.61
+4eccb680
+User
+}
+2026-02-10 11:03:08.61
+4eccb680
+User
+length: 436,
+2026-02-10 11:03:08.61
+4eccb680
+User
+hint: undefined,
+2026-02-10 11:03:08.61
+4eccb680
+User
+hint: undefined,
+2026-02-10 11:03:08.61
+4eccb680
+User
+column: 'content',
+2026-02-10 11:03:08.61
+4eccb680
+User
+constraint: undefined,
+2026-02-10 11:03:08.61
+4eccb680
+User
+table: 'ideas',
+2026-02-10 11:03:08.61
+4eccb680
+User
+constraint: undefined,
+2026-02-10 11:03:08.61
+4eccb680
+User
+schema: 'public',
+2026-02-10 11:03:08.61
+4eccb680
+User
+severity: 'ERROR',
+2026-02-10 11:03:08.61
+4eccb680
+User
+internalPosition: undefined,
+2026-02-10 11:03:08.61
+4eccb680
+User
+at async file:///home/runner/workspace/dist/index.js:8096:22 {
+2026-02-10 11:03:08.61
+4eccb680
+User
+dataType: undefined,
+2026-02-10 11:03:08.61
+4eccb680
+User
+column: 'content',
+2026-02-10 11:03:08.61
+4eccb680
+User
+at async DbStorage.createIdea (file:///home/runner/workspace/dist/index.js:2049:23)
+2026-02-10 11:03:08.61
+4eccb680
+User
+code: '23502',
+2026-02-10 11:03:08.61
+4eccb680
+User
+position: undefined,
+2026-02-10 11:03:08.61
+4eccb680
+User
+position: undefined,
+2026-02-10 11:03:08.61
+4eccb680
+User
+schema: 'public',
+2026-02-10 11:03:08.61
+4eccb680
+User
+at async DbStorage.createIdea (file:///home/runner/workspace/dist/index.js:2049:23)
+2026-02-10 11:03:08.61
+4eccb680
+User
+routine: 'ExecConstraints'
+2026-02-10 11:03:08.61
+4eccb680
+User
+code: '23502',
+2026-02-10 11:03:08.61
+4eccb680
+User
+at async NeonPreparedQuery.execute (file:///home/runner/workspace/node_modules/drizzle-orm/neon-serverless/session.js:76:20)
+2026-02-10 11:03:08.61
+4eccb680
+User
+at async NeonPreparedQuery.execute (file:///home/runner/workspace/node_modules/drizzle-orm/neon-serverless/session.js:76:20)
+2026-02-10 11:03:08.61
+4eccb680
+User
+severity: 'ERROR',
