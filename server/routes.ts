@@ -91,6 +91,10 @@ function createWorkspaceAccessMiddleware(options: {
         return res.status(404).json({ error: "Workspace not found" });
       }
 
+      // Store resolved UUID back so route handlers get the real ID
+      if (req.params.spaceId) req.params.spaceId = spaceId;
+      if (req.params.space) req.params.space = spaceId;
+
       const space = await storage.getSpace(spaceId);
       if (!space) {
         return res.status(404).json({ error: "Workspace not found" });
@@ -5838,7 +5842,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Generate cohort results (Facilitator/Admin only)
   app.post("/api/spaces/:spaceId/results/cohort", requireAuth, async (req, res) => {
     try {
-      const { spaceId } = req.params;
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) return res.status(404).json({ error: "Workspace not found" });
       const currentUser = req.user as User;
 
       // Check if user is facilitator or admin for this space
@@ -5990,7 +5995,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Generate personalized results for all participants (Facilitator/Admin only)
   app.post("/api/spaces/:spaceId/results/generate-all", requireAuth, async (req, res) => {
     try {
-      const { spaceId } = req.params;
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) return res.status(404).json({ error: "Workspace not found" });
       const currentUser = req.user as User;
 
       // Check if user is facilitator or admin for this space

@@ -1,0 +1,192 @@
+2026-02-10 13:52:07.05
+35e32c31
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-10 13:52:07.05
+35e32c31
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-10 13:52:07.05
+35e32c31
+User
+at async NeonPreparedQuery.execute (file:///home/runner/workspace/node_modules/drizzle-orm/neon-serverless/session.js:76:20)
+2026-02-10 13:52:07.05
+35e32c31
+User
+internalPosition: undefined,
+2026-02-10 13:52:07.05
+35e32c31
+User
+at async file:///home/runner/workspace/dist/index.js:9795:30 {
+2026-02-10 13:52:07.05
+35e32c31
+User
+column: undefined,
+2026-02-10 13:52:07.05
+35e32c31
+User
+at file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1345:74
+2026-02-10 13:52:07.05
+35e32c31
+User
+internalPosition: undefined,
+2026-02-10 13:52:07.05
+35e32c31
+User
+constraint: 'personalized_results_space_id_fkey',
+2026-02-10 13:52:07.05
+35e32c31
+User
+detail: 'Key (space_id)=(6174-3588) is not present in table "spaces".',
+2026-02-10 13:52:07.05
+35e32c31
+User
+detail: 'Key (space_id)=(6174-3588) is not present in table "spaces".',
+2026-02-10 13:52:07.05
+35e32c31
+User
+length: 314,
+2026-02-10 13:52:07.05
+35e32c31
+User
+at async generatePersonalizedResults (file:///home/runner/workspace/dist/index.js:4351:28)
+2026-02-10 13:52:07.05
+35e32c31
+User
+Failed to generate personalized results: error: insert or update on table "personalized_results" violates foreign key constraint "personalized_results_space_id_fkey"
+2026-02-10 13:52:07.05
+35e32c31
+User
+table: 'personalized_results',
+2026-02-10 13:52:07.05
+35e32c31
+User
+position: undefined,
+2026-02-10 13:52:07.05
+35e32c31
+User
+code: '23503',
+2026-02-10 13:52:07.05
+35e32c31
+User
+table: 'personalized_results',
+2026-02-10 13:52:07.05
+35e32c31
+User
+severity: 'ERROR',
+2026-02-10 13:52:07.05
+35e32c31
+User
+schema: 'public',
+2026-02-10 13:52:07.05
+35e32c31
+User
+constraint: 'personalized_results_space_id_fkey',
+2026-02-10 13:52:07.05
+35e32c31
+User
+column: undefined,
+2026-02-10 13:52:07.05
+35e32c31
+User
+internalQuery: undefined,
+2026-02-10 13:52:07.05
+35e32c31
+User
+at async NeonPreparedQuery.execute (file:///home/runner/workspace/node_modules/drizzle-orm/neon-serverless/session.js:76:20)
+2026-02-10 13:52:07.05
+35e32c31
+User
+at async generatePersonalizedResults (file:///home/runner/workspace/dist/index.js:4351:28)
+2026-02-10 13:52:07.05
+35e32c31
+User
+hint: undefined,
+2026-02-10 13:52:07.05
+35e32c31
+User
+length: 314,
+2026-02-10 13:52:07.05
+35e32c31
+User
+where: undefined,
+2026-02-10 13:52:07.05
+35e32c31
+User
+severity: 'ERROR',
+2026-02-10 13:52:07.05
+35e32c31
+User
+}
+2026-02-10 13:52:07.05
+35e32c31
+User
+line: '2608',
+2026-02-10 13:52:07.05
+35e32c31
+User
+routine: 'ri_ReportViolation'
+2026-02-10 13:52:07.05
+35e32c31
+User
+schema: 'public',
+2026-02-10 13:52:07.05
+35e32c31
+User
+at file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1345:74
+2026-02-10 13:52:07.05
+35e32c31
+User
+internalQuery: undefined,
+2026-02-10 13:52:07.05
+35e32c31
+User
+at async file:///home/runner/workspace/dist/index.js:9795:30 {
+2026-02-10 13:52:07.05
+35e32c31
+User
+position: undefined,
+2026-02-10 13:52:07.05
+35e32c31
+User
+where: undefined,
+2026-02-10 13:52:07.05
+35e32c31
+User
+file: 'ri_triggers.c',
+2026-02-10 13:52:07.05
+35e32c31
+User
+dataType: undefined,
+2026-02-10 13:52:07.05
+35e32c31
+User
+dataType: undefined,
+2026-02-10 13:52:07.05
+35e32c31
+User
+Failed to generate personalized results: error: insert or update on table "personalized_results" violates foreign key constraint "personalized_results_space_id_fkey"
+2026-02-10 13:52:07.05
+35e32c31
+User
+code: '23503',
+2026-02-10 13:52:07.05
+35e32c31
+User
+hint: undefined,
+2026-02-10 13:52:07.29
+35e32c31
+User
+9:52:07 PM [express] POST /api/spaces/6174-3588/results/personalized 500 in 10814ms :: {"error":"ins…
+2026-02-10 13:52:53.00
+35e32c31
+User
+line: '2608',
+2026-02-10 13:52:53.00
+35e32c31
+User
+severity: 'ERROR',
+2026-02-10 13:52:53.00
+35e32c31
+User
+at async generatePersonalizedResults (file:///home/runner/workspace/dist/index.js:4351:28)
