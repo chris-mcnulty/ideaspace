@@ -1291,7 +1291,7 @@ export default function FacilitatorWorkspace() {
           </Button>
         </div>
       </div>
-      <PriorityMatrix spaceId={space.id} />
+      <PriorityMatrix spaceId={space.id} isFacilitator={true} />
     </div>
   );
 

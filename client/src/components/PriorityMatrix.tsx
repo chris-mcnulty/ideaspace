@@ -22,6 +22,7 @@ interface PriorityMatrixProps {
   spaceId: string;
   moduleRunId?: string;
   isReadOnly?: boolean;
+  isFacilitator?: boolean;
 }
 
 interface Position {
@@ -40,7 +41,8 @@ interface DraggedNote {
 export default function PriorityMatrix({ 
   spaceId, 
   moduleRunId,
-  isReadOnly = false 
+  isReadOnly = false,
+  isFacilitator = false,
 }: PriorityMatrixProps) {
   const { toast } = useToast();
   const matrixRef = useRef<HTMLDivElement>(null);
@@ -206,7 +208,7 @@ export default function PriorityMatrix({
     const deltaY = ((e.clientY - draggedNote.startY) / rect.height) * 100;
 
     const newX = Math.max(0, Math.min(100, draggedNote.currentX + deltaX));
-    const newY = Math.max(0, Math.min(100, draggedNote.currentY + deltaY));
+    const newY = Math.max(0, Math.min(100, draggedNote.currentY - deltaY));
 
     setLocalPositions(prev => {
       const newPositions = new Map(prev);
@@ -273,7 +275,7 @@ export default function PriorityMatrix({
           <h2 className="text-xl font-semibold">2x2 Priority Matrix</h2>
         </div>
         
-        {!isReadOnly && (
+        {isFacilitator && (
           <Button
             variant="outline"
             size="sm"
