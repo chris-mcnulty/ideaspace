@@ -1600,7 +1600,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         projects = memberships.map(m => m.project);
       }
       
-      // Enrich with organization and workspace counts
+      // Enrich with organization and workspace details
       const enriched = await Promise.all(
         projects.map(async (project) => {
           const org = await storage.getOrganization(project.organizationId);
@@ -1609,6 +1609,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ...project,
             organization: org ? { id: org.id, name: org.name, slug: org.slug } : null,
             workspaceCount: spaces.length,
+            workspaces: spaces.map(s => ({
+              id: s.id,
+              name: s.name,
+              code: s.code,
+              status: s.status,
+            })),
           };
         })
       );

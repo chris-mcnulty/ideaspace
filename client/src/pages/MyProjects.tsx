@@ -14,6 +14,13 @@ import { OrgSwitcher } from "@/components/OrgSwitcher";
 import { NewWorkspaceDialog } from "@/components/NewWorkspaceDialog";
 import { useEffect, useState } from "react";
 
+interface ProjectWorkspace {
+  id: string;
+  name: string;
+  code: string;
+  status: string;
+}
+
 interface Project {
   id: string;
   name: string;
@@ -28,6 +35,7 @@ interface Project {
     slug: string;
   };
   workspaceCount?: number;
+  workspaces?: ProjectWorkspace[];
 }
 
 interface Organization {
@@ -216,7 +224,7 @@ export default function MyProjects() {
                   {orgProjects.map((project) => (
                     <Card 
                       key={project.id} 
-                      className="hover-elevate transition-all"
+                      className="transition-all"
                       data-testid={`card-project-${project.id}`}
                     >
                       <CardHeader className="pb-3">
@@ -225,25 +233,10 @@ export default function MyProjects() {
                             <FolderKanban className="h-5 w-5 text-primary" />
                             <CardTitle className="text-lg">{project.name}</CardTitle>
                           </div>
-                          {project.isDefault && (
-                            <Badge variant="outline" className="text-xs">Default</Badge>
-                          )}
-                        </div>
-                        {project.description && (
-                          <CardDescription className="mt-2 line-clamp-2">
-                            {project.description}
-                          </CardDescription>
-                        )}
-                      </CardHeader>
-                      <CardContent>
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <div className="flex items-center gap-1">
-                              <Layers className="h-4 w-4" />
-                              <span>{project.workspaceCount || 0} workspace{(project.workspaceCount || 0) !== 1 ? "s" : ""}</span>
-                            </div>
-                          </div>
                           <div className="flex items-center gap-2 flex-wrap">
+                            {project.isDefault && (
+                              <Badge variant="outline" className="text-xs">Default</Badge>
+                            )}
                             {(user.role === "global_admin" || user.role === "company_admin" || user.role === "facilitator") && (
                               <NewWorkspaceDialog
                                 organizationId={organization.id}
@@ -257,14 +250,47 @@ export default function MyProjects() {
                                 }
                               />
                             )}
-                            <Link href={`/dashboard?org=${organization.id}&project=${project.id}`}>
-                              <Button variant="ghost" size="sm" data-testid={`button-view-project-${project.id}`}>
-                                View
-                                <ChevronRight className="h-4 w-4 ml-1" />
-                              </Button>
-                            </Link>
                           </div>
                         </div>
+                        {project.description && (
+                          <CardDescription className="mt-2 line-clamp-2">
+                            {project.description}
+                          </CardDescription>
+                        )}
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        {(project.workspaces && project.workspaces.length > 0) ? (
+                          <div className="space-y-1">
+                            {project.workspaces.map((ws) => (
+                              <Link 
+                                key={ws.id} 
+                                href={`/o/${organization.slug}/s/${ws.code}/facilitate`}
+                              >
+                                <div 
+                                  className="flex items-center justify-between gap-2 px-3 py-2 rounded-md hover-elevate cursor-pointer group"
+                                  data-testid={`link-workspace-${ws.id}`}
+                                >
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <Layers className="h-4 w-4 text-muted-foreground shrink-0" />
+                                    <span className="text-sm truncate">{ws.name}</span>
+                                    <span className="text-xs text-muted-foreground font-mono shrink-0">{ws.code}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Badge 
+                                      variant={ws.status === 'open' ? 'default' : ws.status === 'closed' ? 'secondary' : 'outline'} 
+                                      className="text-xs"
+                                    >
+                                      {ws.status}
+                                    </Badge>
+                                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                  </div>
+                                </div>
+                              </Link>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground py-2">No workspaces yet</p>
+                        )}
                       </CardContent>
                     </Card>
                   ))}
