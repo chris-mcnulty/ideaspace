@@ -16,7 +16,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import type { Idea, PriorityMatrix, PriorityMatrixPosition, Category } from '@shared/schema';
+import type { Note, PriorityMatrix, PriorityMatrixPosition, Category } from '@shared/schema';
 
 interface PriorityMatrixProps {
   spaceId: string;
@@ -29,7 +29,7 @@ interface Position {
   y: number;  // 0-100 percentage
 }
 
-interface DraggedIdea {
+interface DraggedNote {
   id: string;
   startX: number;
   startY: number;
@@ -44,7 +44,7 @@ export default function PriorityMatrix({
 }: PriorityMatrixProps) {
   const { toast } = useToast();
   const matrixRef = useRef<HTMLDivElement>(null);
-  const [draggedIdea, setDraggedIdea] = useState<DraggedIdea | null>(null);
+  const [draggedNote, setDraggedNote] = useState<DraggedNote | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [xAxisLabel, setXAxisLabel] = useState('Impact');
   const [yAxisLabel, setYAxisLabel] = useState('Effort');
@@ -52,32 +52,27 @@ export default function PriorityMatrix({
   const [wsConnection, setWsConnection] = useState<WebSocket | null>(null);
   const localPositionsRef = useRef<Map<string, Position>>(new Map());
 
-  // Fetch ideas
-  const { data: ideas = [], isLoading: ideasLoading } = useQuery<Idea[]>({
-    queryKey: [`/api/spaces/${spaceId}/ideas`],
-    staleTime: 0, // Always refetch for real-time updates
+  const { data: notes = [], isLoading: notesLoading } = useQuery<Note[]>({
+    queryKey: [`/api/spaces/${spaceId}/notes`],
+    staleTime: 0,
   });
 
-  // Fetch categories
   const { data: categories = [], isLoading: categoriesLoading } = useQuery<Category[]>({
     queryKey: [`/api/spaces/${spaceId}/categories`],
     enabled: !!spaceId,
   });
 
-  // Fetch matrix configuration
   const { data: matrix, isLoading: matrixLoading } = useQuery<PriorityMatrix>({
     queryKey: [`/api/spaces/${spaceId}/priority-matrix`],
     enabled: !!spaceId,
   });
 
-  // Fetch positions
   const { data: positions = [], isLoading: positionsLoading } = useQuery<PriorityMatrixPosition[]>({
     queryKey: [`/api/spaces/${spaceId}/priority-matrix/positions`],
     enabled: !!spaceId,
     staleTime: 0,
   });
 
-  // Create/update matrix config
   const updateMatrixMutation = useMutation({
     mutationFn: (data: { xAxisLabel: string; yAxisLabel: string }) =>
       apiRequest('PUT', `/api/spaces/${spaceId}/priority-matrix`, data),
@@ -98,9 +93,8 @@ export default function PriorityMatrix({
     },
   });
 
-  // Update position mutation
   const updatePositionMutation = useMutation({
-    mutationFn: (data: { ideaId: string; xCoord: number; yCoord: number }) =>
+    mutationFn: (data: { noteId: string; xCoord: number; yCoord: number }) =>
       apiRequest('PUT', `/api/spaces/${spaceId}/priority-matrix/positions`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/priority-matrix/positions`] });
@@ -108,13 +102,12 @@ export default function PriorityMatrix({
     onError: () => {
       toast({
         title: 'Position Update Failed',
-        description: 'Failed to save idea position. Please try again.',
+        description: 'Failed to save position. Please try again.',
         variant: 'destructive',
       });
     },
   });
 
-  // Initialize axis labels from matrix data - only once when matrix first loads
   const matrixId = matrix?.id;
   const matrixXLabel = matrix?.xAxisLabel;
   const matrixYLabel = matrix?.yAxisLabel;
@@ -126,27 +119,23 @@ export default function PriorityMatrix({
     if (matrixYLabel && matrixYLabel !== yAxisLabel) {
       setYAxisLabel(matrixYLabel);
     }
-    // Only run when matrix id changes to avoid re-syncing on every refetch
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matrixId]);
 
-  // Initialize local positions from fetched positions - only update if data actually changed
-  const positionsKey = positions.map(p => `${p.ideaId}:${p.xCoord}:${p.yCoord}`).join('|');
+  const positionsKey = positions.map(p => `${p.noteId}:${p.xCoord}:${p.yCoord}`).join('|');
   
   useEffect(() => {
     if (positions.length === 0) return;
     
     const posMap = new Map<string, Position>();
     positions.forEach(pos => {
-      posMap.set(pos.ideaId, { x: pos.xCoord, y: pos.yCoord });
+      posMap.set(pos.noteId, { x: pos.xCoord, y: pos.yCoord });
     });
     setLocalPositions(posMap);
     localPositionsRef.current = posMap;
-    // Using positionsKey to only run when actual position data changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [positionsKey]);
 
-  // WebSocket connection for real-time updates
   useEffect(() => {
     if (isReadOnly) return;
 
@@ -164,11 +153,10 @@ export default function PriorityMatrix({
       const data = JSON.parse(event.data);
       
       if (data.type === 'matrix-position-update' && data.spaceId === spaceId) {
-        // Update local position without refetching
         setLocalPositions(prev => {
           const newPositions = new Map(prev);
-          newPositions.set(data.ideaId, { x: data.xCoord, y: data.yCoord });
-          // Keep ref in sync
+          const noteId = data.noteId || data.ideaId;
+          newPositions.set(noteId, { x: data.xCoord, y: data.yCoord });
           localPositionsRef.current = newPositions;
           return newPositions;
         });
@@ -182,28 +170,25 @@ export default function PriorityMatrix({
     };
   }, [spaceId, isReadOnly]);
 
-  // Ref to track the current dragged idea ID for cleanup
-  const draggedIdeaRef = useRef<string | null>(null);
+  const draggedNoteRef = useRef<string | null>(null);
 
-  // Handle pointer down on idea
-  const handlePointerDown = (e: React.PointerEvent, ideaId: string) => {
+  const handlePointerDown = (e: React.PointerEvent, noteId: string) => {
     if (isReadOnly) return;
     
     const rect = matrixRef.current?.getBoundingClientRect();
     if (!rect) return;
 
-    const currentPos = localPositions.get(ideaId) || { x: 50, y: 50 };
+    const currentPos = localPositions.get(noteId) || { x: 50, y: 50 };
     
-    draggedIdeaRef.current = ideaId;
-    setDraggedIdea({
-      id: ideaId,
+    draggedNoteRef.current = noteId;
+    setDraggedNote({
+      id: noteId,
       startX: e.clientX,
       startY: e.clientY,
       currentX: currentPos.x,
       currentY: currentPos.y,
     });
 
-    // Capture pointer on the matrix container for reliable tracking
     if (matrixRef.current) {
       matrixRef.current.setPointerCapture(e.pointerId);
     }
@@ -211,58 +196,52 @@ export default function PriorityMatrix({
     e.stopPropagation();
   };
 
-  // Handle pointer move - on matrix container
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!draggedIdea) return;
+    if (!draggedNote) return;
     
     const rect = matrixRef.current?.getBoundingClientRect();
     if (!rect) return;
 
-    const deltaX = ((e.clientX - draggedIdea.startX) / rect.width) * 100;
-    const deltaY = ((e.clientY - draggedIdea.startY) / rect.height) * 100;
+    const deltaX = ((e.clientX - draggedNote.startX) / rect.width) * 100;
+    const deltaY = ((e.clientY - draggedNote.startY) / rect.height) * 100;
 
-    const newX = Math.max(0, Math.min(100, draggedIdea.currentX + deltaX));
-    const newY = Math.max(0, Math.min(100, draggedIdea.currentY + deltaY));
+    const newX = Math.max(0, Math.min(100, draggedNote.currentX + deltaX));
+    const newY = Math.max(0, Math.min(100, draggedNote.currentY + deltaY));
 
     setLocalPositions(prev => {
       const newPositions = new Map(prev);
-      newPositions.set(draggedIdea.id, { x: newX, y: newY });
+      newPositions.set(draggedNote.id, { x: newX, y: newY });
       localPositionsRef.current = newPositions;
       return newPositions;
     });
 
-    // Send real-time update via WebSocket
     if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
       wsConnection.send(JSON.stringify({
         type: 'matrix-position-update',
         spaceId,
-        ideaId: draggedIdea.id,
+        noteId: draggedNote.id,
         xCoord: newX,
         yCoord: newY,
       }));
     }
   };
 
-  // Handle pointer up - always save position
   const handlePointerUp = (e: React.PointerEvent) => {
-    const currentDraggedId = draggedIdeaRef.current;
+    const currentDraggedId = draggedNoteRef.current;
     if (!currentDraggedId) return;
     
-    // Get the final position and save to backend
     const finalPos = localPositionsRef.current.get(currentDraggedId);
     if (finalPos) {
-      console.log('[PriorityMatrix] Saving position:', { ideaId: currentDraggedId, x: finalPos.x, y: finalPos.y });
       updatePositionMutation.mutate({
-        ideaId: currentDraggedId,
+        noteId: currentDraggedId,
         xCoord: finalPos.x,
         yCoord: finalPos.y,
       });
     }
     
-    draggedIdeaRef.current = null;
-    setDraggedIdea(null);
+    draggedNoteRef.current = null;
+    setDraggedNote(null);
     
-    // Release pointer capture from matrix container
     if (matrixRef.current) {
       try {
         matrixRef.current.releasePointerCapture(e.pointerId);
@@ -272,12 +251,11 @@ export default function PriorityMatrix({
     }
   };
 
-  // Handle settings save
   const handleSaveSettings = () => {
     updateMatrixMutation.mutate({ xAxisLabel, yAxisLabel });
   };
 
-  const isLoading = ideasLoading || categoriesLoading || matrixLoading || positionsLoading;
+  const isLoading = notesLoading || categoriesLoading || matrixLoading || positionsLoading;
 
   if (isLoading) {
     return (
@@ -289,8 +267,7 @@ export default function PriorityMatrix({
 
   return (
     <div className="w-full h-full flex flex-col gap-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <Grid className="h-5 w-5" />
           <h2 className="text-xl font-semibold">2x2 Priority Matrix</h2>
@@ -309,19 +286,17 @@ export default function PriorityMatrix({
         )}
       </div>
 
-      {/* Matrix Grid */}
       <Card className="flex-1 relative">
         <CardContent className="p-0 h-full">
           <div 
             ref={matrixRef}
             className="relative w-full h-full min-h-[500px]"
-            style={{ cursor: draggedIdea ? 'grabbing' : 'default', touchAction: 'none' }}
+            style={{ cursor: draggedNote ? 'grabbing' : 'default', touchAction: 'none' }}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
             data-testid="matrix-grid"
           >
-            {/* Axis Labels */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full pb-2 pointer-events-none">
               <span className="text-sm font-medium text-muted-foreground">
                 High {yAxisLabel}
@@ -343,13 +318,11 @@ export default function PriorityMatrix({
               </span>
             </div>
 
-            {/* Grid Lines */}
             <div className="absolute inset-0 pointer-events-none">
               <div className="absolute left-1/2 top-0 bottom-0 w-px bg-border" />
               <div className="absolute top-1/2 left-0 right-0 h-px bg-border" />
             </div>
 
-            {/* Quadrant Labels */}
             <div className="absolute top-2 left-2 text-xs text-muted-foreground pointer-events-none">
               Low {xAxisLabel} / High {yAxisLabel}
             </div>
@@ -363,39 +336,36 @@ export default function PriorityMatrix({
               High {xAxisLabel} / Low {yAxisLabel}
             </div>
 
-            {/* Ideas */}
-            {ideas.map((idea) => {
-              const position = localPositions.get(idea.id) || { x: 50, y: 50 };
-              const isDragging = draggedIdea?.id === idea.id;
-              const category = idea.manualCategoryId 
-                ? categories.find(c => c.id === idea.manualCategoryId) 
+            {notes.map((note) => {
+              const position = localPositions.get(note.id) || { x: 50, y: 50 };
+              const isDragging = draggedNote?.id === note.id;
+              const category = note.manualCategoryId 
+                ? categories.find(c => c.id === note.manualCategoryId) 
                 : null;
               
-              // Use contentPlain if available, otherwise strip HTML from content
-              const displayText = idea.contentPlain || idea.content.replace(/<[^>]*>?/gm, '');
+              const displayText = note.content.replace(/<[^>]*>?/gm, '');
               
-              // Color palette for visual variety
-              const ideaColors = [
+              const noteColors = [
                 '#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444',
                 '#EC4899', '#6366F1', '#14B8A6', '#F97316', '#84CC16',
               ];
-              const hash = idea.id.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
-              const ideaColor = category?.color || ideaColors[hash % ideaColors.length];
+              const hash = note.id.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+              const noteColor = category?.color || noteColors[hash % noteColors.length];
 
               return (
                 <div
-                  key={idea.id}
+                  key={note.id}
                   className={`absolute transform -translate-x-1/2 -translate-y-1/2 ${
                     isDragging ? 'z-50' : 'z-10'
                   } ${!isReadOnly ? 'cursor-grab active:cursor-grabbing' : ''}`}
                   style={{
                     left: `${position.x}%`,
-                    top: `${100 - position.y}%`, // Invert Y axis (top = high)
+                    top: `${100 - position.y}%`,
                     transition: isDragging ? 'none' : 'all 0.2s ease',
                     touchAction: 'none',
                   }}
-                  onPointerDown={(e) => handlePointerDown(e, idea.id)}
-                  data-testid={`idea-${idea.id}`}
+                  onPointerDown={(e) => handlePointerDown(e, note.id)}
+                  data-testid={`note-${note.id}`}
                 >
                   <div 
                     className={`
@@ -406,7 +376,7 @@ export default function PriorityMatrix({
                     style={{ 
                       borderWidth: '2px', 
                       borderStyle: 'solid',
-                      borderColor: ideaColor,
+                      borderColor: noteColor,
                     }}
                   >
                     <p className="text-sm font-medium line-clamp-2">{displayText}</p>
@@ -414,7 +384,7 @@ export default function PriorityMatrix({
                       <Badge 
                         variant="secondary" 
                         className="mt-1 text-xs"
-                        style={{ backgroundColor: `${ideaColor}20`, color: ideaColor }}
+                        style={{ backgroundColor: `${noteColor}20`, color: noteColor }}
                       >
                         {category.name}
                       </Badge>
@@ -430,7 +400,6 @@ export default function PriorityMatrix({
         </CardContent>
       </Card>
 
-      {/* Settings Dialog */}
       <Dialog open={showSettings} onOpenChange={setShowSettings}>
         <DialogContent>
           <DialogHeader>
@@ -490,18 +459,17 @@ export default function PriorityMatrix({
         </DialogContent>
       </Dialog>
 
-      {/* Helper text */}
-      {!isReadOnly && ideas.length > 0 && (
+      {!isReadOnly && notes.length > 0 && (
         <div className="text-sm text-muted-foreground text-center">
-          Drag and drop ideas to position them on the matrix. Changes are saved automatically.
+          Drag and drop notes to position them on the matrix. Changes are saved automatically.
         </div>
       )}
 
-      {ideas.length === 0 && (
+      {notes.length === 0 && (
         <Card>
           <CardContent className="text-center py-8">
             <p className="text-muted-foreground">
-              No ideas available. Add ideas to start positioning them on the matrix.
+              No notes available yet. Participants need to create notes during ideation before they can be positioned on the matrix.
             </p>
           </CardContent>
         </Card>

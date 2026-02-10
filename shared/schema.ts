@@ -556,23 +556,21 @@ export const priorityMatrices = pgTable("priority_matrices", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-// Priority Matrix Positions: Track idea positions in 2x2 grid
+// Priority Matrix Positions: Track note positions in 2x2 grid
 export const priorityMatrixPositions = pgTable("priority_matrix_positions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   matrixId: varchar("matrix_id").notNull().references(() => priorityMatrices.id, { onDelete: "cascade" }),
-  ideaId: varchar("idea_id").notNull().references(() => ideas.id, { onDelete: "cascade" }),
-  moduleRunId: varchar("module_run_id").references(() => workspaceModuleRuns.id, { onDelete: "cascade" }), // Optional: scope to run
+  noteId: varchar("note_id").notNull().references(() => notes.id, { onDelete: "cascade" }),
+  moduleRunId: varchar("module_run_id").references(() => workspaceModuleRuns.id, { onDelete: "cascade" }),
   xCoord: real("x_coord").notNull(), // Normalized float (0.0 - 1.0)
   yCoord: real("y_coord").notNull(), // Normalized float (0.0 - 1.0)
-  lockedBy: varchar("locked_by").references(() => participants.id), // For collaborative drag locking
+  lockedBy: varchar("locked_by").references(() => participants.id),
   lockedAt: timestamp("locked_at"),
-  participantId: varchar("participant_id").references(() => participants.id), // Who positioned this idea
+  participantId: varchar("participant_id").references(() => participants.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
-  // Ensure one position per idea per matrix (or per module run if specified)
-  uniqueMatrixIdea: unique().on(table.matrixId, table.ideaId, table.moduleRunId),
-  // CHECK constraints for coordinate ranges (0.0 - 1.0)
+  uniqueMatrixNote: unique().on(table.matrixId, table.noteId, table.moduleRunId),
   checkXCoord: sql`CHECK (x_coord >= 0 AND x_coord <= 1)`,
   checkYCoord: sql`CHECK (y_coord >= 0 AND y_coord <= 1)`,
 }));
@@ -593,22 +591,21 @@ export const staircaseModules = pgTable("staircase_modules", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-// Staircase Positions: Track idea positions on the staircase
+// Staircase Positions: Track note positions on the staircase
 export const staircasePositions = pgTable("staircase_positions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   staircaseId: varchar("staircase_id").notNull().references(() => staircaseModules.id, { onDelete: "cascade" }),
-  ideaId: varchar("idea_id").notNull().references(() => ideas.id, { onDelete: "cascade" }),
+  noteId: varchar("note_id").notNull().references(() => notes.id, { onDelete: "cascade" }),
   moduleRunId: varchar("module_run_id").references(() => workspaceModuleRuns.id, { onDelete: "cascade" }),
   participantId: varchar("participant_id").references(() => participants.id),
-  score: real("score").notNull(), // Score value (e.g., 0.0 - 10.0)
-  slotOffset: integer("slot_offset").default(0), // For handling multiple ideas at same score
+  score: real("score").notNull(),
+  slotOffset: integer("slot_offset").default(0),
   lockedBy: varchar("locked_by").references(() => participants.id),
   lockedAt: timestamp("locked_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
-  // Ensure one position per idea per staircase (or per module run)
-  uniqueStaircaseIdea: unique().on(table.staircaseId, table.ideaId, table.moduleRunId),
+  uniqueStaircaseNote: unique().on(table.staircaseId, table.noteId, table.moduleRunId),
 }));
 
 // Insert schemas

@@ -4131,7 +4131,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const { ideaId, xCoord, yCoord } = req.body;
+      const { noteId, ideaId, xCoord, yCoord } = req.body;
+      const resolvedNoteId = noteId || ideaId;
+      
+      if (!resolvedNoteId) {
+        return res.status(400).json({ error: "noteId is required" });
+      }
       
       // Validate coordinates are within bounds (client sends 0-100 percentages)
       if (xCoord < 0 || xCoord > 100 || yCoord < 0 || yCoord > 100) {
@@ -4148,7 +4153,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const positionData: any = {
         matrixId: matrix.id,
-        ideaId,
+        noteId: resolvedNoteId,
         xCoord: normalizedX,
         yCoord: normalizedY
       };
@@ -4188,7 +4193,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Update idea position (upsert) - legacy route
+  // Update note position (upsert) - legacy route
   app.post("/api/priority-matrix-positions", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
     try {
       const positionData = insertPriorityMatrixPositionSchema.parse(req.body);
@@ -4319,7 +4324,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Update idea position on staircase (upsert)
+  // Update note position on staircase (upsert)
   app.post("/api/spaces/:spaceId/staircase-positions", createWorkspaceAccessMiddleware({ requireOpen: false }), async (req, res) => {
     try {
       const spaceId = await resolveWorkspaceId(req.params.spaceId);

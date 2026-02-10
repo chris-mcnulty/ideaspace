@@ -16,7 +16,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import type { Idea, StaircaseModule, StaircasePosition, Category } from '@shared/schema';
+import type { Note, StaircaseModule, StaircasePosition, Category } from '@shared/schema';
 
 interface StaircaseModuleProps {
   spaceId: string;
@@ -24,9 +24,9 @@ interface StaircaseModuleProps {
   isReadOnly?: boolean;
 }
 
-interface DraggedIdea {
+interface DraggedNote {
   id: string;
-  ideaId: string;
+  noteId: string;
   startY: number;
   currentY: number;
   currentStepIndex: number;
@@ -40,15 +40,15 @@ export default function StaircaseModule({
 }: StaircaseModuleProps) {
   const { toast } = useToast();
   const canvasRef = useRef<SVGSVGElement>(null);
-  const [draggedIdea, setDraggedIdea] = useState<DraggedIdea | null>(null);
+  const [draggedNote, setDraggedNote] = useState<DraggedNote | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [minLabel, setMinLabel] = useState('Lowest');
   const [maxLabel, setMaxLabel] = useState('Highest');
   const [stepCount, setStepCount] = useState(11);
   const [wsConnection, setWsConnection] = useState<WebSocket | null>(null);
 
-  const { data: ideas = [], isLoading: ideasLoading } = useQuery<Idea[]>({
-    queryKey: [`/api/spaces/${spaceId}/ideas`],
+  const { data: notes = [], isLoading: notesLoading } = useQuery<Note[]>({
+    queryKey: [`/api/spaces/${spaceId}/notes`],
     staleTime: 0,
   });
 
@@ -89,7 +89,7 @@ export default function StaircaseModule({
   });
 
   const updatePositionMutation = useMutation({
-    mutationFn: (data: { ideaId: string; score: number; slotOffset?: number }) =>
+    mutationFn: (data: { noteId: string; score: number; slotOffset?: number }) =>
       apiRequest('POST', `/api/spaces/${spaceId}/staircase-positions`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/staircase-positions`] });
@@ -97,7 +97,7 @@ export default function StaircaseModule({
     onError: () => {
       toast({
         title: 'Position Update Failed',
-        description: 'Failed to save idea position. Please try again.',
+        description: 'Failed to save position. Please try again.',
         variant: 'destructive',
       });
     },
@@ -118,7 +118,6 @@ export default function StaircaseModule({
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws?spaceId=${spaceId}`);
     
     ws.onopen = () => {
-      console.log('[StaircaseModule] WebSocket connected');
       ws.send(JSON.stringify({ type: 'join', data: { spaceId } }));
     };
 
@@ -137,9 +136,7 @@ export default function StaircaseModule({
       console.error('[StaircaseModule] WebSocket error:', error);
     };
 
-    ws.onclose = () => {
-      console.log('[StaircaseModule] WebSocket disconnected');
-    };
+    ws.onclose = () => {};
 
     setWsConnection(ws);
 
@@ -163,38 +160,38 @@ export default function StaircaseModule({
     positionsByScore.get(score)?.push(pos);
   });
 
-  const placedIdeaIds = new Set(positions.map(p => p.ideaId));
-  const unplacedIdeas = ideas.filter(idea => !placedIdeaIds.has(idea.id));
-  const placedIdeas = ideas.filter(idea => placedIdeaIds.has(idea.id));
+  const placedNoteIds = new Set(positions.map(p => p.noteId));
+  const unplacedNotes = notes.filter(note => !placedNoteIds.has(note.id));
+  const placedNotes = notes.filter(note => placedNoteIds.has(note.id));
 
-  const ideaColors = [
+  const noteColors = [
     '#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444',
     '#EC4899', '#6366F1', '#14B8A6', '#F97316', '#84CC16',
   ];
   
-  const getCategoryColor = (manualCategoryId?: string | null, aiCategoryId?: string | null, ideaId?: string) => {
+  const getCategoryColor = (manualCategoryId?: string | null, aiCategoryId?: string | null, noteId?: string) => {
     const categoryId = manualCategoryId || aiCategoryId;
     if (categoryId) {
       const category = categories.find(c => c.id === categoryId);
       if (category?.color) return category.color;
     }
-    if (ideaId) {
-      const hash = ideaId.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
-      return ideaColors[hash % ideaColors.length];
+    if (noteId) {
+      const hash = noteId.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+      return noteColors[hash % noteColors.length];
     }
-    return ideaColors[0];
+    return noteColors[0];
   };
 
-  const handleQuickPlace = (idea: Idea, stepIndex: number) => {
+  const handleQuickPlace = (note: Note, stepIndex: number) => {
     if (isReadOnly || !staircase) return;
     const scoreRange = staircase.maxScore - staircase.minScore;
     const score = staircase.minScore + (stepIndex / (stepCount - 1)) * scoreRange;
     const existingAtScore = positionsByScore.get(score) || [];
     const slotOffset = existingAtScore.length;
-    updatePositionMutation.mutate({ ideaId: idea.id, score, slotOffset });
+    updatePositionMutation.mutate({ noteId: note.id, score, slotOffset });
   };
 
-  const handleDragStart = (e: React.PointerEvent, idea: Idea, position?: StaircasePosition) => {
+  const handleDragStart = (e: React.PointerEvent, note: Note, position?: StaircasePosition) => {
     if (isReadOnly) return;
     
     const canvas = canvasRef.current;
@@ -206,9 +203,9 @@ export default function StaircaseModule({
     const stepIndex = Math.floor((canvasHeight - margin - y) / stepHeight);
     const clampedStep = Math.max(0, Math.min(stepCount - 1, stepIndex));
     
-    setDraggedIdea({
-      id: position?.id || `new-${idea.id}`,
-      ideaId: idea.id,
+    setDraggedNote({
+      id: position?.id || `new-${note.id}`,
+      noteId: note.id,
       startY: y,
       currentY: y,
       currentStepIndex: clampedStep,
@@ -221,7 +218,7 @@ export default function StaircaseModule({
   };
 
   const handleDragMove = (e: React.PointerEvent) => {
-    if (!draggedIdea) return;
+    if (!draggedNote) return;
     
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -232,28 +229,28 @@ export default function StaircaseModule({
     const stepIndex = Math.floor((canvasHeight - margin - y) / stepHeight);
     const clampedStep = Math.max(0, Math.min(stepCount - 1, stepIndex));
     
-    setDraggedIdea(prev => prev ? { ...prev, currentY: y, currentStepIndex: clampedStep } : null);
+    setDraggedNote(prev => prev ? { ...prev, currentY: y, currentStepIndex: clampedStep } : null);
   };
 
   const handleDragEnd = (e: React.PointerEvent) => {
-    if (!draggedIdea || !staircase) return;
+    if (!draggedNote || !staircase) return;
     
-    const stepIndex = Math.floor((canvasHeight - margin - draggedIdea.currentY) / stepHeight);
+    const stepIndex = Math.floor((canvasHeight - margin - draggedNote.currentY) / stepHeight);
     const clampedStep = Math.max(0, Math.min(stepCount - 1, stepIndex));
     
     const scoreRange = staircase.maxScore - staircase.minScore;
     const score = staircase.minScore + (clampedStep / (stepCount - 1)) * scoreRange;
     
     const existingAtScore = positionsByScore.get(score) || [];
-    const slotOffset = existingAtScore.filter(p => p.ideaId !== draggedIdea.ideaId).length;
+    const slotOffset = existingAtScore.filter(p => p.noteId !== draggedNote.noteId).length;
     
     updatePositionMutation.mutate({
-      ideaId: draggedIdea.ideaId,
+      noteId: draggedNote.noteId,
       score,
       slotOffset,
     });
     
-    setDraggedIdea(null);
+    setDraggedNote(null);
     (e.target as Element).releasePointerCapture(e.pointerId);
   };
 
@@ -269,7 +266,7 @@ export default function StaircaseModule({
     });
   }
 
-  const isLoading = ideasLoading || categoriesLoading || staircaseLoading || positionsLoading;
+  const isLoading = notesLoading || categoriesLoading || staircaseLoading || positionsLoading;
 
   if (isLoading) {
     return (
@@ -281,7 +278,7 @@ export default function StaircaseModule({
     );
   }
 
-  if (ideas.length === 0) {
+  if (notes.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -291,7 +288,7 @@ export default function StaircaseModule({
           </CardTitle>
         </CardHeader>
         <CardContent className="p-6 text-center">
-          <p className="text-muted-foreground">No ideas available yet. Ideas need to be created in the Ideas Hub before they can be rated on the staircase.</p>
+          <p className="text-muted-foreground">No notes available yet. Participants need to create notes during ideation before they can be rated on the staircase.</p>
         </CardContent>
       </Card>
     );
@@ -308,7 +305,7 @@ export default function StaircaseModule({
             </CardTitle>
             <div className="flex items-center gap-3">
               <Badge variant="secondary" data-testid="badge-placed-count">
-                {placedIdeas.length}/{ideas.length} placed
+                {placedNotes.length}/{notes.length} placed
               </Badge>
               {!isReadOnly && (
                 <Button
@@ -326,67 +323,68 @@ export default function StaircaseModule({
         </CardHeader>
         <CardContent className="p-6">
           <div className="flex gap-6">
-            {/* Unplaced Ideas Panel */}
             <div className="w-64 shrink-0" data-testid="staircase-unplaced-panel">
               <div className="mb-3">
                 <h3 className="text-sm font-semibold text-foreground">
-                  {unplacedIdeas.length > 0 ? `Ideas to Place (${unplacedIdeas.length})` : 'All Ideas Placed'}
+                  {unplacedNotes.length > 0 ? `Notes to Place (${unplacedNotes.length})` : 'All Notes Placed'}
                 </h3>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {unplacedIdeas.length > 0
-                    ? 'Click a step number to place each idea on the staircase'
-                    : 'Drag ideas on the staircase to change their position'}
+                  {unplacedNotes.length > 0
+                    ? 'Click a step number to place each note on the staircase'
+                    : 'Drag notes on the staircase to change their position'}
                 </p>
               </div>
               <div className="space-y-2 max-h-[540px] overflow-y-auto pr-1">
-                {unplacedIdeas.map(idea => (
-                  <Card
-                    key={idea.id}
-                    className="p-3"
-                    data-testid={`unplaced-idea-${idea.id}`}
-                  >
-                    <div className="flex items-start gap-2">
-                      <div
-                        className="w-3 h-3 rounded-full mt-1 shrink-0"
-                        style={{ backgroundColor: getCategoryColor(idea.manualCategoryId, null, idea.id) }}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm leading-tight break-words">
-                          {(idea.content || '').length > 80
-                            ? (idea.content || '').substring(0, 80) + '...'
-                            : (idea.content || '')}
-                        </p>
-                        {!isReadOnly && (
-                          <div className="flex items-center gap-1 mt-2 flex-wrap">
-                            <span className="text-xs text-muted-foreground mr-1">Step:</span>
-                            {[0, Math.floor(stepCount / 4), Math.floor(stepCount / 2), Math.floor(3 * stepCount / 4), stepCount - 1].map(step => (
-                              <Button
-                                key={step}
-                                variant="outline"
-                                size="sm"
-                                className="h-6 px-2 text-xs"
-                                onClick={() => handleQuickPlace(idea, step)}
-                                disabled={updatePositionMutation.isPending}
-                                data-testid={`button-place-${idea.id}-step-${step}`}
-                              >
-                                {step}
-                              </Button>
-                            ))}
-                          </div>
-                        )}
+                {unplacedNotes.map(note => {
+                  const displayText = note.content.replace(/<[^>]*>?/gm, '');
+                  return (
+                    <Card
+                      key={note.id}
+                      className="p-3"
+                      data-testid={`unplaced-note-${note.id}`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full mt-1 shrink-0"
+                          style={{ backgroundColor: getCategoryColor(note.manualCategoryId, null, note.id) }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm leading-tight break-words">
+                            {displayText.length > 80
+                              ? displayText.substring(0, 80) + '...'
+                              : displayText}
+                          </p>
+                          {!isReadOnly && (
+                            <div className="flex items-center gap-1 mt-2 flex-wrap">
+                              <span className="text-xs text-muted-foreground mr-1">Step:</span>
+                              {[0, Math.floor(stepCount / 4), Math.floor(stepCount / 2), Math.floor(3 * stepCount / 4), stepCount - 1].map(step => (
+                                <Button
+                                  key={step}
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 px-2 text-xs"
+                                  onClick={() => handleQuickPlace(note, step)}
+                                  disabled={updatePositionMutation.isPending}
+                                  data-testid={`button-place-${note.id}-step-${step}`}
+                                >
+                                  {step}
+                                </Button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </Card>
-                ))}
-                {placedIdeas.length > 0 && unplacedIdeas.length === 0 && (
+                    </Card>
+                  );
+                })}
+                {placedNotes.length > 0 && unplacedNotes.length === 0 && (
                   <p className="text-xs text-muted-foreground text-center py-4">
-                    All {placedIdeas.length} ideas have been placed on the staircase. Drag them on the canvas to adjust their positions.
+                    All {placedNotes.length} notes have been placed on the staircase. Drag them on the canvas to adjust their positions.
                   </p>
                 )}
               </div>
             </div>
             
-            {/* Staircase Canvas */}
             <div className="flex-1 min-w-0">
               <svg
                 ref={canvasRef}
@@ -398,7 +396,6 @@ export default function StaircaseModule({
                 onPointerLeave={handleDragEnd}
                 data-testid="staircase-canvas"
               >
-                {/* Draw staircase steps */}
                 {Array.from({ length: stepCount }).map((_, i) => {
                   const x = margin + i * stepWidth;
                   const y = canvasHeight - margin - i * stepHeight;
@@ -436,7 +433,6 @@ export default function StaircaseModule({
                   );
                 })}
                 
-                {/* Axis labels */}
                 <text
                   x={margin}
                   y={canvasHeight - margin + 40}
@@ -458,9 +454,8 @@ export default function StaircaseModule({
                   {maxLabel}
                 </text>
                 
-                {/* Render only placed ideas on the staircase */}
-                {placedIdeas.map((idea) => {
-                  const position = positions.find(p => p.ideaId === idea.id);
+                {placedNotes.map((note) => {
+                  const position = positions.find(p => p.noteId === note.id);
                   if (!position) return null;
                   
                   const score = Number(position.score);
@@ -474,24 +469,26 @@ export default function StaircaseModule({
                   const x = baseX + offsetX;
                   const y = baseY;
                   
-                  const isDragging = draggedIdea?.ideaId === idea.id;
+                  const isDragging = draggedNote?.noteId === note.id;
                   
                   let displayX = x;
                   let displayY = y;
                   if (isDragging) {
-                    const dragStepIndex = draggedIdea.currentStepIndex;
+                    const dragStepIndex = draggedNote.currentStepIndex;
                     displayX = margin + dragStepIndex * stepWidth + stepWidth / 2;
                     displayY = canvasHeight - margin - dragStepIndex * stepHeight - stepHeight / 2;
                   }
                   
+                  const displayText = note.content.replace(/<[^>]*>?/gm, '');
+                  
                   return (
                     <g
-                      key={position.id || idea.id}
+                      key={position.id || note.id}
                       transform={`translate(${displayX}, ${displayY})`}
-                      onPointerDown={(e) => handleDragStart(e, idea, position)}
+                      onPointerDown={(e) => handleDragStart(e, note, position)}
                       className={isReadOnly ? '' : 'cursor-grab'}
                       style={{ opacity: isDragging ? 0.7 : 1, touchAction: 'none' }}
-                      data-testid={`staircase-idea-${idea.id}`}
+                      data-testid={`staircase-note-${note.id}`}
                     >
                       <rect
                         x={-45}
@@ -499,7 +496,7 @@ export default function StaircaseModule({
                         width={90}
                         height={40}
                         rx={6}
-                        fill={getCategoryColor(idea.manualCategoryId, null, idea.id)}
+                        fill={getCategoryColor(note.manualCategoryId, null, note.id)}
                         stroke={isDragging ? 'hsl(var(--primary))' : 'hsl(var(--border))'}
                         strokeWidth={isDragging ? 2 : 1}
                       />
@@ -512,16 +509,15 @@ export default function StaircaseModule({
                         fontWeight="500"
                         style={{ pointerEvents: 'none' }}
                       >
-                        {(idea.content || '').length > 12 
-                          ? (idea.content || '').substring(0, 12) + '...' 
-                          : (idea.content || '')}
+                        {displayText.length > 12 
+                          ? displayText.substring(0, 12) + '...' 
+                          : displayText}
                       </text>
                     </g>
                   );
                 })}
 
-                {/* Empty state message on canvas */}
-                {placedIdeas.length === 0 && (
+                {placedNotes.length === 0 && (
                   <text
                     x={canvasWidth / 2}
                     y={canvasHeight / 2}
@@ -529,13 +525,12 @@ export default function StaircaseModule({
                     fill="hsl(var(--muted-foreground))"
                     fontSize="14"
                   >
-                    Place ideas from the panel on the left
+                    Place notes from the panel on the left
                   </text>
                 )}
               </svg>
             </div>
             
-            {/* Score Distribution */}
             {staircase?.showDistribution && positions.length > 0 && (
               <Card className="w-56 shrink-0">
                 <CardHeader className="pb-3">
@@ -569,7 +564,6 @@ export default function StaircaseModule({
         </CardContent>
       </Card>
       
-      {/* Settings Dialog */}
       <Dialog open={showSettings} onOpenChange={setShowSettings}>
         <DialogContent data-testid="staircase-settings-dialog">
           <DialogHeader>

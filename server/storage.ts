@@ -1905,7 +1905,7 @@ export class DbStorage implements IStorage {
       .onConflictDoUpdate({
         target: [
           priorityMatrixPositions.matrixId,
-          priorityMatrixPositions.ideaId,
+          priorityMatrixPositions.noteId,
           priorityMatrixPositions.moduleRunId
         ],
         set: {
@@ -1985,7 +1985,7 @@ export class DbStorage implements IStorage {
       .onConflictDoUpdate({
         target: [
           staircasePositions.staircaseId,
-          staircasePositions.ideaId,
+          staircasePositions.noteId,
           staircasePositions.moduleRunId,
         ],
         set: updateSet,
