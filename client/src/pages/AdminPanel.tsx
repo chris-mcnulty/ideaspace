@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertOrganizationSchema, createSpaceApiSchema, insertUserSchema, insertProjectSchema } from "@shared/schema";
+import { NewWorkspaceDialog } from "@/components/NewWorkspaceDialog";
 import { z } from "zod";
 import { Key, UserPlus } from "lucide-react";
 
@@ -451,7 +452,7 @@ function OrganizationCard({
                   </Button>
                 </>
               )}
-              <NewWorkspaceDialog organizationId={organization.id} organizationSlug={organization.slug} />
+              <NewWorkspaceDialogWrapper organizationId={organization.id} organizationSlug={organization.slug} />
             </div>
           </div>
         </CardHeader>
@@ -1669,266 +1670,21 @@ function NewOrganizationDialog() {
   );
 }
 
-function NewWorkspaceDialog({ 
+function NewWorkspaceDialogWrapper({ 
   organizationId, 
   organizationSlug 
 }: { 
   organizationId: string;
   organizationSlug: string;
 }) {
-  const { toast } = useToast();
-  const [open, setOpen] = useState(false);
-  
-  // Fetch projects for this organization
-  const { data: projects = [] } = useQuery<Project[]>({
-    queryKey: ["/api/organizations", organizationId, "projects"],
-  });
-  
-  // Fetch workspace templates (new simplified system)
-  // Include organizationId in query key to prevent cache collision between orgs
-  const { data: allTemplates = [] } = useQuery<Space[]>({
-    queryKey: ["/api/templates/spaces", organizationId],
-    queryFn: async () => {
-      const response = await fetch("/api/templates/spaces");
-      if (!response.ok) throw new Error("Failed to fetch templates");
-      return response.json();
-    },
-  });
-
-  // Filter to show system templates + org-specific templates for this org
-  const templates = allTemplates.filter(t => 
-    t.templateScope === 'system' || t.organizationId === organizationId
-  );
-
-  // Find the default project for this organization
-  const defaultProject = projects.find(p => p.isDefault);
-  
-  const form = useForm<z.infer<typeof createSpaceApiSchema>>({
-    resolver: zodResolver(createSpaceApiSchema),
-    defaultValues: {
-      organizationId,
-      projectId: defaultProject?.id || undefined,
-      name: "",
-      purpose: "",
-      guestAllowed: false,
-      hidden: false,
-      status: "draft",
-      sessionMode: "live",
-      icon: "brain",
-      templateId: undefined,
-    },
-  });
-
-  const createSpaceMutation = useMutation({
-    mutationFn: async (data: z.infer<typeof createSpaceApiSchema>) => {
-      const response = await apiRequest("POST", "/api/spaces", data);
-      return await response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/organizations", organizationId, "spaces"] });
-      toast({
-        title: "Workspace created",
-        description: "The new workspace has been created successfully.",
-      });
-      setOpen(false);
-      form.reset({
-        organizationId,
-        name: "",
-        purpose: "",
-        guestAllowed: false,
-        hidden: false,
-        status: "draft",
-        sessionMode: "live",
-        icon: "brain",
-        templateId: undefined,
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        variant: "destructive",
-        title: "Failed to create workspace",
-        description: error.message || "Please try again",
-      });
-    },
-  });
-
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" data-testid={`button-create-workspace-${organizationSlug}`}>
-          <Plus className="h-4 w-4 mr-2" />
-          New Workspace
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>Create New Workspace</DialogTitle>
-          <DialogDescription>
-            Add a new collaborative workspace for this organization.
-          </DialogDescription>
-        </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit((data) => createSpaceMutation.mutate(data))} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Workspace Name</FormLabel>
-                  <FormControl>
-                    <Input 
-                      placeholder="e.g., Q1 Strategy Session" 
-                      {...field} 
-                      data-testid="input-workspace-name"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            {projects.length > 0 && (
-              <FormField
-                control={form.control}
-                name="projectId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Project</FormLabel>
-                    <Select 
-                      onValueChange={(value) => field.onChange(value === "none" ? undefined : value)} 
-                      value={field.value || "none"}
-                    >
-                      <FormControl>
-                        <SelectTrigger data-testid="select-project">
-                          <SelectValue placeholder="Select a project" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none" data-testid="project-option-none">
-                          No project
-                        </SelectItem>
-                        {projects.map((project) => (
-                          <SelectItem 
-                            key={project.id} 
-                            value={project.id}
-                            data-testid={`project-option-${project.id}`}
-                          >
-                            {project.name} {project.isDefault ? '(Default)' : ''}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-            {templates.length > 0 && (
-              <FormField
-                control={form.control}
-                name="templateId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Template (Optional)</FormLabel>
-                    <Select 
-                      onValueChange={(value) => field.onChange(value === "none" ? undefined : value)} 
-                      value={field.value || "none"}
-                    >
-                      <FormControl>
-                        <SelectTrigger data-testid="select-template">
-                          <SelectValue placeholder="Start from scratch or select a template" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none" data-testid="template-option-none">
-                          No template (blank workspace)
-                        </SelectItem>
-                        {templates.map((template) => (
-                          <SelectItem 
-                            key={template.id} 
-                            value={template.id}
-                            data-testid={`template-option-${template.id}`}
-                          >
-                            {template.name} {template.templateScope === 'system' ? '(System)' : '(Organization)'}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-sm text-muted-foreground">
-                      Clone notes, categories, and documents from an existing template
-                    </p>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-            <FormField
-              control={form.control}
-              name="purpose"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Purpose / Description</FormLabel>
-                  <FormControl>
-                    <Textarea 
-                      placeholder="Describe the goal of this workspace..." 
-                      {...field} 
-                      data-testid="input-workspace-purpose"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="guestAllowed"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                      data-testid="checkbox-guest-allowed"
-                    />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>
-                      Allow Guest Access
-                    </FormLabel>
-                    <p className="text-sm text-muted-foreground">
-                      Anonymous users can join this workspace without creating an account
-                    </p>
-                  </div>
-                </FormItem>
-              )}
-            />
-            <div className="flex justify-end gap-2 pt-4">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => setOpen(false)}
-                data-testid="button-cancel-workspace"
-              >
-                Cancel
-              </Button>
-              <Button 
-                type="submit" 
-                disabled={createSpaceMutation.isPending}
-                data-testid="button-submit-workspace"
-              >
-                {createSpaceMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  "Create Workspace"
-                )}
-              </Button>
-            </div>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+    <NewWorkspaceDialog
+      organizationId={organizationId}
+      organizationSlug={organizationSlug}
+      onSuccess={() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/organizations", organizationId, "spaces"] });
+      }}
+    />
   );
 }
 

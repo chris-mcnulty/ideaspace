@@ -13,6 +13,7 @@ import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { OrgSwitcher } from "@/components/OrgSwitcher";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { NewWorkspaceDialog } from "@/components/NewWorkspaceDialog";
 
 interface WorkspaceWithStats {
   id: string;
@@ -280,14 +281,23 @@ export default function FacilitatorDashboard() {
                   Created by me
                 </Label>
               </div>
-              {(user.role === "global_admin" || user.role === "company_admin" || user.role === "facilitator") && (
-                <Button asChild data-testid="button-create-workspace">
-                  <Link href="/admin">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create Workspace
-                  </Link>
-                </Button>
-              )}
+              {(user.role === "global_admin" || user.role === "company_admin" || user.role === "facilitator") && (() => {
+                const targetOrg = selectedOrgId 
+                  ? organizations?.find(o => o.id === selectedOrgId) 
+                  : organizations?.[0];
+                return targetOrg ? (
+                  <NewWorkspaceDialog
+                    organizationId={targetOrg.id}
+                    organizationSlug={targetOrg.slug}
+                    trigger={
+                      <Button data-testid="button-create-workspace">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create Workspace
+                      </Button>
+                    }
+                  />
+                ) : null;
+              })()}
             </div>
           </div>
         </div>
@@ -320,16 +330,25 @@ export default function FacilitatorDashboard() {
                   : "Create your first workspace to begin an envisioning session."}
               </CardDescription>
             </CardHeader>
-            {(user.role === "global_admin" || user.role === "company_admin") && (
-              <CardContent>
-                <Button asChild data-testid="button-create-first-workspace">
-                  <Link href="/admin">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create Workspace
-                  </Link>
-                </Button>
-              </CardContent>
-            )}
+            {(user.role === "global_admin" || user.role === "company_admin") && (() => {
+              const targetOrg = selectedOrgId 
+                ? organizations?.find(o => o.id === selectedOrgId) 
+                : organizations?.[0];
+              return targetOrg ? (
+                <CardContent>
+                  <NewWorkspaceDialog
+                    organizationId={targetOrg.id}
+                    organizationSlug={targetOrg.slug}
+                    trigger={
+                      <Button data-testid="button-create-first-workspace">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create Workspace
+                      </Button>
+                    }
+                  />
+                </CardContent>
+              ) : null;
+            })()}
           </Card>
         ) : (
           <div className="space-y-8">
@@ -383,12 +402,17 @@ export default function FacilitatorDashboard() {
                               </CardHeader>
                               {(user.role === "global_admin" || user.role === "company_admin") && (
                                 <CardContent className="pt-0">
-                                  <Button asChild variant="outline" className="w-full" data-testid={`button-create-workspace-${project.projectId}`}>
-                                    <Link href="/admin">
-                                      <Plus className="w-4 h-4 mr-2" />
-                                      Create Workspace
-                                    </Link>
-                                  </Button>
+                                  <NewWorkspaceDialog
+                                    organizationId={org.orgId}
+                                    organizationSlug={org.orgSlug}
+                                    defaultProjectId={project.projectId || undefined}
+                                    trigger={
+                                      <Button variant="outline" className="w-full" data-testid={`button-create-workspace-${project.projectId}`}>
+                                        <Plus className="w-4 h-4 mr-2" />
+                                        Create Workspace
+                                      </Button>
+                                    }
+                                  />
                                 </CardContent>
                               )}
                             </Card>

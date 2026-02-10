@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FolderKanban, Building2, Layers, ChevronRight, User } from "lucide-react";
+import { FolderKanban, Building2, Layers, ChevronRight, User, Plus } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { OrgSwitcher } from "@/components/OrgSwitcher";
+import { NewWorkspaceDialog } from "@/components/NewWorkspaceDialog";
 import { useEffect, useState } from "react";
 
 interface Project {
@@ -235,19 +236,34 @@ export default function MyProjects() {
                         )}
                       </CardHeader>
                       <CardContent>
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-4 text-sm text-muted-foreground">
                             <div className="flex items-center gap-1">
                               <Layers className="h-4 w-4" />
                               <span>{project.workspaceCount || 0} workspace{(project.workspaceCount || 0) !== 1 ? "s" : ""}</span>
                             </div>
                           </div>
-                          <Link href={`/dashboard?org=${organization.id}&project=${project.id}`}>
-                            <Button variant="ghost" size="sm" data-testid={`button-view-project-${project.id}`}>
-                              View
-                              <ChevronRight className="h-4 w-4 ml-1" />
-                            </Button>
-                          </Link>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {(user.role === "global_admin" || user.role === "company_admin" || user.role === "facilitator") && (
+                              <NewWorkspaceDialog
+                                organizationId={organization.id}
+                                organizationSlug={organization.slug}
+                                defaultProjectId={project.id}
+                                trigger={
+                                  <Button variant="outline" size="sm" data-testid={`button-create-workspace-project-${project.id}`}>
+                                    <Plus className="h-4 w-4 mr-1" />
+                                    New Workspace
+                                  </Button>
+                                }
+                              />
+                            )}
+                            <Link href={`/dashboard?org=${organization.id}&project=${project.id}`}>
+                              <Button variant="ghost" size="sm" data-testid={`button-view-project-${project.id}`}>
+                                View
+                                <ChevronRight className="h-4 w-4 ml-1" />
+                              </Button>
+                            </Link>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
