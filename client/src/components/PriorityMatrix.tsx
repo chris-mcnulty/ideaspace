@@ -51,7 +51,6 @@ export default function PriorityMatrix({
   const [xAxisLabel, setXAxisLabel] = useState('Impact');
   const [yAxisLabel, setYAxisLabel] = useState('Effort');
   const [localPositions, setLocalPositions] = useState<Map<string, Position>>(new Map());
-  const [wsConnection, setWsConnection] = useState<WebSocket | null>(null);
   const localPositionsRef = useRef<Map<string, Position>>(new Map());
 
   const { data: notes = [], isLoading: notesLoading } = useQuery<Note[]>({
@@ -142,30 +141,29 @@ export default function PriorityMatrix({
     if (isReadOnly) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}`);
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws?spaceId=${spaceId}`);
     
-    ws.onopen = () => {
-      ws.send(JSON.stringify({
-        type: 'join-matrix',
-        spaceId,
-      }));
-    };
-
     ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      
-      if (data.type === 'matrix-position-update' && data.spaceId === spaceId) {
-        setLocalPositions(prev => {
-          const newPositions = new Map(prev);
-          const noteId = data.noteId || data.ideaId;
-          newPositions.set(noteId, { x: data.xCoord, y: data.yCoord });
-          localPositionsRef.current = newPositions;
-          return newPositions;
-        });
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'matrix_position_updated') {
+          const posData = data.data;
+          if (posData?.noteId) {
+            const x = typeof posData.xCoord === 'number' ? (posData.xCoord <= 1 ? posData.xCoord * 100 : posData.xCoord) : 50;
+            const y = typeof posData.yCoord === 'number' ? (posData.yCoord <= 1 ? posData.yCoord * 100 : posData.yCoord) : 50;
+            setLocalPositions(prev => {
+              const newPositions = new Map(prev);
+              newPositions.set(posData.noteId, { x, y });
+              localPositionsRef.current = newPositions;
+              return newPositions;
+            });
+          }
+        }
+      } catch (error) {
+        console.error('[PriorityMatrix] WebSocket message error:', error);
       }
     };
-
-    setWsConnection(ws);
 
     return () => {
       ws.close();
@@ -216,16 +214,6 @@ export default function PriorityMatrix({
       localPositionsRef.current = newPositions;
       return newPositions;
     });
-
-    if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
-      wsConnection.send(JSON.stringify({
-        type: 'matrix-position-update',
-        spaceId,
-        noteId: draggedNote.id,
-        xCoord: newX,
-        yCoord: newY,
-      }));
-    }
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {

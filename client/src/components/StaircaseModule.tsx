@@ -22,6 +22,7 @@ interface StaircaseModuleProps {
   spaceId: string;
   moduleRunId?: string;
   isReadOnly?: boolean;
+  isFacilitator?: boolean;
 }
 
 interface DraggedNote {
@@ -36,7 +37,8 @@ interface DraggedNote {
 export default function StaircaseModule({ 
   spaceId, 
   moduleRunId,
-  isReadOnly = false 
+  isReadOnly = false,
+  isFacilitator = false,
 }: StaircaseModuleProps) {
   const { toast } = useToast();
   const canvasRef = useRef<SVGSVGElement>(null);
@@ -307,7 +309,7 @@ export default function StaircaseModule({
               <Badge variant="secondary" data-testid="badge-placed-count">
                 {placedNotes.length}/{notes.length} placed
               </Badge>
-              {!isReadOnly && (
+              {isFacilitator && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -465,9 +467,9 @@ export default function StaircaseModule({
                   const baseX = margin + stepIndex * stepWidth + stepWidth / 2;
                   const baseY = canvasHeight - margin - stepIndex * stepHeight - stepHeight / 2;
                   
-                  const offsetX = (position.slotOffset || 0) * 40;
-                  const x = baseX + offsetX;
-                  const y = baseY;
+                  const offsetY = (position.slotOffset || 0) * 44;
+                  const x = baseX;
+                  const y = baseY - offsetY;
                   
                   const isDragging = draggedNote?.noteId === note.id;
                   

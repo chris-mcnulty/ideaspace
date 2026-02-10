@@ -1328,7 +1328,7 @@ export default function FacilitatorWorkspace() {
           </Button>
         </div>
       </div>
-      <StaircaseModule spaceId={space.id} />
+      <StaircaseModule spaceId={space.id} isFacilitator={true} />
     </div>
   );
 

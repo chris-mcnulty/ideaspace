@@ -1,6 +1,6 @@
 import { openai } from "./openai";
 import { db } from "../db";
-import { notes, votes, rankings, marketplaceAllocations, participants, spaces, knowledgeBaseDocuments, cohortResults, personalizedResults, categories, workspaceModules } from "@shared/schema";
+import { notes, votes, rankings, marketplaceAllocations, participants, spaces, knowledgeBaseDocuments, cohortResults, personalizedResults, categories, workspaceModules, priorityMatrices, priorityMatrixPositions, staircaseModules, staircasePositions } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { CohortResult, PersonalizedResult } from "@shared/schema";
@@ -134,6 +134,63 @@ export async function generateCohortResults(
     );
   });
 
+  // Fetch Priority Matrix data
+  const matrixPositionsByNote = new Map<string, { x: number; y: number }>();
+  let matrixXLabel = 'Impact';
+  let matrixYLabel = 'Effort';
+  if (hasPriorityMatrix) {
+    const [matrix] = await db
+      .select()
+      .from(priorityMatrices)
+      .where(eq(priorityMatrices.spaceId, spaceId))
+      .limit(1);
+
+    if (matrix) {
+      matrixXLabel = matrix.xAxisLabel;
+      matrixYLabel = matrix.yAxisLabel;
+      const matrixPositions = await db
+        .select()
+        .from(priorityMatrixPositions)
+        .where(eq(priorityMatrixPositions.matrixId, matrix.id));
+
+      matrixPositions.forEach((pos: any) => {
+        matrixPositionsByNote.set(pos.noteId, {
+          x: Math.round(pos.xCoord * 100),
+          y: Math.round(pos.yCoord * 100),
+        });
+      });
+    }
+  }
+
+  // Fetch Staircase data
+  const staircaseScoresByNote = new Map<string, number>();
+  let staircaseMinLabel = 'Lowest';
+  let staircaseMaxLabel = 'Highest';
+  let staircaseMinScore = 0;
+  let staircaseMaxScore = 10;
+  if (hasStaircase) {
+    const [staircase] = await db
+      .select()
+      .from(staircaseModules)
+      .where(eq(staircaseModules.spaceId, spaceId))
+      .limit(1);
+
+    if (staircase) {
+      staircaseMinLabel = staircase.minLabel;
+      staircaseMaxLabel = staircase.maxLabel;
+      staircaseMinScore = staircase.minScore;
+      staircaseMaxScore = staircase.maxScore;
+      const stPositions = await db
+        .select()
+        .from(staircasePositions)
+        .where(eq(staircasePositions.staircaseId, staircase.id));
+
+      stPositions.forEach((pos: any) => {
+        staircaseScoresByNote.set(pos.noteId, pos.score);
+      });
+    }
+  }
+
   // Combine all scoring data
   const notesWithScores = allNotes.map((note: any) => ({
     ...note,
@@ -187,13 +244,19 @@ Total Ideas: ${allNotes.length}
 ${hasPairwiseVoting ? `Total Pairwise Votes: ${pairwiseVotes.length}` : ''}
 ${hasStackRanking ? `Total Rankings Submitted: ${new Set(rankingData.map((r: any) => r.participantId)).size}` : ''}
 ${hasMarketplace ? `Total Marketplace Allocations: ${marketplaceData.length}` : ''}
+${hasPriorityMatrix ? `Priority Matrix Axes: X="${matrixXLabel}" (0=Low, 100=High), Y="${matrixYLabel}" (0=Low, 100=High)
+Notes positioned on matrix: ${matrixPositionsByNote.size}` : ''}
+${hasStaircase ? `Staircase Scale: ${staircaseMinScore} (${staircaseMinLabel}) to ${staircaseMaxScore} (${staircaseMaxLabel})
+Notes rated on staircase: ${staircaseScoresByNote.size}` : ''}
 
 All Ideas Ranked by Combined Score:
 ${notesWithScores.map((note: any, idx: any) => `
 ${idx + 1}. "${note.content}" (Category: ${note.manualCategoryId ? categoryMap.get(note.manualCategoryId) || 'Uncategorized' : 'Uncategorized'})${hasPairwiseVoting ? `
    - Pairwise Wins: ${note.pairwiseWins}` : ''}${hasStackRanking ? `
    - Borda Score: ${note.bordaScore}` : ''}${hasMarketplace ? `
-   - Marketplace Coins: ${note.marketplaceCoins}` : ''}
+   - Marketplace Coins: ${note.marketplaceCoins}` : ''}${hasPriorityMatrix && matrixPositionsByNote.has(note.id) ? `
+   - Matrix Position: ${matrixXLabel}=${matrixPositionsByNote.get(note.id)!.x}%, ${matrixYLabel}=${matrixPositionsByNote.get(note.id)!.y}% (${matrixPositionsByNote.get(note.id)!.x > 50 ? 'High' : 'Low'} ${matrixXLabel}, ${matrixPositionsByNote.get(note.id)!.y > 50 ? 'High' : 'Low'} ${matrixYLabel})` : ''}${hasStaircase && staircaseScoresByNote.has(note.id) ? `
+   - Staircase Score: ${staircaseScoresByNote.get(note.id)} / ${staircaseMaxScore}` : ''}
    - Combined Score: ${note.combinedScore.toFixed(3)}
 `).join('')}
 
