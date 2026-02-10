@@ -1801,6 +1801,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Protected: Require facilitator or above to update spaces
   app.patch("/api/spaces/:id", requireFacilitator, async (req, res) => {
     try {
+      // Resolve workspace code to UUID
+      const rawId = req.params.id;
+      const spaceId = await resolveWorkspaceId(rawId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Space not found" });
+      }
+
       // Coerce date strings to Date objects before validation
       const body = { ...req.body };
       const dateFields = ['ideationStartsAt', 'ideationEndsAt', 'votingStartsAt', 'votingEndsAt', 'rankingStartsAt', 'rankingEndsAt'];
@@ -1810,7 +1817,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       const data = insertSpaceSchema.partial().parse(body);
-      const space = await storage.updateSpace(req.params.id, data);
+      const space = await storage.updateSpace(spaceId, data);
       if (!space) {
         return res.status(404).json({ error: "Space not found" });
       }
@@ -1824,14 +1831,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
           phase = "ideation"; // Active ideation phase
         }
         
-        broadcastToSpace(req.params.id, {
+        // Broadcast using workspace code (how participants connect)
+        broadcastToSpace(rawId, {
           type: "phase_change",
           data: {
-            spaceId: req.params.id,
+            spaceId: rawId,
             status: data.status,
             phase: phase,
           }
         });
+        if (rawId !== spaceId) {
+          broadcastToSpace(spaceId, {
+            type: "phase_change",
+            data: {
+              spaceId: spaceId,
+              status: data.status,
+              phase: phase,
+            }
+          });
+        }
       }
       
       res.json(space);
@@ -1852,6 +1870,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid phase. Must be one of: vote, rank, marketplace, ideate, results, priority-matrix, staircase, survey" });
       }
       
+      // Resolve workspace code to UUID
+      const rawId = req.params.id;
+      const spaceId = await resolveWorkspaceId(rawId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
       // Automatically enable the phase by setting time windows
       // This allows the phase to be "active" according to isPhaseActive checks
       const now = new Date();
@@ -1860,8 +1885,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updates: any = {};
       
       // Get workspace modules to check for timer configuration
-      const workspaceModules = await storage.getWorkspaceModules(req.params.id);
-      const ideationModule = workspaceModules.find(m => m.moduleType === 'ideation');
+      const wModules = await storage.getWorkspaceModules(spaceId);
+      const ideationModule = wModules.find(m => m.moduleType === 'ideation');
       const ideationConfig = ideationModule?.config as { timerEnabled?: boolean; timerDurationMinutes?: number } | undefined;
       
       switch (phase) {
@@ -1901,17 +1926,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Update workspace to enable the phase (if needed)
       if (Object.keys(updates).length > 0) {
-        await storage.updateSpace(req.params.id, updates);
+        await storage.updateSpace(spaceId, updates);
       }
       
-      // Broadcast navigation command to participants in this workspace only
-      broadcastToSpace(req.params.id, {
+      // Broadcast navigation command to participants in this workspace
+      // Use rawId (workspace code) since participants connect with the code from their URL
+      broadcastToSpace(rawId, {
         type: "navigate_to_phase",
         data: {
-          spaceId: req.params.id,
+          spaceId: rawId,
           phase: phase,
         }
       });
+      // Also broadcast using the resolved UUID in case some clients connected with that
+      if (rawId !== spaceId) {
+        broadcastToSpace(spaceId, {
+          type: "navigate_to_phase",
+          data: {
+            spaceId: spaceId,
+            phase: phase,
+          }
+        });
+      }
       
       res.json({ success: true, phase });
     } catch (error) {
