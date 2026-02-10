@@ -376,7 +376,7 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
       queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/categories`] });
       toast({ 
         title: "AI Categorization Complete", 
-        description: `${data.categorizedNotes || 0} notes categorized into ${data.categoriesCreated || 0} categories` 
+        description: `${data.categoriesApplied || 0} notes grouped into ${data.newCategoriesCreated || 0} categories` 
       });
     },
     onError: (error: any) => {
