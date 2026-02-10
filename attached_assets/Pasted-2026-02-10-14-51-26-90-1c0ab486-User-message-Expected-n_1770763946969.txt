@@ -1,0 +1,152 @@
+2026-02-10 14:51:26.90
+1c0ab486
+User
+"message": "Expected number, received null"
+2026-02-10 14:51:26.90
+1c0ab486
+User
+},
+2026-02-10 14:51:26.90
+1c0ab486
+User
+"code": "invalid_type",
+2026-02-10 14:51:26.90
+1c0ab486
+User
+{
+2026-02-10 14:51:26.90
+1c0ab486
+User
+"expected": "number",
+2026-02-10 14:51:26.90
+1c0ab486
+User
+"code": "invalid_type",
+2026-02-10 14:51:26.90
+1c0ab486
+User
+Failed to generate cohort results: ZodError: [
+2026-02-10 14:51:26.90
+1c0ab486
+User
+"expected": "number",
+2026-02-10 14:51:26.90
+1c0ab486
+User
+],
+2026-02-10 14:51:26.90
+1c0ab486
+User
+},
+2026-02-10 14:51:26.90
+1c0ab486
+User
+"received": "null",
+2026-02-10 14:51:26.90
+1c0ab486
+User
+"received": "null",
+2026-02-10 14:51:26.90
+1c0ab486
+User
+"pairwiseWins"
+2026-02-10 14:51:26.90
+1c0ab486
+User
+"expected": "number",
+2026-02-10 14:51:26.90
+1c0ab486
+User
+0,
+2026-02-10 14:51:26.90
+1c0ab486
+User
+"topIdeas",
+2026-02-10 14:51:26.90
+1c0ab486
+User
+{
+2026-02-10 14:51:26.90
+1c0ab486
+User
+1,
+2026-02-10 14:51:26.90
+1c0ab486
+User
+"received": "null",
+2026-02-10 14:51:26.90
+1c0ab486
+User
+{
+2026-02-10 14:51:26.90
+1c0ab486
+User
+"path": [
+2026-02-10 14:51:26.90
+1c0ab486
+User
+],
+2026-02-10 14:51:26.90
+1c0ab486
+User
+"path": [
+2026-02-10 14:51:26.90
+1c0ab486
+User
+"expected": "number",
+2026-02-10 14:51:26.90
+1c0ab486
+User
+"path": [
+2026-02-10 14:51:26.90
+1c0ab486
+User
+2,
+2026-02-10 14:51:26.90
+1c0ab486
+User
+},
+2026-02-10 14:51:26.90
+1c0ab486
+User
+"pairwiseWins"
+2026-02-10 14:51:26.90
+1c0ab486
+User
+"expected": "number",
+2026-02-10 14:51:26.90
+1c0ab486
+User
+},
+2026-02-10 14:51:26.90
+1c0ab486
+User
+"pairwiseWins"
+2026-02-10 14:51:26.90
+1c0ab486
+User
+"code": "invalid_type",
+2026-02-10 14:51:26.90
+1c0ab486
+User
+"pairwiseWins"
+2026-02-10 14:51:26.90
+1c0ab486
+User
+"received": "null",
+2026-02-10 14:51:26.90
+1c0ab486
+User
+"topIdeas",
+2026-02-10 14:51:26.90
+1c0ab486
+User
+},
+2026-02-10 14:51:26.90
+1c0ab486
+User
+{
+2026-02-10 14:51:26.90
+1c0ab486
+User
+{

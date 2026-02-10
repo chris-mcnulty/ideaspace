@@ -12,14 +12,14 @@ const CohortResultSchema = z.object({
   topIdeas: z.array(z.object({
     noteId: z.string(),
     content: z.string(),
-    category: z.string().optional(),
-    pairwiseWins: z.number().optional(),
-    bordaScore: z.number().optional(),
-    marketplaceCoins: z.number().optional(),
+    category: z.string().optional().nullable(),
+    pairwiseWins: z.number().optional().nullable().transform(v => v ?? undefined),
+    bordaScore: z.number().optional().nullable().transform(v => v ?? undefined),
+    marketplaceCoins: z.number().optional().nullable().transform(v => v ?? undefined),
     overallRank: z.number(),
   })),
   insights: z.string(),
-  recommendations: z.string().optional(),
+  recommendations: z.string().optional().nullable(),
 });
 
 // Schema for validating AI-generated personalized results
@@ -32,7 +32,7 @@ const PersonalizedResultSchema = z.object({
     impact: z.string(),
   })),
   insights: z.string(),
-  recommendations: z.string().optional(),
+  recommendations: z.string().optional().nullable(),
 });
 
 /**
