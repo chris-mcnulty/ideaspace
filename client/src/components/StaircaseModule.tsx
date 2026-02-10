@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Settings2, TrendingUp, BarChart2 } from 'lucide-react';
+import { Loader2, Settings2, TrendingUp, BarChart2, GripVertical, ArrowRight } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -29,8 +29,8 @@ interface DraggedIdea {
   ideaId: string;
   startY: number;
   currentY: number;
-  // Calculated step index for visual positioning along the staircase
   currentStepIndex: number;
+  fromSidebar: boolean;
 }
 
 export default function StaircaseModule({ 
@@ -47,32 +47,27 @@ export default function StaircaseModule({
   const [stepCount, setStepCount] = useState(11);
   const [wsConnection, setWsConnection] = useState<WebSocket | null>(null);
 
-  // Fetch ideas
   const { data: ideas = [], isLoading: ideasLoading } = useQuery<Idea[]>({
     queryKey: [`/api/spaces/${spaceId}/ideas`],
     staleTime: 0,
   });
 
-  // Fetch categories
   const { data: categories = [], isLoading: categoriesLoading } = useQuery<Category[]>({
     queryKey: [`/api/spaces/${spaceId}/categories`],
     enabled: !!spaceId,
   });
 
-  // Fetch staircase configuration
   const { data: staircase, isLoading: staircaseLoading } = useQuery<StaircaseModule>({
     queryKey: [`/api/spaces/${spaceId}/staircase`],
     enabled: !!spaceId,
   });
 
-  // Fetch positions
   const { data: positions = [], isLoading: positionsLoading } = useQuery<StaircasePosition[]>({
     queryKey: [`/api/spaces/${spaceId}/staircase-positions`],
     enabled: !!spaceId,
     staleTime: 0,
   });
 
-  // Create/update staircase config
   const updateStaircaseMutation = useMutation({
     mutationFn: (data: { minLabel: string; maxLabel: string; stepCount: number }) =>
       apiRequest('PUT', `/api/spaces/${spaceId}/staircase`, data),
@@ -93,7 +88,6 @@ export default function StaircaseModule({
     },
   });
 
-  // Update position mutation
   const updatePositionMutation = useMutation({
     mutationFn: (data: { ideaId: string; score: number; slotOffset?: number }) =>
       apiRequest('POST', `/api/spaces/${spaceId}/staircase-positions`, data),
@@ -109,7 +103,6 @@ export default function StaircaseModule({
     },
   });
 
-  // Initialize labels and config from staircase data
   useEffect(() => {
     if (staircase) {
       setMinLabel(staircase.minLabel);
@@ -118,7 +111,6 @@ export default function StaircaseModule({
     }
   }, [staircase]);
 
-  // WebSocket connection for real-time updates
   useEffect(() => {
     if (typeof window === 'undefined' || !spaceId) return;
 
@@ -127,7 +119,6 @@ export default function StaircaseModule({
     
     ws.onopen = () => {
       console.log('[StaircaseModule] WebSocket connected');
-      // Send join message to register this connection with the space
       ws.send(JSON.stringify({ type: 'join', data: { spaceId } }));
     };
 
@@ -135,26 +126,15 @@ export default function StaircaseModule({
       try {
         const message = JSON.parse(event.data);
         if (message.type === 'staircase_position_updated') {
-          // Invalidate positions query to get fresh data
           queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/staircase-positions`] });
         }
       } catch (error) {
         console.error('[StaircaseModule] WebSocket message error:', error);
-        toast({
-          title: 'Real-time Update Error',
-          description: 'Failed to process real-time update. Please refresh the page.',
-          variant: 'destructive',
-        });
       }
     };
 
     ws.onerror = (error) => {
       console.error('[StaircaseModule] WebSocket error:', error);
-      toast({
-        title: 'Connection Error',
-        description: 'Real-time collaboration may not be working. Changes will still be saved.',
-        variant: 'destructive',
-      });
     };
 
     ws.onclose = () => {
@@ -166,16 +146,14 @@ export default function StaircaseModule({
     return () => {
       ws.close();
     };
-  }, [spaceId, toast]);
+  }, [spaceId]);
 
-  // Calculate staircase dimensions and positions
   const canvasWidth = 800;
   const canvasHeight = 600;
   const margin = 60;
   const stepWidth = (canvasWidth - 2 * margin) / stepCount;
   const stepHeight = (canvasHeight - 2 * margin) / stepCount;
 
-  // Group positions by score for slot offset calculation
   const positionsByScore = new Map<number, StaircasePosition[]>();
   positions.forEach(pos => {
     const score = Number(pos.score);
@@ -185,28 +163,21 @@ export default function StaircaseModule({
     positionsByScore.get(score)?.push(pos);
   });
 
-  // Vibrant color palette for uncategorized items
+  const placedIdeaIds = new Set(positions.map(p => p.ideaId));
+  const unplacedIdeas = ideas.filter(idea => !placedIdeaIds.has(idea.id));
+  const placedIdeas = ideas.filter(idea => placedIdeaIds.has(idea.id));
+
   const ideaColors = [
-    '#8B5CF6', // Purple
-    '#3B82F6', // Blue
-    '#10B981', // Emerald
-    '#F59E0B', // Amber
-    '#EF4444', // Red
-    '#EC4899', // Pink
-    '#6366F1', // Indigo
-    '#14B8A6', // Teal
-    '#F97316', // Orange
-    '#84CC16', // Lime
+    '#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444',
+    '#EC4899', '#6366F1', '#14B8A6', '#F97316', '#84CC16',
   ];
   
-  // Get category color with fallback - uses idea ID for consistent color variety
   const getCategoryColor = (manualCategoryId?: string | null, aiCategoryId?: string | null, ideaId?: string) => {
     const categoryId = manualCategoryId || aiCategoryId;
     if (categoryId) {
       const category = categories.find(c => c.id === categoryId);
       if (category?.color) return category.color;
     }
-    // Generate consistent color based on idea ID for variety
     if (ideaId) {
       const hash = ideaId.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
       return ideaColors[hash % ideaColors.length];
@@ -214,7 +185,15 @@ export default function StaircaseModule({
     return ideaColors[0];
   };
 
-  // Handle drag start - works with or without existing position
+  const handleQuickPlace = (idea: Idea, stepIndex: number) => {
+    if (isReadOnly || !staircase) return;
+    const scoreRange = staircase.maxScore - staircase.minScore;
+    const score = staircase.minScore + (stepIndex / (stepCount - 1)) * scoreRange;
+    const existingAtScore = positionsByScore.get(score) || [];
+    const slotOffset = existingAtScore.length;
+    updatePositionMutation.mutate({ ideaId: idea.id, score, slotOffset });
+  };
+
   const handleDragStart = (e: React.PointerEvent, idea: Idea, position?: StaircasePosition) => {
     if (isReadOnly) return;
     
@@ -224,7 +203,6 @@ export default function StaircaseModule({
     const rect = canvas.getBoundingClientRect();
     const y = e.clientY - rect.top;
     
-    // Calculate initial step index
     const stepIndex = Math.floor((canvasHeight - margin - y) / stepHeight);
     const clampedStep = Math.max(0, Math.min(stepCount - 1, stepIndex));
     
@@ -234,6 +212,7 @@ export default function StaircaseModule({
       startY: y,
       currentY: y,
       currentStepIndex: clampedStep,
+      fromSidebar: false,
     });
     
     (e.target as Element).setPointerCapture(e.pointerId);
@@ -241,7 +220,6 @@ export default function StaircaseModule({
     e.stopPropagation();
   };
 
-  // Handle drag move
   const handleDragMove = (e: React.PointerEvent) => {
     if (!draggedIdea) return;
     
@@ -251,33 +229,24 @@ export default function StaircaseModule({
     const rect = canvas.getBoundingClientRect();
     const y = e.clientY - rect.top;
     
-    // Calculate step index for staircase positioning
     const stepIndex = Math.floor((canvasHeight - margin - y) / stepHeight);
     const clampedStep = Math.max(0, Math.min(stepCount - 1, stepIndex));
     
     setDraggedIdea(prev => prev ? { ...prev, currentY: y, currentStepIndex: clampedStep } : null);
   };
 
-  // Handle drag end
   const handleDragEnd = (e: React.PointerEvent) => {
     if (!draggedIdea || !staircase) return;
     
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    // Calculate which step the idea was dropped on
     const stepIndex = Math.floor((canvasHeight - margin - draggedIdea.currentY) / stepHeight);
     const clampedStep = Math.max(0, Math.min(stepCount - 1, stepIndex));
     
-    // Calculate score from step
     const scoreRange = staircase.maxScore - staircase.minScore;
     const score = staircase.minScore + (clampedStep / (stepCount - 1)) * scoreRange;
     
-    // Calculate slot offset for this score
     const existingAtScore = positionsByScore.get(score) || [];
     const slotOffset = existingAtScore.filter(p => p.ideaId !== draggedIdea.ideaId).length;
     
-    // Update position
     updatePositionMutation.mutate({
       ideaId: draggedIdea.ideaId,
       score,
@@ -288,7 +257,6 @@ export default function StaircaseModule({
     (e.target as Element).releasePointerCapture(e.pointerId);
   };
 
-  // Calculate score distribution for histogram
   const scoreDistribution = new Map<number, number>();
   if (staircase) {
     for (let i = 0; i < stepCount; i++) {
@@ -313,37 +281,118 @@ export default function StaircaseModule({
     );
   }
 
+  if (ideas.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" />
+            Staircase Rating Module
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-6 text-center">
+          <p className="text-muted-foreground">No ideas available yet. Ideas need to be created in the Ideas Hub before they can be rated on the staircase.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5" />
               Staircase Rating Module
             </CardTitle>
-            {!isReadOnly && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowSettings(true)}
-                data-testid="button-staircase-settings"
-              >
-                <Settings2 className="h-4 w-4 mr-2" />
-                Configure
-              </Button>
-            )}
+            <div className="flex items-center gap-3">
+              <Badge variant="secondary" data-testid="badge-placed-count">
+                {placedIdeas.length}/{ideas.length} placed
+              </Badge>
+              {!isReadOnly && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowSettings(true)}
+                  data-testid="button-staircase-settings"
+                >
+                  <Settings2 className="h-4 w-4 mr-2" />
+                  Configure
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-6">
           <div className="flex gap-6">
+            {/* Unplaced Ideas Panel */}
+            <div className="w-64 shrink-0" data-testid="staircase-unplaced-panel">
+              <div className="mb-3">
+                <h3 className="text-sm font-semibold text-foreground">
+                  {unplacedIdeas.length > 0 ? `Ideas to Place (${unplacedIdeas.length})` : 'All Ideas Placed'}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {unplacedIdeas.length > 0
+                    ? 'Click a step number to place each idea on the staircase'
+                    : 'Drag ideas on the staircase to change their position'}
+                </p>
+              </div>
+              <div className="space-y-2 max-h-[540px] overflow-y-auto pr-1">
+                {unplacedIdeas.map(idea => (
+                  <Card
+                    key={idea.id}
+                    className="p-3"
+                    data-testid={`unplaced-idea-${idea.id}`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <div
+                        className="w-3 h-3 rounded-full mt-1 shrink-0"
+                        style={{ backgroundColor: getCategoryColor(idea.manualCategoryId, null, idea.id) }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm leading-tight break-words">
+                          {(idea.content || '').length > 80
+                            ? (idea.content || '').substring(0, 80) + '...'
+                            : (idea.content || '')}
+                        </p>
+                        {!isReadOnly && (
+                          <div className="flex items-center gap-1 mt-2 flex-wrap">
+                            <span className="text-xs text-muted-foreground mr-1">Step:</span>
+                            {[0, Math.floor(stepCount / 4), Math.floor(stepCount / 2), Math.floor(3 * stepCount / 4), stepCount - 1].map(step => (
+                              <Button
+                                key={step}
+                                variant="outline"
+                                size="sm"
+                                className="h-6 px-2 text-xs"
+                                onClick={() => handleQuickPlace(idea, step)}
+                                disabled={updatePositionMutation.isPending}
+                                data-testid={`button-place-${idea.id}-step-${step}`}
+                              >
+                                {step}
+                              </Button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+                {placedIdeas.length > 0 && unplacedIdeas.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-4">
+                    All {placedIdeas.length} ideas have been placed on the staircase. Drag them on the canvas to adjust their positions.
+                  </p>
+                )}
+              </div>
+            </div>
+            
             {/* Staircase Canvas */}
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <svg
                 ref={canvasRef}
-                width={canvasWidth}
-                height={canvasHeight}
-                className="border rounded-lg bg-muted/10"
+                viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}
+                className="w-full border rounded-lg bg-muted/10"
+                style={{ maxHeight: '600px' }}
                 onPointerMove={handleDragMove}
                 onPointerUp={handleDragEnd}
                 onPointerLeave={handleDragEnd}
@@ -356,7 +405,6 @@ export default function StaircaseModule({
                   
                   return (
                     <g key={i}>
-                      {/* Step line */}
                       <line
                         x1={x}
                         y1={y}
@@ -365,7 +413,6 @@ export default function StaircaseModule({
                         stroke="hsl(var(--border))"
                         strokeWidth="2"
                       />
-                      {/* Vertical line to next step */}
                       {i < stepCount - 1 && (
                         <line
                           x1={x + stepWidth}
@@ -376,12 +423,12 @@ export default function StaircaseModule({
                           strokeWidth="2"
                         />
                       )}
-                      {/* Step label */}
                       <text
                         x={x + stepWidth / 2}
                         y={canvasHeight - margin + 20}
                         textAnchor="middle"
-                        className="fill-muted-foreground text-xs"
+                        fill="hsl(var(--muted-foreground))"
+                        fontSize="12"
                       >
                         {i}
                       </text>
@@ -394,7 +441,9 @@ export default function StaircaseModule({
                   x={margin}
                   y={canvasHeight - margin + 40}
                   textAnchor="start"
-                  className="fill-foreground font-semibold"
+                  fill="hsl(var(--foreground))"
+                  fontWeight="600"
+                  fontSize="14"
                 >
                   {minLabel}
                 </text>
@@ -402,31 +451,31 @@ export default function StaircaseModule({
                   x={canvasWidth - margin}
                   y={margin - 10}
                   textAnchor="end"
-                  className="fill-foreground font-semibold"
+                  fill="hsl(var(--foreground))"
+                  fontWeight="600"
+                  fontSize="14"
                 >
                   {maxLabel}
                 </text>
                 
-                {/* Render all ideas */}
-                {ideas.map((idea) => {
+                {/* Render only placed ideas on the staircase */}
+                {placedIdeas.map((idea) => {
                   const position = positions.find(p => p.ideaId === idea.id);
+                  if (!position) return null;
                   
-                  // Use default position (middle) if no position exists
-                  const score = position ? Number(position.score) : ((staircase?.minScore || 0) + (staircase?.maxScore || 10)) / 2;
+                  const score = Number(position.score);
                   const stepIndex = Math.round((score - (staircase?.minScore || 0)) / 
                     ((staircase?.maxScore || 10) - (staircase?.minScore || 0)) * (stepCount - 1));
                   
                   const baseX = margin + stepIndex * stepWidth + stepWidth / 2;
                   const baseY = canvasHeight - margin - stepIndex * stepHeight - stepHeight / 2;
                   
-                  // Apply slot offset for multiple ideas at same score
-                  const offsetX = (position?.slotOffset || 0) * 40;
+                  const offsetX = (position.slotOffset || 0) * 40;
                   const x = baseX + offsetX;
                   const y = baseY;
                   
                   const isDragging = draggedIdea?.ideaId === idea.id;
                   
-                  // When dragging, position along the staircase path based on current step
                   let displayX = x;
                   let displayY = y;
                   if (isDragging) {
@@ -437,7 +486,7 @@ export default function StaircaseModule({
                   
                   return (
                     <g
-                      key={position?.id || idea.id}
+                      key={position.id || idea.id}
                       transform={`translate(${displayX}, ${displayY})`}
                       onPointerDown={(e) => handleDragStart(e, idea, position)}
                       className={isReadOnly ? '' : 'cursor-grab'}
@@ -458,7 +507,9 @@ export default function StaircaseModule({
                         x={0}
                         y={5}
                         textAnchor="middle"
-                        className="fill-foreground text-sm font-medium"
+                        fill="white"
+                        fontSize="12"
+                        fontWeight="500"
                         style={{ pointerEvents: 'none' }}
                       >
                         {(idea.content || '').length > 12 
@@ -468,33 +519,46 @@ export default function StaircaseModule({
                     </g>
                   );
                 })}
+
+                {/* Empty state message on canvas */}
+                {placedIdeas.length === 0 && (
+                  <text
+                    x={canvasWidth / 2}
+                    y={canvasHeight / 2}
+                    textAnchor="middle"
+                    fill="hsl(var(--muted-foreground))"
+                    fontSize="14"
+                  >
+                    Place ideas from the panel on the left
+                  </text>
+                )}
               </svg>
             </div>
             
             {/* Score Distribution */}
-            {staircase?.showDistribution && (
-              <Card className="w-64">
+            {staircase?.showDistribution && positions.length > 0 && (
+              <Card className="w-56 shrink-0">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm flex items-center gap-2">
                     <BarChart2 className="h-4 w-4" />
-                    Score Distribution
+                    Distribution
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {Array.from(scoreDistribution.entries())
                     .sort((a, b) => b[0] - a[0])
                     .map(([score, count]) => {
-                      const maxCount = Math.max(...Array.from(scoreDistribution.values()));
+                      const maxCount = Math.max(...Array.from(scoreDistribution.values()), 1);
                       return (
                         <div key={score} className="flex items-center gap-2">
-                          <span className="text-sm w-12 text-right">{score}</span>
-                          <div className="flex-1 bg-muted rounded-full h-4 relative">
+                          <span className="text-sm w-8 text-right">{score}</span>
+                          <div className="flex-1 bg-muted rounded-full h-3 relative">
                             <div
                               className="absolute inset-y-0 left-0 bg-primary rounded-full transition-all"
                               style={{ width: `${(count / maxCount) * 100}%` }}
                             />
                           </div>
-                          <span className="text-xs text-muted-foreground w-8">{count}</span>
+                          <span className="text-xs text-muted-foreground w-6">{count}</span>
                         </div>
                       );
                     })}
