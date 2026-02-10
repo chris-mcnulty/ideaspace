@@ -230,39 +230,41 @@ export default function Marketplace() {
             Distribute your {coinBudget} coins among the ideas below. Allocate more coins to ideas you value most.
           </p>
 
-          <Card className="p-6 mb-6">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Coins className="h-5 w-5 text-primary" />
-                  <span className="font-medium">Budget Status</span>
-                </div>
-                <div className="text-right">
-                  <div className={`text-2xl font-bold ${isOverBudget ? 'text-destructive' : 'text-primary'}`}>
-                    {remainingBudget} / {coinBudget}
+          <div className="sticky top-0 z-50 pb-4 -mx-4 px-4 bg-background">
+            <Card className="p-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Coins className="h-5 w-5 text-primary" />
+                    <span className="font-medium">Budget Status</span>
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    Coins Remaining
+                  <div className="text-right">
+                    <div className={`text-2xl font-bold ${isOverBudget ? 'text-destructive' : 'text-primary'}`}>
+                      {remainingBudget} / {coinBudget}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Coins Remaining
+                    </div>
                   </div>
                 </div>
-              </div>
-              
-              <div>
-                <div className="flex justify-between text-sm mb-2">
-                  <span>Allocated: {totalAllocated}</span>
-                  <span>{Math.round((totalAllocated / coinBudget) * 100)}%</span>
+                
+                <div>
+                  <div className="flex justify-between text-sm mb-2">
+                    <span>Allocated: {totalAllocated}</span>
+                    <span>{Math.round((totalAllocated / coinBudget) * 100)}%</span>
+                  </div>
+                  <Progress value={(totalAllocated / coinBudget) * 100} className="h-2" />
                 </div>
-                <Progress value={(totalAllocated / coinBudget) * 100} className="h-2" />
-              </div>
 
-              {isOverBudget && (
-                <div className="flex items-center gap-2 text-destructive text-sm">
-                  <AlertCircle className="h-4 w-4" />
-                  <span>You've exceeded your budget by {totalAllocated - coinBudget} coins</span>
-                </div>
-              )}
-            </div>
-          </Card>
+                {isOverBudget && (
+                  <div className="flex items-center gap-2 text-destructive text-sm">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>You've exceeded your budget by {totalAllocated - coinBudget} coins</span>
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
         </div>
 
         <div className="space-y-4 mb-8">
