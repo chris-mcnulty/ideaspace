@@ -1,6 +1,6 @@
 import { openai } from "./openai";
 import { db } from "../db";
-import { notes, votes, rankings, marketplaceAllocations, participants, spaces, knowledgeBaseDocuments, cohortResults, personalizedResults, categories, workspaceModules, priorityMatrices, priorityMatrixPositions, staircaseModules, staircasePositions } from "@shared/schema";
+import { notes, votes, rankings, marketplaceAllocations, participants, spaces, knowledgeBaseDocuments, cohortResults, personalizedResults, categories, workspaceModules, priorityMatrices, priorityMatrixPositions, staircaseModules, staircasePositions, surveyQuestions, surveyResponses } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { CohortResult, PersonalizedResult } from "@shared/schema";
@@ -16,8 +16,17 @@ const CohortResultSchema = z.object({
     pairwiseWins: z.number().optional().nullable().transform(v => v ?? undefined),
     bordaScore: z.number().optional().nullable().transform(v => v ?? undefined),
     marketplaceCoins: z.number().optional().nullable().transform(v => v ?? undefined),
+    matrixPosition: z.object({
+      x: z.number(),
+      y: z.number(),
+      xLabel: z.string().optional().nullable(),
+      yLabel: z.string().optional().nullable(),
+    }).optional().nullable(),
+    staircaseScore: z.number().optional().nullable().transform(v => v ?? undefined),
+    avgSurveyScore: z.number().optional().nullable().transform(v => v ?? undefined),
     overallRank: z.number(),
   })),
+  surveyAnalysis: z.string().optional().nullable(),
   insights: z.string(),
   recommendations: z.string().optional().nullable(),
 });
@@ -191,18 +200,120 @@ export async function generateCohortResults(
     }
   }
 
-  // Combine all scoring data
-  const notesWithScores = allNotes.map((note: any) => ({
-    ...note,
-    pairwiseWins: pairwiseWins.get(note.id) || 0,
-    bordaScore: bordaScores.get(note.id) || 0,
-    marketplaceCoins: marketplaceCoins.get(note.id) || 0,
-    // Calculate combined rank (simple average of normalized ranks)
-    combinedScore:
-      ((pairwiseWins.get(note.id) || 0) / (pairwiseVotes.length || 1)) * 0.33 +
-      ((bordaScores.get(note.id) || 0) / (noteCount * noteCount || 1)) * 0.33 +
-      ((marketplaceCoins.get(note.id) || 0) / 100) * 0.34,
-  }));
+  // Fetch Survey data
+  const surveyAvgByNote = new Map<string, number>();
+  const surveyQuestionsList: { id: string; questionText: string; sortOrder: number }[] = [];
+  const surveyQuestionAverages = new Map<string, Map<string, number>>(); // questionId -> noteId -> avg
+  if (hasSurvey) {
+    const questions = await db
+      .select()
+      .from(surveyQuestions)
+      .where(eq(surveyQuestions.spaceId, spaceId));
+
+    questions.forEach(q => surveyQuestionsList.push({ id: q.id, questionText: q.questionText, sortOrder: q.sortOrder }));
+    surveyQuestionsList.sort((a, b) => a.sortOrder - b.sortOrder);
+
+    const responses = await db
+      .select()
+      .from(surveyResponses)
+      .where(eq(surveyResponses.spaceId, spaceId));
+
+    // Filter to only current notes and current questions
+    const currentNoteIds = new Set(allNotes.map(n => n.id));
+    const currentQuestionIds = new Set(surveyQuestionsList.map(q => q.id));
+    const validResponses = responses.filter((r: any) => currentNoteIds.has(r.noteId) && currentQuestionIds.has(r.questionId));
+
+    // Calculate average score per note across all questions
+    const noteScoreSums = new Map<string, { total: number; count: number }>();
+    // Also calculate per-question averages per note
+    const questionNoteScores = new Map<string, Map<string, { total: number; count: number }>>();
+
+    validResponses.forEach((r: any) => {
+      const entry = noteScoreSums.get(r.noteId) || { total: 0, count: 0 };
+      entry.total += r.score;
+      entry.count += 1;
+      noteScoreSums.set(r.noteId, entry);
+
+      if (!questionNoteScores.has(r.questionId)) {
+        questionNoteScores.set(r.questionId, new Map());
+      }
+      const qMap = questionNoteScores.get(r.questionId)!;
+      const qEntry = qMap.get(r.noteId) || { total: 0, count: 0 };
+      qEntry.total += r.score;
+      qEntry.count += 1;
+      qMap.set(r.noteId, qEntry);
+    });
+
+    noteScoreSums.forEach((val, noteId) => {
+      surveyAvgByNote.set(noteId, val.total / val.count);
+    });
+
+    questionNoteScores.forEach((noteMap, qId) => {
+      const avgMap = new Map<string, number>();
+      noteMap.forEach((val, noteId) => {
+        avgMap.set(noteId, val.total / val.count);
+      });
+      surveyQuestionAverages.set(qId, avgMap);
+    });
+  }
+
+  // Determine which scoring modules have data and build dynamic combined score
+  const activeModules: { name: string; getScore: (noteId: string) => number; maxVal: number }[] = [];
+
+  if (hasPairwiseVoting && pairwiseVotes.length > 0) {
+    const maxPairwise = Math.max(...Array.from(pairwiseWins.values()), 0);
+    if (maxPairwise > 0) {
+      activeModules.push({ name: 'pairwise', getScore: (id) => pairwiseWins.get(id) || 0, maxVal: maxPairwise });
+    }
+  }
+  if (hasStackRanking && rankingData.length > 0) {
+    const maxBorda = Math.max(...Array.from(bordaScores.values()), 0);
+    if (maxBorda > 0) {
+      activeModules.push({ name: 'borda', getScore: (id) => bordaScores.get(id) || 0, maxVal: maxBorda });
+    }
+  }
+  if (hasMarketplace && marketplaceData.length > 0) {
+    const maxCoins = Math.max(...Array.from(marketplaceCoins.values()), 0);
+    if (maxCoins > 0) {
+      activeModules.push({ name: 'marketplace', getScore: (id) => marketplaceCoins.get(id) || 0, maxVal: maxCoins });
+    }
+  }
+  if (hasPriorityMatrix && matrixPositionsByNote.size > 0) {
+    activeModules.push({ name: 'matrix', getScore: (id) => matrixPositionsByNote.get(id)?.x || 0, maxVal: 100 });
+  }
+  if (hasStaircase && staircaseScoresByNote.size > 0) {
+    const maxStaircase = staircaseMaxScore > 0 ? staircaseMaxScore : 10;
+    activeModules.push({ name: 'staircase', getScore: (id) => staircaseScoresByNote.get(id) || 0, maxVal: maxStaircase });
+  }
+  if (hasSurvey && surveyAvgByNote.size > 0) {
+    activeModules.push({ name: 'survey', getScore: (id) => surveyAvgByNote.get(id) || 0, maxVal: 5 });
+  }
+
+  const moduleWeight = activeModules.length > 0 ? 1 / activeModules.length : 1;
+
+  // Combine all scoring data with dynamic weighting
+  const notesWithScores = allNotes.map((note: any) => {
+    let combinedScore = 0;
+    if (activeModules.length > 0) {
+      combinedScore = activeModules.reduce((sum, mod) => {
+        return sum + (mod.getScore(note.id) / mod.maxVal) * moduleWeight;
+      }, 0);
+    }
+    return {
+      ...note,
+      pairwiseWins: pairwiseWins.get(note.id) || 0,
+      bordaScore: bordaScores.get(note.id) || 0,
+      marketplaceCoins: marketplaceCoins.get(note.id) || 0,
+      staircaseScore: staircaseScoresByNote.get(note.id),
+      avgSurveyScore: surveyAvgByNote.get(note.id),
+      matrixPosition: matrixPositionsByNote.has(note.id) ? {
+        ...matrixPositionsByNote.get(note.id)!,
+        xLabel: matrixXLabel,
+        yLabel: matrixYLabel,
+      } : undefined,
+      combinedScore,
+    };
+  });
 
   // Sort by combined score
   notesWithScores.sort((a: any, b: any) => b.combinedScore - a.combinedScore);
@@ -248,6 +359,9 @@ ${hasPriorityMatrix ? `Priority Matrix Axes: X="${matrixXLabel}" (0=Low, 100=Hig
 Notes positioned on matrix: ${matrixPositionsByNote.size}` : ''}
 ${hasStaircase ? `Staircase Scale: ${staircaseMinScore} (${staircaseMinLabel}) to ${staircaseMaxScore} (${staircaseMaxLabel})
 Notes rated on staircase: ${staircaseScoresByNote.size}` : ''}
+${hasSurvey && surveyQuestionsList.length > 0 ? `Survey Questions (participants rated each idea 1-5 on these):
+${surveyQuestionsList.map((q, i) => `  Q${i + 1}: ${q.questionText}`).join('\n')}
+Total survey responses: ${surveyAvgByNote.size} ideas rated` : ''}
 
 All Ideas Ranked by Combined Score:
 ${notesWithScores.map((note: any, idx: any) => `
@@ -256,7 +370,11 @@ ${idx + 1}. "${note.content}" (Category: ${note.manualCategoryId ? categoryMap.g
    - Borda Score: ${note.bordaScore}` : ''}${hasMarketplace ? `
    - Marketplace Coins: ${note.marketplaceCoins}` : ''}${hasPriorityMatrix && matrixPositionsByNote.has(note.id) ? `
    - Matrix Position: ${matrixXLabel}=${matrixPositionsByNote.get(note.id)!.x}%, ${matrixYLabel}=${matrixPositionsByNote.get(note.id)!.y}% (${matrixPositionsByNote.get(note.id)!.x > 50 ? 'High' : 'Low'} ${matrixXLabel}, ${matrixPositionsByNote.get(note.id)!.y > 50 ? 'High' : 'Low'} ${matrixYLabel})` : ''}${hasStaircase && staircaseScoresByNote.has(note.id) ? `
-   - Staircase Score: ${staircaseScoresByNote.get(note.id)} / ${staircaseMaxScore}` : ''}
+   - Staircase Score: ${staircaseScoresByNote.get(note.id)} / ${staircaseMaxScore}` : ''}${hasSurvey && surveyAvgByNote.has(note.id) ? `
+   - Avg Survey Score: ${surveyAvgByNote.get(note.id)!.toFixed(2)} / 5${surveyQuestionsList.map(q => {
+      const qAvg = surveyQuestionAverages.get(q.id)?.get(note.id);
+      return qAvg != null ? `\n     - "${q.questionText}": ${qAvg.toFixed(2)}/5` : '';
+    }).join('')}` : ''}
    - Combined Score: ${note.combinedScore.toFixed(3)}
 `).join('')}
 
@@ -303,18 +421,22 @@ Please provide your analysis in the following JSON format:
     {
       "noteId": "id",
       "content": "idea text",
-      "category": "category name",
-      "pairwiseWins": number,
-      "bordaScore": number,
-      "marketplaceCoins": number,
+      "category": "category name or null",
+      ${hasPairwiseVoting ? '"pairwiseWins": number,' : ''}
+      ${hasStackRanking ? '"bordaScore": number,' : ''}
+      ${hasMarketplace ? '"marketplaceCoins": number,' : ''}
+      ${hasPriorityMatrix ? '"matrixPosition": {"x": number, "y": number, "xLabel": "' + matrixXLabel + '", "yLabel": "' + matrixYLabel + '"} or null,' : ''}
+      ${hasStaircase ? '"staircaseScore": number or null,' : ''}
+      ${hasSurvey ? '"avgSurveyScore": number or null,' : ''}
       "overallRank": number (1-based rank)
     }
   ],
-  "insights": "3-4 paragraphs of deep insights about patterns, alignment, diversity of thought, and key findings. Use \\n\\n between paragraphs for readability. Focus only on enabled modules.",
+  ${hasSurvey ? '"surveyAnalysis": "A paragraph analyzing survey response patterns across questions and ideas. What dimensions scored highest/lowest? Any surprising patterns?",' : ''}
+  "insights": "3-4 paragraphs of deep insights about patterns, alignment, diversity of thought, and key findings. Use \\n\\n between paragraphs for readability. Focus only on enabled modules.${hasPriorityMatrix ? ' Include analysis of where ideas fall on the priority matrix quadrants.' : ''}${hasStaircase ? ' Include analysis of staircase rating distributions.' : ''}${hasSurvey ? ' Include analysis of survey response patterns.' : ''}",
   "recommendations": "Format as a numbered list:\\n\\n1. First recommendation\\n\\n2. Second recommendation\\n\\n3. Third recommendation\\n\\nEach recommendation should be actionable and specific."
 }
 
-Include ALL ideas in the topIdeas array, ranked by combined score (highest to lowest).`,
+Include ALL ideas in the topIdeas array, ranked by combined score (highest to lowest). Only include fields for modules that were enabled. Use null for ideas that don't have data for a particular module (e.g. not positioned on matrix).`,
       },
     ],
     response_format: { type: "json_object" },

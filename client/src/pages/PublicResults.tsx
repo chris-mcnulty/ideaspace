@@ -19,8 +19,12 @@ interface CohortResultData {
     pairwiseWins?: number;
     bordaScore?: number;
     marketplaceCoins?: number;
+    matrixPosition?: { x: number; y: number; xLabel?: string; yLabel?: string };
+    staircaseScore?: number;
+    avgSurveyScore?: number;
     overallRank: number;
   }>;
+  surveyAnalysis?: string;
   insights: string[];
   recommendations: string[];
   participantCount: number;
@@ -196,17 +200,46 @@ export default function PublicResults() {
                       {idea.category && (
                         <Badge variant="secondary" className="mt-1">{idea.category}</Badge>
                       )}
-                    </div>
-                    <div className="flex flex-col gap-1 text-right">
-                      {(idea.pairwiseWins !== undefined && idea.pairwiseWins > 0) && (
-                        <Badge variant="outline">{idea.pairwiseWins} wins</Badge>
-                      )}
-                      {(idea.bordaScore !== undefined && idea.bordaScore > 0) && (
-                        <Badge variant="outline">Borda: {idea.bordaScore}</Badge>
-                      )}
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-muted-foreground">
+                        {(idea.pairwiseWins != null && idea.pairwiseWins > 0) && (
+                          <span>Pairwise: {idea.pairwiseWins} wins</span>
+                        )}
+                        {(idea.bordaScore != null && idea.bordaScore > 0) && (
+                          <span>Borda: {idea.bordaScore}</span>
+                        )}
+                        {(idea.marketplaceCoins != null && idea.marketplaceCoins > 0) && (
+                          <span>Marketplace: {idea.marketplaceCoins} coins</span>
+                        )}
+                        {idea.matrixPosition && (
+                          <span>
+                            Matrix: {idea.matrixPosition.xLabel || 'X'}={idea.matrixPosition.x}%, {idea.matrixPosition.yLabel || 'Y'}={idea.matrixPosition.y}%
+                          </span>
+                        )}
+                        {idea.staircaseScore != null && (
+                          <span>Staircase: {idea.staircaseScore}</span>
+                        )}
+                        {idea.avgSurveyScore != null && (
+                          <span>Survey: {Number(idea.avgSurveyScore).toFixed(1)}/5</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Survey Analysis */}
+        {cohortResult.surveyAnalysis && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Survey Analysis</CardTitle>
+              <CardDescription>Patterns from participant survey ratings</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="prose prose-sm max-w-none dark:prose-invert">
+                <p className="whitespace-pre-wrap text-muted-foreground">{cohortResult.surveyAnalysis}</p>
               </div>
             </CardContent>
           </Card>

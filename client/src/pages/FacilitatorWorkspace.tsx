@@ -1902,7 +1902,7 @@ export default function FacilitatorWorkspace() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-muted-foreground">
-              Generate AI-powered cohort results based on all voting data, rankings, and marketplace allocations.
+              Generate AI-powered cohort results based on all enabled module data including voting, rankings, marketplace allocations, priority matrix positions, staircase ratings, and survey responses.
               This will create a comprehensive summary of the session's key themes, top ideas, and insights.
             </p>
             <Button
@@ -1992,17 +1992,44 @@ export default function FacilitatorWorkspace() {
                   <Sparkles className="h-5 w-5 text-primary" />
                   Top Ideas
                 </CardTitle>
+                <CardDescription>
+                  Ranked by combined score across all enabled modules
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {cohortResults.topIdeas.map((idea: { rank: number; content: string; rationale: string }, index: number) => (
+                {cohortResults.topIdeas.map((idea: any, index: number) => (
                   <div key={index} className="space-y-2">
                     <div className="flex items-start gap-3">
                       <Badge variant="outline" className="mt-1">
-                        #{idea.rank}
+                        #{idea.overallRank || index + 1}
                       </Badge>
                       <div className="flex-1">
                         <p className="font-medium">{idea.content}</p>
-                        <p className="text-sm text-muted-foreground mt-1">{idea.rationale}</p>
+                        {idea.category && (
+                          <Badge variant="secondary" className="mt-1 text-xs">{idea.category}</Badge>
+                        )}
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
+                          {idea.pairwiseWins != null && (
+                            <span data-testid={`idea-pairwise-${index}`}>Pairwise Wins: {idea.pairwiseWins}</span>
+                          )}
+                          {idea.bordaScore != null && (
+                            <span data-testid={`idea-borda-${index}`}>Borda Score: {idea.bordaScore}</span>
+                          )}
+                          {idea.marketplaceCoins != null && (
+                            <span data-testid={`idea-marketplace-${index}`}>Marketplace: {idea.marketplaceCoins} coins</span>
+                          )}
+                          {idea.matrixPosition && (
+                            <span data-testid={`idea-matrix-${index}`}>
+                              Matrix: {idea.matrixPosition.xLabel || 'X'}={idea.matrixPosition.x}%, {idea.matrixPosition.yLabel || 'Y'}={idea.matrixPosition.y}%
+                            </span>
+                          )}
+                          {idea.staircaseScore != null && (
+                            <span data-testid={`idea-staircase-${index}`}>Staircase: {idea.staircaseScore}</span>
+                          )}
+                          {idea.avgSurveyScore != null && (
+                            <span data-testid={`idea-survey-${index}`}>Survey Avg: {Number(idea.avgSurveyScore).toFixed(1)}/5</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                     {index < cohortResults.topIdeas.length - 1 && <div className="border-t" />}
@@ -2027,6 +2054,23 @@ export default function FacilitatorWorkspace() {
                       {theme}
                     </Badge>
                   ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {cohortResults.surveyAnalysis && (
+            <Card data-testid="card-survey-analysis">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ListOrdered className="h-5 w-5 text-primary" />
+                  Survey Analysis
+                </CardTitle>
+                <CardDescription>Patterns from participant survey ratings</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="prose prose-sm max-w-none dark:prose-invert">
+                  <p className="whitespace-pre-wrap">{cohortResults.surveyAnalysis}</p>
                 </div>
               </CardContent>
             </Card>
