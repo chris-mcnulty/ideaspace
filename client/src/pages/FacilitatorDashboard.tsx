@@ -370,27 +370,42 @@ export default function FacilitatorDashboard() {
                       open={isExpanded}
                       onOpenChange={() => toggleProject(org.orgId, project.projectId)}
                     >
-                      <CollapsibleTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          className="w-full justify-start gap-2 h-auto py-3 px-4 hover-elevate"
-                          data-testid={`button-toggle-project-${project.projectId || "unassigned"}`}
-                        >
-                          {isExpanded ? (
-                            <ChevronDown className="h-4 w-4 shrink-0" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4 shrink-0" />
-                          )}
-                          <FolderKanban className="h-4 w-4 shrink-0 text-primary" />
-                          <span className="font-medium">{project.projectName}</span>
-                          {project.isDefault && (
-                            <Badge variant="secondary" className="ml-2">Default</Badge>
-                          )}
-                          <Badge variant="outline" className="ml-auto">
-                            {project.workspaces.length} workspace{project.workspaces.length !== 1 ? "s" : ""}
-                          </Badge>
-                        </Button>
-                      </CollapsibleTrigger>
+                      <div className="flex items-center flex-wrap gap-2">
+                        <CollapsibleTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            className="flex-1 min-w-0 justify-start gap-2 h-auto py-3 px-4 hover-elevate"
+                            data-testid={`button-toggle-project-${project.projectId || "unassigned"}`}
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4 shrink-0" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 shrink-0" />
+                            )}
+                            <FolderKanban className="h-4 w-4 shrink-0 text-primary" />
+                            <span className="font-medium truncate">{project.projectName}</span>
+                            {project.isDefault && (
+                              <Badge variant="secondary" className="ml-2">Default</Badge>
+                            )}
+                            <Badge variant="outline" className="ml-auto shrink-0">
+                              {project.workspaces.length} workspace{project.workspaces.length !== 1 ? "s" : ""}
+                            </Badge>
+                          </Button>
+                        </CollapsibleTrigger>
+                        {(user.role === "global_admin" || user.role === "company_admin" || user.role === "facilitator") && project.projectId && (
+                          <NewWorkspaceDialog
+                            organizationId={org.orgId}
+                            organizationSlug={org.orgSlug}
+                            defaultProjectId={project.projectId}
+                            trigger={
+                              <Button variant="outline" size="sm" className="shrink-0" data-testid={`button-new-workspace-in-project-${project.projectId}`}>
+                                <Plus className="h-4 w-4 mr-1" />
+                                New Workspace
+                              </Button>
+                            }
+                          />
+                        )}
+                      </div>
                       <CollapsibleContent>
                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mt-4 ml-6">
                           {project.workspaces.length === 0 ? (
@@ -400,7 +415,7 @@ export default function FacilitatorDashboard() {
                                   No workspaces in this project yet.
                                 </CardDescription>
                               </CardHeader>
-                              {(user.role === "global_admin" || user.role === "company_admin") && (
+                              {(user.role === "global_admin" || user.role === "company_admin" || user.role === "facilitator") && (
                                 <CardContent className="pt-0">
                                   <NewWorkspaceDialog
                                     organizationId={org.orgId}
