@@ -9,6 +9,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { useAuth } from "@/hooks/use-auth";
 import nebulaBg from "@assets/AdobeStock_245281455_Smaller_1761866686758.jpg";
+import { SynozurAppSwitcher } from "@/components/SynozurAppSwitcher";
 
 export default function LandingPage() {
   const { isAuthenticated } = useAuth();
@@ -62,6 +63,7 @@ export default function LandingPage() {
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto flex h-16 items-center justify-between px-6">
           <div className="flex items-center gap-3">
+            <SynozurAppSwitcher currentApp="nebula" variant="light" />
             <img 
               src="/logos/synozur-horizontal-color.png" 
               alt="Synozur Alliance" 

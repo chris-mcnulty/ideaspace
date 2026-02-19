@@ -2,6 +2,7 @@ import { Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { SynozurAppSwitcher } from "@/components/SynozurAppSwitcher";
 
 interface BrandHeaderProps {
   orgName?: string;
@@ -33,6 +34,7 @@ export default function BrandHeader({
     <header className="sticky top-0 z-50 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-full items-center justify-between px-6">
         <div className="flex items-center gap-3">
+          <SynozurAppSwitcher currentApp="nebula" variant="light" />
           {orgLogo ? (
             <img src={orgLogo} alt={orgName} className="h-8 w-auto object-contain" data-testid="img-org-logo" />
           ) : (

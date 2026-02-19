@@ -26,6 +26,7 @@ import { insertOrganizationSchema, createSpaceApiSchema, insertUserSchema, inser
 import { NewWorkspaceDialog } from "@/components/NewWorkspaceDialog";
 import { z } from "zod";
 import { Key, UserPlus } from "lucide-react";
+import { SynozurAppSwitcher } from "@/components/SynozurAppSwitcher";
 
 export default function AdminPanel() {
   const [, setLocation] = useLocation();
@@ -100,6 +101,7 @@ export default function AdminPanel() {
       <header className="border-b bg-card sticky top-0 z-50">
         <div className="container mx-auto flex h-16 items-center justify-between px-6">
           <div className="flex items-center gap-3">
+            <SynozurAppSwitcher currentApp="nebula" variant="light" />
             <img 
               src="/logos/synozur-horizontal-color.png" 
               alt="Synozur Alliance" 

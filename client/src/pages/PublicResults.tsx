@@ -6,6 +6,7 @@ import { Loader2, Trophy, Award, Target, TrendingUp, Users } from "lucide-react"
 import { ThemeToggle } from "@/components/ThemeToggle";
 import type { Organization, Space } from "@shared/schema";
 import { useEffect } from "react";
+import { SynozurAppSwitcher } from "@/components/SynozurAppSwitcher";
 
 interface CohortResultData {
   id: string;

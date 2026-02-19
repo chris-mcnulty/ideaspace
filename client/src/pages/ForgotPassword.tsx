@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft, Mail } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { SynozurAppSwitcher } from "@/components/SynozurAppSwitcher";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -47,6 +48,7 @@ export default function ForgotPassword() {
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto flex h-16 items-center justify-between px-6">
           <div className="flex items-center gap-3">
+            <SynozurAppSwitcher currentApp="nebula" variant="light" />
             <img 
               src="/logos/synozur-horizontal-color.png" 
               alt="Synozur Alliance" 
