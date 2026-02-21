@@ -63,7 +63,7 @@ export default function LandingPage() {
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto flex h-16 items-center justify-between px-6">
           <div className="flex items-center gap-3">
-            <SynozurAppSwitcher currentApp="nebula" variant="light" />
+            <SynozurAppSwitcher currentApp="nebula" />
             <img 
               src="/logos/synozur-horizontal-color.png" 
               alt="Synozur Alliance" 

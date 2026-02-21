@@ -2258,7 +2258,7 @@ export default function FacilitatorWorkspace() {
       <header className="sticky top-0 z-50 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-full items-center justify-between px-6">
           <div className="flex items-center gap-3">
-            <SynozurAppSwitcher currentApp="nebula" variant="light" />
+            <SynozurAppSwitcher currentApp="nebula" />
             <Button
               variant="ghost"
               size="icon"
