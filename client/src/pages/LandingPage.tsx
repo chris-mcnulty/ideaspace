@@ -118,6 +118,9 @@ export default function LandingPage() {
                   Collaborative Envisioning Platform
                 </span>
               </h2>
+              <p className="mt-4 text-base italic text-gray-300 tracking-wide sm:text-lg">
+                The birthplace of new starlight
+              </p>
               <p className="mt-6 text-lg leading-relaxed text-gray-200 md:text-xl lg:text-2xl">
                 Guide cohorts through structured activities to envision the future,
                 prioritize initiatives, and generate actionable insights powered by AI.
