@@ -10,7 +10,7 @@ const CohortResultSchema = z.object({
   summary: z.string(),
   keyThemes: z.array(z.string()),
   topIdeas: z.array(z.object({
-    noteId: z.string(),
+    noteId: z.union([z.string(), z.number()]).transform(v => String(v)),
     content: z.string(),
     category: z.string().optional().nullable(),
     pairwiseWins: z.number().optional().nullable().transform(v => v ?? undefined),
@@ -36,7 +36,7 @@ const PersonalizedResultSchema = z.object({
   personalSummary: z.string(),
   alignmentScore: z.number().min(0).max(100),
   topContributions: z.array(z.object({
-    noteId: z.string(),
+    noteId: z.union([z.string(), z.number()]).transform(v => String(v)),
     content: z.string(),
     impact: z.string(),
   })),
