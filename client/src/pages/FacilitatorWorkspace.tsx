@@ -324,50 +324,66 @@ export default function FacilitatorWorkspace() {
       case 'note_updated':
       case 'note_deleted':
       case 'notes_deleted':
-      case 'categories_updated':
-        // Invalidate notes query to refetch latest data
+      case 'notes_updated':
+      case 'notes_bulk_imported':
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/notes`] });
-        if (message.type === 'categories_updated') {
-          // Also invalidate categories query since AI may have created new categories
-          queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/categories`] });
-          toast({
-            title: "AI Categorization Complete",
-            description: message.data?.summary || "Notes have been organized into categories",
-          });
-        }
+        break;
+      case 'categories_updated':
+        queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/notes`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/categories`] });
+        toast({
+          title: "AI Categorization Complete",
+          description: message.data?.summary || "Notes have been organized into categories",
+        });
         break;
       case 'category_created':
       case 'category_updated':
       case 'category_deleted':
-        // Invalidate categories query to refetch latest data
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/categories`] });
         break;
       case 'participant_joined':
       case 'participant_left':
-        // Invalidate participants query
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/participants`] });
         break;
       case 'module_configured':
       case 'module_updated':
-        // Invalidate modules query to refetch and update tabs
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/modules`] });
-        console.log('[FacilitatorWorkspace] Module configuration updated, invalidating modules query');
         break;
       case 'vote_recorded':
-        // Real-time vote updates for facilitator
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/votes`] });
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/voting-stats`] });
-        console.log('[FacilitatorWorkspace] Vote recorded, refreshing voting data');
         break;
-      case 'ranking_updated':
-        // Real-time ranking updates
+      case 'ranking_submitted':
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/stack-ranking-leaderboard`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/leaderboard`] });
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/ranking-progress`] });
         break;
-      case 'allocation_updated':
-        // Real-time marketplace allocation updates
+      case 'marketplace_allocation_submitted':
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/marketplace-leaderboard`] });
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/marketplace-progress`] });
+        break;
+      case 'priority_matrix_configured':
+      case 'matrix_position_updated':
+        queryClient.invalidateQueries({
+          predicate: (query) => query.queryKey.some(k => typeof k === 'string' && k.includes('/priority-matrix'))
+        });
+        break;
+      case 'staircase_position_updated':
+        queryClient.invalidateQueries({
+          predicate: (query) => query.queryKey.some(k => typeof k === 'string' && (k.includes('/staircase') || k === 'staircase-positions'))
+        });
+        break;
+      case 'survey_question_created':
+      case 'survey_question_updated':
+      case 'survey_question_deleted':
+        queryClient.invalidateQueries({
+          predicate: (query) => query.queryKey.includes('survey-questions')
+        });
+        break;
+      case 'survey_response_submitted':
+        queryClient.invalidateQueries({
+          predicate: (query) => query.queryKey.includes('survey-responses')
+        });
         break;
     }
   }, [params.space, toast]);
