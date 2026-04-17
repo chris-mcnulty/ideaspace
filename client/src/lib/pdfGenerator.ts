@@ -206,9 +206,9 @@ function addFooter(doc: jsPDF, branding: BrandingConfig, fontsAvailable: boolean
     { align: 'center' }
   );
   
-  // Second line: "www.synozur.com"
+  // Second line: URLs
   doc.text(
-    'www.synozur.com',
+    'nebula.synozur.com | www.synozur.com',
     pageWidth / 2,
     pageHeight - 10,
     { align: 'center' }
