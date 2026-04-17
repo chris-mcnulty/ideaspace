@@ -167,11 +167,11 @@ async function addBrandedHeader(
     console.error('Failed to load Synozur logo:', error);
   }
 
-  // Add "Orion by Synozur | Maturity Modeler" branding
+  // Add "Nebula by Synozur | Collaborative Envisioning" branding
   setBrandFont(doc, true, fontsAvailable);
   doc.setFontSize(12);
   doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
-  doc.text('Orion by Synozur | Maturity Modeler', 50, 22);
+  doc.text('Nebula by Synozur | Collaborative Envisioning', 50, 22);
 
   // Add title
   setBrandFont(doc, true, fontsAvailable);
@@ -198,9 +198,9 @@ function addFooter(doc: jsPDF, branding: BrandingConfig, fontsAvailable: boolean
   doc.setFontSize(8);
   doc.setTextColor(150, 150, 150);
   
-  // First line: "Powered by Orion | The Synozur Alliance"
+  // First line: "Powered by Nebula | The Synozur Alliance"
   doc.text(
-    'Powered by Orion | The Synozur Alliance',
+    'Powered by Nebula | The Synozur Alliance',
     pageWidth / 2,
     pageHeight - 15,
     { align: 'center' }
@@ -221,7 +221,8 @@ function addFooter(doc: jsPDF, branding: BrandingConfig, fontsAvailable: boolean
 export async function generateCohortResultsPDF(
   cohortResult: CohortResult,
   branding: BrandingConfig,
-  workspaceName: string
+  workspaceName: string,
+  projectName?: string
 ): Promise<void> {
   const doc = new jsPDF();
   
@@ -235,12 +236,18 @@ export async function generateCohortResultsPDF(
   // Add header
   let yPos = await addBrandedHeader(doc, branding, 'Cohort Results', fontsAvailable);
 
-  // Add workspace info
+  // Add workspace / project info
   setBrandFont(doc, false, fontsAvailable);
   doc.setFontSize(12);
   doc.setTextColor(100, 100, 100);
-  doc.text(`Workspace: ${workspaceName}`, 15, yPos + 5);
-  yPos += 15;
+  if (projectName) {
+    doc.text(`Project: ${projectName}`, 15, yPos + 5);
+    doc.text(`Workspace: ${workspaceName}`, 15, yPos + 12);
+    yPos += 22;
+  } else {
+    doc.text(`Workspace: ${workspaceName}`, 15, yPos + 5);
+    yPos += 15;
+  }
 
   // Add summary section
   setBrandFont(doc, true, fontsAvailable);
@@ -481,7 +488,8 @@ export async function generatePersonalizedResultsPDF(
   personalizedResult: PersonalizedResult,
   branding: BrandingConfig,
   participantName: string,
-  workspaceName: string
+  workspaceName: string,
+  projectName?: string
 ): Promise<void> {
   const doc = new jsPDF();
   
@@ -495,13 +503,19 @@ export async function generatePersonalizedResultsPDF(
   // Add header
   let yPos = await addBrandedHeader(doc, branding, 'Personalized Results', fontsAvailable);
 
-  // Add participant info
+  // Add participant / workspace / project info
   setBrandFont(doc, false, fontsAvailable);
   doc.setFontSize(12);
   doc.setTextColor(100, 100, 100);
   doc.text(`Participant: ${participantName}`, 15, yPos + 5);
-  doc.text(`Workspace: ${workspaceName}`, 15, yPos + 10);
-  yPos += 20;
+  if (projectName) {
+    doc.text(`Project: ${projectName}`, 15, yPos + 12);
+    doc.text(`Workspace: ${workspaceName}`, 15, yPos + 19);
+    yPos += 29;
+  } else {
+    doc.text(`Workspace: ${workspaceName}`, 15, yPos + 12);
+    yPos += 22;
+  }
 
   // Add alignment score
   if (personalizedResult.alignmentScore !== null) {

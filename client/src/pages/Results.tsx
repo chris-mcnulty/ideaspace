@@ -9,7 +9,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import type { PersonalizedResult, Organization, Space, Participant } from "@shared/schema";
+import type { PersonalizedResult, Organization, Space, Participant, Project } from "@shared/schema";
 import { useEffect } from "react";
 import { generatePersonalizedResultsPDF } from "@/lib/pdfGenerator";
 
@@ -47,6 +47,12 @@ export default function Results() {
     enabled: !!personalizedResults?.participantId,
   });
 
+  // Fetch project (if workspace belongs to one)
+  const { data: project } = useQuery<Project>({
+    queryKey: [`/api/projects/${space?.projectId}`],
+    enabled: !!space?.projectId,
+  });
+
   // Download results as branded PDF
   const handleDownload = async () => {
     if (!personalizedResults || !organization || !space || !participant) {
@@ -67,7 +73,8 @@ export default function Results() {
           primaryColor: organization.primaryColor || undefined,
         },
         participant.displayName,
-        space.name
+        space.name,
+        project?.name
       );
       toast({
         title: "PDF Downloaded",

@@ -67,7 +67,7 @@ import {
   ExternalLink,
   Target,
 } from "lucide-react";
-import type { Organization, Space, Note, Participant, Category, User, Idea, WorkspaceModule } from "@shared/schema";
+import type { Organization, Space, Note, Participant, Category, User, Idea, WorkspaceModule, Project } from "@shared/schema";
 import { Leaderboard } from "@/components/Leaderboard";
 import { KnowledgeBaseManager } from "@/components/KnowledgeBaseManager";
 import { ShareLinksDialog } from "@/components/ShareLinksDialog";
@@ -508,6 +508,12 @@ export default function FacilitatorWorkspace() {
     enabled: !!params.space,
   });
 
+  // Fetch project (if workspace belongs to one)
+  const { data: project } = useQuery<Project>({
+    queryKey: [`/api/projects/${space?.projectId}`],
+    enabled: !!space?.projectId,
+  });
+
   // Tab configuration type
   type TabConfig = {
     value: string;
@@ -618,7 +624,8 @@ export default function FacilitatorWorkspace() {
           orgLogo: org.logoUrl || undefined,
           primaryColor: org.primaryColor || undefined,
         },
-        space.name
+        space.name,
+        project?.name
       );
       toast({
         title: "PDF Downloaded",
