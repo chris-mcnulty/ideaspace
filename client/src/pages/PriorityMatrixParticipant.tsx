@@ -44,13 +44,13 @@ export default function PriorityMatrixParticipant() {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold">{space.name}</h1>
-              <p className="text-sm text-muted-foreground">Priority Matrix</p>
+        <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-lg sm:text-2xl font-bold truncate">{space.name}</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground">Priority Matrix</p>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4 shrink-0">
               <ThemeToggle />
               <UserProfileMenu />
             </div>
@@ -58,7 +58,7 @@ export default function PriorityMatrixParticipant() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-hidden p-6">
+      <main className="flex-1 p-3 sm:p-6">
         <div className="mx-auto max-w-7xl">
           <PriorityMatrix spaceId={params.space} />
         </div>

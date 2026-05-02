@@ -192,14 +192,14 @@ export function SurveyView({ spaceId, participantId }: SurveyViewProps) {
                 </div>
                 
                 {/* Rating Scale */}
-                <div className="flex gap-2">
+                <div className="flex gap-1 sm:gap-2">
                   {[1, 2, 3, 4, 5].map((score) => (
                     <Button
                       key={score}
                       variant={currentNoteResponses[question.id] === score ? "default" : "outline"}
                       size="lg"
                       onClick={() => handleRatingChange(currentNote.id, question.id, score)}
-                      className="flex-1 h-12 text-lg font-semibold"
+                      className="flex-1 min-w-0 h-12 text-base sm:text-lg font-semibold px-1 sm:px-3"
                       data-testid={`button-rate-${question.id}-${score}`}
                     >
                       {score}
@@ -218,17 +218,19 @@ export function SurveyView({ spaceId, participantId }: SurveyViewProps) {
       </Card>
 
       {/* Navigation */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <Button
           variant="outline"
           onClick={() => setCurrentNoteIndex(prev => Math.max(0, prev - 1))}
           disabled={currentNoteIndex === 0}
           data-testid="button-previous-idea"
+          className="flex-1 sm:flex-initial"
         >
-          Previous Idea
+          <span className="sm:hidden">Previous</span>
+          <span className="hidden sm:inline">Previous Idea</span>
         </Button>
         
-        <span className="text-sm text-muted-foreground">
+        <span className="text-sm text-muted-foreground shrink-0">
           {currentNoteIndex + 1} / {notes.length}
         </span>
 
@@ -237,8 +239,10 @@ export function SurveyView({ spaceId, participantId }: SurveyViewProps) {
           onClick={() => setCurrentNoteIndex(prev => Math.min(notes.length - 1, prev + 1))}
           disabled={currentNoteIndex === notes.length - 1}
           data-testid="button-next-idea"
+          className="flex-1 sm:flex-initial"
         >
-          Next Idea
+          <span className="sm:hidden">Next</span>
+          <span className="hidden sm:inline">Next Idea</span>
         </Button>
       </div>
 

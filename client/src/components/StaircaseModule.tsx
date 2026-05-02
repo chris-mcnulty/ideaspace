@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Settings2, TrendingUp, BarChart2, GripVertical, ArrowRight } from 'lucide-react';
+import { Loader2, Settings2, TrendingUp, BarChart2, GripVertical, ArrowRight, ChevronUp, ChevronDown } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -193,6 +193,19 @@ export default function StaircaseModule({
     updatePositionMutation.mutate({ noteId: note.id, score, slotOffset });
   };
 
+  const handleStepChange = (note: Note, position: StaircasePosition, direction: -1 | 1) => {
+    if (isReadOnly || !staircase) return;
+    const scoreRange = staircase.maxScore - staircase.minScore;
+    const currentScore = Number(position.score);
+    const currentStepIndex = Math.round((currentScore - staircase.minScore) / scoreRange * (stepCount - 1));
+    const newStepIndex = Math.max(0, Math.min(stepCount - 1, currentStepIndex + direction));
+    if (newStepIndex === currentStepIndex) return;
+    const score = staircase.minScore + (newStepIndex / (stepCount - 1)) * scoreRange;
+    const existingAtScore = positionsByScore.get(score) || [];
+    const slotOffset = existingAtScore.filter(p => p.noteId !== note.id).length;
+    updatePositionMutation.mutate({ noteId: note.id, score, slotOffset });
+  };
+
   const handleDragStart = (e: React.PointerEvent, note: Note, position?: StaircasePosition) => {
     if (isReadOnly) return;
     
@@ -323,9 +336,9 @@ export default function StaircaseModule({
             </div>
           </div>
         </CardHeader>
-        <CardContent className="p-6">
-          <div className="flex gap-6">
-            <div className="w-64 shrink-0" data-testid="staircase-unplaced-panel">
+        <CardContent className="p-3 sm:p-6">
+          <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
+            <div className="w-full lg:w-64 lg:shrink-0" data-testid="staircase-unplaced-panel">
               <div className="mb-3">
                 <h3 className="text-sm font-semibold text-foreground">
                   {unplacedNotes.length > 0 ? `Notes to Place (${unplacedNotes.length})` : 'All Notes Placed'}
@@ -364,7 +377,7 @@ export default function StaircaseModule({
                                   key={step}
                                   variant="outline"
                                   size="sm"
-                                  className="h-6 px-2 text-xs"
+                                  className="h-9 sm:h-7 min-w-9 sm:min-w-0 px-3 sm:px-2 text-xs"
                                   onClick={() => handleQuickPlace(note, step)}
                                   disabled={updatePositionMutation.isPending}
                                   data-testid={`button-place-${note.id}-step-${step}`}
@@ -381,17 +394,80 @@ export default function StaircaseModule({
                 })}
                 {placedNotes.length > 0 && unplacedNotes.length === 0 && (
                   <p className="text-xs text-muted-foreground text-center py-4">
-                    All {placedNotes.length} notes have been placed on the staircase. Drag them on the canvas to adjust their positions.
+                    All {placedNotes.length} notes have been placed on the staircase. Drag them on the canvas, or use the up/down buttons below, to adjust their positions.
                   </p>
                 )}
               </div>
+
+              {!isReadOnly && placedNotes.length > 0 && (
+                <div className="mt-4" data-testid="staircase-placed-panel">
+                  <h3 className="text-sm font-semibold text-foreground mb-2">Placed Notes</h3>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Use the up/down buttons to fine-tune each note's step.
+                  </p>
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
+                    {placedNotes.map(note => {
+                      const position = positions.find(p => p.noteId === note.id);
+                      if (!position || !staircase) return null;
+                      const score = Number(position.score);
+                      const scoreRange = staircase.maxScore - staircase.minScore;
+                      const currentStepIndex = Math.round((score - staircase.minScore) / scoreRange * (stepCount - 1));
+                      const displayText = note.content.replace(/<[^>]*>?/gm, '');
+                      return (
+                        <Card key={note.id} className="p-3" data-testid={`placed-note-${note.id}`}>
+                          <div className="flex items-start gap-2">
+                            <div
+                              className="w-3 h-3 rounded-full mt-1 shrink-0"
+                              style={{ backgroundColor: getCategoryColor(note.manualCategoryId, null, note.id) }}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm leading-tight break-words">
+                                {displayText.length > 60 ? displayText.substring(0, 60) + '...' : displayText}
+                              </p>
+                              <div className="flex items-center gap-2 mt-2">
+                                <Badge variant="secondary" className="text-xs" data-testid={`badge-step-${note.id}`}>
+                                  Step {currentStepIndex}
+                                </Badge>
+                              </div>
+                            </div>
+                            <div className="flex flex-col gap-1 shrink-0">
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-11 w-11 sm:h-9 sm:w-9"
+                                onClick={() => handleStepChange(note, position, 1)}
+                                disabled={updatePositionMutation.isPending || currentStepIndex >= stepCount - 1}
+                                data-testid={`button-step-up-${note.id}`}
+                                aria-label="Move up one step"
+                              >
+                                <ChevronUp className="h-5 w-5" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-11 w-11 sm:h-9 sm:w-9"
+                                onClick={() => handleStepChange(note, position, -1)}
+                                disabled={updatePositionMutation.isPending || currentStepIndex <= 0}
+                                data-testid={`button-step-down-${note.id}`}
+                                aria-label="Move down one step"
+                              >
+                                <ChevronDown className="h-5 w-5" />
+                              </Button>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
-            
-            <div className="flex-1 min-w-0">
+
+            <div className="flex-1 min-w-0 overflow-x-auto">
               <svg
                 ref={canvasRef}
                 viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}
-                className="w-full border rounded-lg bg-muted/10"
+                className="w-full border rounded-lg bg-muted/10 min-w-[640px]"
                 style={{ maxHeight: '600px' }}
                 onPointerMove={handleDragMove}
                 onPointerUp={handleDragEnd}
@@ -534,7 +610,7 @@ export default function StaircaseModule({
             </div>
             
             {staircase?.showDistribution && positions.length > 0 && (
-              <Card className="w-56 shrink-0">
+              <Card className="w-full lg:w-56 lg:shrink-0">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm flex items-center gap-2">
                     <BarChart2 className="h-4 w-4" />

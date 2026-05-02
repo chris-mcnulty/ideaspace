@@ -148,32 +148,32 @@ export default function PairwiseVoting() {
     return (
       <div className="min-h-screen flex flex-col bg-background">
         <header className="sticky top-0 z-50 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="flex h-full items-center justify-between px-6">
-            <div className="flex items-center gap-3">
+          <div className="flex h-full items-center justify-between px-4 sm:px-6 gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
               {org?.logoUrl ? (
-                <img src={org.logoUrl} alt={org.name} className="h-8 w-auto object-contain" data-testid="img-org-logo" />
+                <img src={org.logoUrl} alt={org.name} className="h-7 sm:h-8 w-auto object-contain" data-testid="img-org-logo" />
               ) : (
                 <img 
                   src="/logos/synozur-horizontal-color.png" 
                   alt="Synozur Alliance" 
-                  className="h-8 w-auto object-contain"
+                  className="h-7 sm:h-8 w-auto object-contain"
                   data-testid="img-default-logo"
                 />
               )}
               {org?.name && (
                 <>
-                  <div className="h-6 w-px bg-border/40" />
-                  <span className="text-lg font-semibold" data-testid="text-org-name">
+                  <div className="hidden sm:block h-6 w-px bg-border/40" />
+                  <span className="hidden sm:inline text-lg font-semibold truncate" data-testid="text-org-name">
                     {org.name}
                   </span>
                 </>
               )}
-              <div className="h-6 w-px bg-border/40" />
-              <span className="text-lg font-semibold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
+              <div className="h-5 sm:h-6 w-px bg-border/40" />
+              <span className="text-base sm:text-lg font-semibold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
                 Nebula
               </span>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               <ThemeToggle />
               {isAuthenticated && <UserProfileMenu />}
             </div>
@@ -190,32 +190,32 @@ export default function PairwiseVoting() {
     return (
       <div className="min-h-screen flex flex-col bg-background">
         <header className="sticky top-0 z-50 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="flex h-full items-center justify-between px-6">
-            <div className="flex items-center gap-3">
+          <div className="flex h-full items-center justify-between px-4 sm:px-6 gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
               {org?.logoUrl ? (
-                <img src={org.logoUrl} alt={org.name} className="h-8 w-auto object-contain" data-testid="img-org-logo" />
+                <img src={org.logoUrl} alt={org.name} className="h-7 sm:h-8 w-auto object-contain" data-testid="img-org-logo" />
               ) : (
                 <img 
                   src="/logos/synozur-horizontal-color.png" 
                   alt="Synozur Alliance" 
-                  className="h-8 w-auto object-contain"
+                  className="h-7 sm:h-8 w-auto object-contain"
                   data-testid="img-default-logo"
                 />
               )}
               {org?.name && (
                 <>
-                  <div className="h-6 w-px bg-border/40" />
-                  <span className="text-lg font-semibold" data-testid="text-org-name">
+                  <div className="hidden sm:block h-6 w-px bg-border/40" />
+                  <span className="hidden sm:inline text-lg font-semibold truncate" data-testid="text-org-name">
                     {org.name}
                   </span>
                 </>
               )}
-              <div className="h-6 w-px bg-border/40" />
-              <span className="text-lg font-semibold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
+              <div className="h-5 sm:h-6 w-px bg-border/40" />
+              <span className="text-base sm:text-lg font-semibold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
                 Nebula
               </span>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               <ThemeToggle />
               {isAuthenticated && <UserProfileMenu />}
             </div>
@@ -240,32 +240,32 @@ export default function PairwiseVoting() {
     return (
       <div className="min-h-screen flex flex-col bg-background">
         <header className="sticky top-0 z-50 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="flex h-full items-center justify-between px-6">
-            <div className="flex items-center gap-3">
+          <div className="flex h-full items-center justify-between px-4 sm:px-6 gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
               {org?.logoUrl ? (
-                <img src={org.logoUrl} alt={org.name} className="h-8 w-auto object-contain" data-testid="img-org-logo" />
+                <img src={org.logoUrl} alt={org.name} className="h-7 sm:h-8 w-auto object-contain" data-testid="img-org-logo" />
               ) : (
                 <img 
                   src="/logos/synozur-horizontal-color.png" 
                   alt="Synozur Alliance" 
-                  className="h-8 w-auto object-contain"
+                  className="h-7 sm:h-8 w-auto object-contain"
                   data-testid="img-default-logo"
                 />
               )}
               {org?.name && (
                 <>
-                  <div className="h-6 w-px bg-border/40" />
-                  <span className="text-lg font-semibold" data-testid="text-org-name">
+                  <div className="hidden sm:block h-6 w-px bg-border/40" />
+                  <span className="hidden sm:inline text-lg font-semibold truncate" data-testid="text-org-name">
                     {org.name}
                   </span>
                 </>
               )}
-              <div className="h-6 w-px bg-border/40" />
-              <span className="text-lg font-semibold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
+              <div className="h-5 sm:h-6 w-px bg-border/40" />
+              <span className="text-base sm:text-lg font-semibold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
                 Nebula
               </span>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               <ThemeToggle />
               {isAuthenticated && <UserProfileMenu />}
             </div>
@@ -305,46 +305,46 @@ export default function PairwiseVoting() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <header className="sticky top-0 z-50 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex h-full items-center justify-between px-6">
-          <div className="flex items-center gap-3">
+        <div className="flex h-full items-center justify-between px-4 sm:px-6 gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             {org?.logoUrl ? (
-              <img src={org.logoUrl} alt={org.name} className="h-8 w-auto object-contain" data-testid="img-org-logo" />
+              <img src={org.logoUrl} alt={org.name} className="h-7 sm:h-8 w-auto object-contain" data-testid="img-org-logo" />
             ) : (
               <img 
                 src="/logos/synozur-horizontal-color.png" 
                 alt="Synozur Alliance" 
-                className="h-8 w-auto object-contain"
+                className="h-7 sm:h-8 w-auto object-contain"
                 data-testid="img-default-logo"
               />
             )}
             {org?.name && (
               <>
-                <div className="h-6 w-px bg-border/40" />
-                <span className="text-lg font-semibold" data-testid="text-org-name">
+                <div className="hidden sm:block h-6 w-px bg-border/40" />
+                <span className="hidden sm:inline text-lg font-semibold truncate" data-testid="text-org-name">
                   {org.name}
                 </span>
               </>
             )}
-            <div className="h-6 w-px bg-border/40" />
-            <span className="text-lg font-semibold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
+            <div className="h-5 sm:h-6 w-px bg-border/40" />
+            <span className="text-base sm:text-lg font-semibold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
               Nebula
             </span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <ThemeToggle />
             {isAuthenticated && <UserProfileMenu />}
           </div>
         </div>
       </header>
       
-      <main className="flex-1 p-8 space-y-8">
+      <main className="flex-1 p-4 sm:p-8 space-y-6 sm:space-y-8">
         {/* Workspace Info Section */}
         {org && space && (
           <div className="max-w-4xl mx-auto text-center space-y-2">
             <p className="text-sm text-muted-foreground">{org.name}</p>
-            <h2 className="text-xl font-semibold">{space.name}</h2>
+            <h2 className="text-lg sm:text-xl font-semibold">{space.name}</h2>
             {space.purpose && (
-              <p className="text-base text-muted-foreground max-w-2xl mx-auto">
+              <p className="text-sm sm:text-base text-muted-foreground max-w-2xl mx-auto">
                 {space.purpose}
               </p>
             )}
@@ -353,16 +353,16 @@ export default function PairwiseVoting() {
 
         {/* Progress Section */}
         <div className="max-w-4xl mx-auto space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
-              <h1 className="text-2xl font-bold">Pairwise Voting</h1>
-              <p className="text-muted-foreground">
+              <h1 className="text-xl sm:text-2xl font-bold">Pairwise Voting</h1>
+              <p className="text-sm sm:text-base text-muted-foreground">
                 Choose the more important idea from each pair
               </p>
             </div>
-            <div className="text-right">
+            <div className="text-left sm:text-right">
               <div className="text-sm text-muted-foreground">Progress</div>
-              <div className="text-2xl font-bold">
+              <div className="text-xl sm:text-2xl font-bold">
                 {progress.completedPairs} / {progress.totalPairs}
               </div>
             </div>
@@ -390,7 +390,7 @@ export default function PairwiseVoting() {
         </div>
 
         {/* Keyboard Hint */}
-        <div className="text-center text-sm text-muted-foreground">
+        <div className="hidden sm:block text-center text-sm text-muted-foreground">
           <p>Tip: Press <kbd className="px-2 py-1 bg-muted rounded text-xs font-mono">1</kbd> or <kbd className="px-2 py-1 bg-muted rounded text-xs font-mono">2</kbd> to vote quickly</p>
         </div>
       </main>

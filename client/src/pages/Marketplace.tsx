@@ -205,48 +205,48 @@ export default function Marketplace() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <header className="sticky top-0 z-50 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex h-full items-center justify-between px-6">
-          <div className="flex items-center gap-3">
+        <div className="flex h-full items-center justify-between px-4 sm:px-6 gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             {org?.logoUrl ? (
-              <img src={org.logoUrl} alt={org.name} className="h-8 w-auto object-contain" data-testid="img-org-logo" />
+              <img src={org.logoUrl} alt={org.name} className="h-7 sm:h-8 w-auto object-contain" data-testid="img-org-logo" />
             ) : (
               <img 
                 src="/logos/synozur-horizontal-color.png" 
                 alt="Synozur Alliance" 
-                className="h-8 w-auto object-contain"
+                className="h-7 sm:h-8 w-auto object-contain"
                 data-testid="img-default-logo"
               />
             )}
             {org?.name && (
               <>
-                <div className="h-6 w-px bg-border/40" />
-                <span className="text-lg font-semibold" data-testid="text-org-name">
+                <div className="hidden sm:block h-6 w-px bg-border/40" />
+                <span className="hidden sm:inline text-lg font-semibold truncate" data-testid="text-org-name">
                   {org.name}
                 </span>
               </>
             )}
-            <div className="h-6 w-px bg-border/40" />
-            <span className="text-lg font-semibold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
+            <div className="h-5 sm:h-6 w-px bg-border/40" />
+            <span className="text-base sm:text-lg font-semibold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
               Nebula
             </span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <ThemeToggle />
             {isAuthenticated && <UserProfileMenu />}
           </div>
         </div>
       </header>
       
-      <main className="flex-1 container mx-auto px-4 py-8 max-w-4xl">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-2">Marketplace Allocation</h1>
-          <p className="text-muted-foreground">
+      <main className="flex-1 container mx-auto px-4 py-4 sm:py-8 max-w-4xl">
+        <div className="mb-4 sm:mb-6">
+          <h1 className="text-2xl sm:text-3xl font-bold mb-2">Marketplace Allocation</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
             Distribute your {coinBudget} coins among the ideas below. Allocate more coins to ideas you value most.
           </p>
         </div>
 
-        <div className="sticky top-16 z-40 pb-4 -mx-4 px-4 bg-background">
-          <Card className="p-6">
+        <div className="sticky top-16 z-40 pb-3 sm:pb-4 -mx-4 px-4 bg-background">
+          <Card className="p-4 sm:p-6">
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div className="flex items-center gap-2">
@@ -295,42 +295,45 @@ export default function Marketplace() {
             .map((note) => {
             const coins = allocations.get(note.id) || 0;
             return (
-              <Card key={note.id} className="p-4" data-testid={`allocation-item-${note.id}`}>
-                <div className="flex items-start gap-4">
+              <Card key={note.id} className="p-3 sm:p-4" data-testid={`allocation-item-${note.id}`}>
+                <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
                   <div className="flex-1 min-w-0">
                     {note.category && (
                       <Badge variant="secondary" className="mb-2 text-xs">
                         {note.category}
                       </Badge>
                     )}
-                    <p className="text-base leading-relaxed mb-3">
+                    <p className="text-sm sm:text-base leading-relaxed mb-3 break-words">
                       {note.content}
                     </p>
                     
                     <div className="flex items-center gap-2 flex-wrap">
                       <Button
-                        size="sm"
+                        size="default"
                         variant="outline"
                         onClick={() => handleQuickAdd(note.id, 5)}
                         disabled={submitAllocationMutation.isPending}
+                        className="h-11 sm:h-9 px-4 sm:px-3"
                         data-testid={`button-quick-add-5-${note.id}`}
                       >
                         +5
                       </Button>
                       <Button
-                        size="sm"
+                        size="default"
                         variant="outline"
                         onClick={() => handleQuickAdd(note.id, 10)}
                         disabled={submitAllocationMutation.isPending}
+                        className="h-11 sm:h-9 px-4 sm:px-3"
                         data-testid={`button-quick-add-10-${note.id}`}
                       >
                         +10
                       </Button>
                       <Button
-                        size="sm"
+                        size="default"
                         variant="outline"
                         onClick={() => handleQuickAdd(note.id, -5)}
                         disabled={submitAllocationMutation.isPending || coins === 0}
+                        className="h-11 sm:h-9 px-4 sm:px-3"
                         data-testid={`button-quick-subtract-5-${note.id}`}
                       >
                         -5
@@ -338,7 +341,7 @@ export default function Marketplace() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col items-end gap-2 min-w-[120px]">
+                  <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 sm:min-w-[120px] w-full sm:w-auto pt-3 sm:pt-0 border-t sm:border-t-0 border-border">
                     <div className="flex items-center gap-2">
                       <Coins className="h-4 w-4 text-muted-foreground" />
                       <Input
@@ -346,7 +349,7 @@ export default function Marketplace() {
                         min="0"
                         value={coins}
                         onChange={(e) => handleAllocationChange(note.id, e.target.value)}
-                        className="w-20 text-center"
+                        className="w-20 text-center h-11 sm:h-10"
                         disabled={submitAllocationMutation.isPending}
                         data-testid={`input-coins-${note.id}`}
                       />
@@ -363,7 +366,7 @@ export default function Marketplace() {
           })}
         </div>
 
-        <div className="flex gap-4 sticky bottom-4 bg-background/95 backdrop-blur p-4 rounded-lg border">
+        <div className="flex gap-3 sticky bottom-2 sm:bottom-4 bg-background/95 backdrop-blur p-3 sm:p-4 rounded-lg border">
           <Button
             variant="outline"
             onClick={() => navigate(`/o/${params.org}/s/${params.space}/participate`)}

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { CheckCircle2, GripVertical, Trophy } from "lucide-react";
+import { CheckCircle2, GripVertical, Trophy, ChevronUp, ChevronDown } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -21,9 +21,13 @@ import type { Note, Organization, Space } from "@shared/schema";
 interface SortableNoteProps {
   note: Note;
   rank: number;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
 }
 
-function SortableNote({ note, rank }: SortableNoteProps) {
+function SortableNote({ note, rank, onMoveUp, onMoveDown, canMoveUp, canMoveDown }: SortableNoteProps) {
   const {
     attributes,
     listeners,
@@ -41,33 +45,64 @@ function SortableNote({ note, rank }: SortableNoteProps) {
     <Card
       ref={setNodeRef}
       style={style}
-      className="p-4 mb-3 cursor-move hover-elevate"
+      className="p-3 sm:p-4 mb-3 hover-elevate"
       data-testid={`ranking-item-${note.id}`}
     >
-      <div className="flex items-start gap-4">
-        <div className="flex flex-col items-center gap-1 min-w-[40px]">
-          <div className="text-2xl font-bold text-primary">
+      <div className="flex items-start gap-2 sm:gap-4">
+        <div className="flex flex-col items-center gap-1 shrink-0">
+          <div className="text-xl sm:text-2xl font-bold text-primary min-w-[36px] text-center">
             #{rank}
           </div>
-          <div
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
             {...attributes}
             {...listeners}
-            className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors"
+            className="cursor-grab active:cursor-grabbing touch-none"
             data-testid={`drag-handle-${note.id}`}
+            aria-label="Drag to reorder"
           >
             <GripVertical className="h-5 w-5" />
-          </div>
+          </Button>
         </div>
-        
+
         <div className="flex-1 min-w-0">
           {note.category && (
             <Badge variant="secondary" className="mb-2 text-xs">
               {note.category}
             </Badge>
           )}
-          <p className="text-base leading-relaxed">
+          <p className="text-sm sm:text-base leading-relaxed break-words">
             {note.content}
           </p>
+        </div>
+
+        <div className="flex flex-col gap-1 shrink-0">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={onMoveUp}
+            disabled={!canMoveUp}
+            className="h-11 w-11 sm:h-9 sm:w-9"
+            data-testid={`button-move-up-${note.id}`}
+            aria-label="Move up"
+          >
+            <ChevronUp className="h-5 w-5" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={onMoveDown}
+            disabled={!canMoveDown}
+            className="h-11 w-11 sm:h-9 sm:w-9"
+            data-testid={`button-move-down-${note.id}`}
+            aria-label="Move down"
+          >
+            <ChevronDown className="h-5 w-5" />
+          </Button>
         </div>
       </div>
     </Card>
@@ -184,6 +219,12 @@ export default function StackRanking() {
     }
   }
 
+  function moveItem(index: number, direction: -1 | 1) {
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= rankedNotes.length) return;
+    setRankedNotes((items) => arrayMove(items, index, newIndex));
+  }
+
   function handleSubmit() {
     const rankings = rankedNotes.map((note, index) => ({
       noteId: note.id,
@@ -271,47 +312,47 @@ export default function StackRanking() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <header className="sticky top-0 z-50 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex h-full items-center justify-between px-6">
-          <div className="flex items-center gap-3">
+        <div className="flex h-full items-center justify-between px-4 sm:px-6 gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             {org?.logoUrl ? (
-              <img src={org.logoUrl} alt={org.name} className="h-8 w-auto object-contain" data-testid="img-org-logo" />
+              <img src={org.logoUrl} alt={org.name} className="h-7 sm:h-8 w-auto object-contain" data-testid="img-org-logo" />
             ) : (
               <img 
                 src="/logos/synozur-horizontal-color.png" 
                 alt="Synozur Alliance" 
-                className="h-8 w-auto object-contain"
+                className="h-7 sm:h-8 w-auto object-contain"
                 data-testid="img-default-logo"
               />
             )}
             {org?.name && (
               <>
-                <div className="h-6 w-px bg-border/40" />
-                <span className="text-lg font-semibold" data-testid="text-org-name">
+                <div className="hidden sm:block h-6 w-px bg-border/40" />
+                <span className="hidden sm:inline text-lg font-semibold truncate" data-testid="text-org-name">
                   {org.name}
                 </span>
               </>
             )}
-            <div className="h-6 w-px bg-border/40" />
-            <span className="text-lg font-semibold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
+            <div className="h-5 sm:h-6 w-px bg-border/40" />
+            <span className="text-base sm:text-lg font-semibold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
               Nebula
             </span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <ThemeToggle />
             {isAuthenticated && <UserProfileMenu />}
           </div>
         </div>
       </header>
       
-      <div className="flex-1 p-8">
+      <div className="flex-1 p-4 sm:p-8">
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Header */}
           <div className="space-y-2">
-            <h1 className="text-3xl font-bold" data-testid="heading-stack-ranking">
+            <h1 className="text-2xl sm:text-3xl font-bold" data-testid="heading-stack-ranking">
               Stack Ranking
             </h1>
-            <p className="text-lg text-muted-foreground">
-              Drag and drop to rank ideas from most important (top) to least important (bottom)
+            <p className="text-sm sm:text-lg text-muted-foreground">
+              Drag, or use the up/down buttons, to rank ideas from most important (top) to least important (bottom)
             </p>
           </div>
 
@@ -350,14 +391,30 @@ export default function StackRanking() {
                 strategy={verticalListSortingStrategy}
               >
                 {rankedNotes.map((note, index) => (
-                  <SortableNote key={note.id} note={note} rank={index + 1} />
+                  <SortableNote
+                    key={note.id}
+                    note={note}
+                    rank={index + 1}
+                    onMoveUp={() => moveItem(index, -1)}
+                    onMoveDown={() => moveItem(index, 1)}
+                    canMoveUp={index > 0}
+                    canMoveDown={index < rankedNotes.length - 1}
+                  />
                 ))}
               </SortableContext>
             </DndContext>
           </div>
 
           {/* Submit Button */}
-          <div className="flex gap-4">
+          <div className="flex flex-col-reverse sm:flex-row gap-3 sm:gap-4">
+            <Button
+              size="lg"
+              variant="outline"
+              onClick={() => navigate(`/o/${params.org}/s/${params.space}/participate`)}
+              data-testid="button-cancel-ranking"
+            >
+              Cancel
+            </Button>
             <Button
               size="lg"
               className="flex-1"
@@ -367,14 +424,6 @@ export default function StackRanking() {
             >
               {submitRankingMutation.isPending ? "Submitting..." : "Submit Rankings"}
               {!submitRankingMutation.isPending && <CheckCircle2 className="ml-2 h-5 w-5" />}
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              onClick={() => navigate(`/o/${params.org}/s/${params.space}/participate`)}
-              data-testid="button-cancel-ranking"
-            >
-              Cancel
             </Button>
           </div>
         </div>

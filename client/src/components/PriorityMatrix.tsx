@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Settings2, Grid, Move } from 'lucide-react';
+import { Loader2, Settings2, Grid, Move, MousePointer2 } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
 import {
   Dialog,
   DialogContent,
@@ -45,6 +46,7 @@ export default function PriorityMatrix({
   isFacilitator = false,
 }: PriorityMatrixProps) {
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const matrixRef = useRef<HTMLDivElement>(null);
   const [draggedNote, setDraggedNote] = useState<DraggedNote | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -52,6 +54,14 @@ export default function PriorityMatrix({
   const [yAxisLabel, setYAxisLabel] = useState('Effort');
   const [localPositions, setLocalPositions] = useState<Map<string, Position>>(new Map());
   const localPositionsRef = useRef<Map<string, Position>>(new Map());
+  const [tapMode, setTapMode] = useState(false);
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isMobile) {
+      setTapMode(true);
+    }
+  }, [isMobile]);
 
   const { data: notes = [], isLoading: notesLoading } = useQuery<Note[]>({
     queryKey: [`/api/spaces/${spaceId}/notes`],
@@ -174,7 +184,14 @@ export default function PriorityMatrix({
 
   const handlePointerDown = (e: React.PointerEvent, noteId: string) => {
     if (isReadOnly) return;
-    
+
+    if (tapMode) {
+      setSelectedNoteId(prev => (prev === noteId ? null : noteId));
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
     const rect = matrixRef.current?.getBoundingClientRect();
     if (!rect) return;
 
@@ -194,6 +211,34 @@ export default function PriorityMatrix({
     }
     e.preventDefault();
     e.stopPropagation();
+  };
+
+  const handleMatrixClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isReadOnly || !tapMode || !selectedNoteId) return;
+    const rect = matrixRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const yPx = ((e.clientY - rect.top) / rect.height) * 100;
+    const y = 100 - yPx;
+
+    const clampedX = Math.max(0, Math.min(100, x));
+    const clampedY = Math.max(0, Math.min(100, y));
+
+    setLocalPositions(prev => {
+      const newPositions = new Map(prev);
+      newPositions.set(selectedNoteId, { x: clampedX, y: clampedY });
+      localPositionsRef.current = newPositions;
+      return newPositions;
+    });
+
+    updatePositionMutation.mutate({
+      noteId: selectedNoteId,
+      xCoord: clampedX,
+      yCoord: clampedY,
+    });
+
+    setSelectedNoteId(null);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -260,49 +305,74 @@ export default function PriorityMatrix({
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <Grid className="h-5 w-5" />
-          <h2 className="text-xl font-semibold">2x2 Priority Matrix</h2>
+          <h2 className="text-lg sm:text-xl font-semibold">2x2 Priority Matrix</h2>
         </div>
-        
-        {isFacilitator && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowSettings(true)}
-            data-testid="button-matrix-settings"
-          >
-            <Settings2 className="h-4 w-4 mr-2" />
-            Configure Axes
-          </Button>
-        )}
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {!isReadOnly && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setTapMode(prev => !prev);
+                setSelectedNoteId(null);
+              }}
+              data-testid="button-toggle-tap-mode"
+            >
+              <MousePointer2 className="h-4 w-4 mr-2" />
+              {tapMode ? 'Switch to drag mode' : 'Switch to tap mode'}
+            </Button>
+          )}
+          {isFacilitator && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowSettings(true)}
+              data-testid="button-matrix-settings"
+            >
+              <Settings2 className="h-4 w-4 mr-2" />
+              Configure Axes
+            </Button>
+          )}
+        </div>
       </div>
+
+      {tapMode && !isReadOnly && (
+        <div className="text-xs sm:text-sm text-muted-foreground bg-muted/50 rounded-md p-3" data-testid="text-tap-mode-hint">
+          {selectedNoteId
+            ? 'Now tap anywhere on the matrix to place the selected note.'
+            : 'Tap a note to select it, then tap on the matrix to place it.'}
+        </div>
+      )}
 
       <Card className="flex-1 relative">
         <CardContent className="p-0 h-full">
           <div 
             ref={matrixRef}
-            className="relative w-full h-full min-h-[500px]"
-            style={{ cursor: draggedNote ? 'grabbing' : 'default', touchAction: 'none' }}
+            className="relative w-full h-full min-h-[400px] sm:min-h-[500px]"
+            style={{ cursor: draggedNote ? 'grabbing' : (tapMode && selectedNoteId ? 'crosshair' : 'default'), touchAction: tapMode ? 'auto' : 'none' }}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
+            onClick={handleMatrixClick}
             data-testid="matrix-grid"
           >
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full pb-2 pointer-events-none">
+            <div className="hidden sm:block absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full pb-2 pointer-events-none">
               <span className="text-sm font-medium text-muted-foreground">
                 High {yAxisLabel}
               </span>
             </div>
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full pt-2 pointer-events-none">
+            <div className="hidden sm:block absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-full pt-2 pointer-events-none">
               <span className="text-sm font-medium text-muted-foreground">
                 Low {yAxisLabel}
               </span>
             </div>
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full pr-2 pointer-events-none">
+            <div className="hidden sm:block absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full pr-2 pointer-events-none">
               <span className="text-sm font-medium text-muted-foreground">
                 Low {xAxisLabel}
               </span>
             </div>
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-full pl-2 pointer-events-none">
+            <div className="hidden sm:block absolute right-0 top-1/2 -translate-y-1/2 translate-x-full pl-2 pointer-events-none">
               <span className="text-sm font-medium text-muted-foreground">
                 High {xAxisLabel}
               </span>
@@ -342,17 +412,20 @@ export default function PriorityMatrix({
               const hash = note.id.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
               const noteColor = category?.color || noteColors[hash % noteColors.length];
 
+              const isSelected = selectedNoteId === note.id;
               return (
                 <div
                   key={note.id}
                   className={`absolute transform -translate-x-1/2 -translate-y-1/2 ${
                     isDragging ? 'z-50' : 'z-10'
-                  } ${!isReadOnly ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                  } ${!isReadOnly ? (tapMode ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing') : ''} ${
+                    isSelected ? 'ring-4 ring-primary rounded-lg' : ''
+                  }`}
                   style={{
                     left: `${position.x}%`,
                     top: `${100 - position.y}%`,
                     transition: isDragging ? 'none' : 'all 0.2s ease',
-                    touchAction: 'none',
+                    touchAction: tapMode ? 'auto' : 'none',
                   }}
                   onPointerDown={(e) => handlePointerDown(e, note.id)}
                   data-testid={`note-${note.id}`}
@@ -361,7 +434,7 @@ export default function PriorityMatrix({
                     className={`
                       bg-card rounded-lg p-2 shadow-sm
                       ${isDragging ? 'shadow-lg scale-105' : 'hover:shadow-md'}
-                      min-w-[100px] max-w-[200px]
+                      min-w-[100px] max-w-[200px] min-h-[44px]
                     `}
                     style={{ 
                       borderWidth: '2px', 
@@ -449,7 +522,7 @@ export default function PriorityMatrix({
         </DialogContent>
       </Dialog>
 
-      {!isReadOnly && notes.length > 0 && (
+      {!isReadOnly && notes.length > 0 && !tapMode && (
         <div className="text-sm text-muted-foreground text-center">
           Drag and drop notes to position them on the matrix. Changes are saved automatically.
         </div>

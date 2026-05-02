@@ -42,9 +42,9 @@ export default function Survey() {
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="border-b bg-card sticky top-0 z-50">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+        <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
               <Button
                 variant="ghost"
                 size="icon"
@@ -53,10 +53,10 @@ export default function Survey() {
               >
                 <ArrowLeft className="h-5 w-5" />
               </Button>
-              <div>
+              <div className="min-w-0 flex-1">
                 <BrandHeader />
                 {space && (
-                  <h1 className="text-xl font-bold mt-2">{space.name} - Survey</h1>
+                  <h1 className="text-base sm:text-xl font-bold mt-1 sm:mt-2 truncate">{space.name} - Survey</h1>
                 )}
               </div>
             </div>
@@ -66,7 +66,7 @@ export default function Survey() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 container mx-auto px-6 py-8">
+      <main className="flex-1 container mx-auto px-4 sm:px-6 py-4 sm:py-8">
         <SurveyView spaceId={params.space} participantId={participantId} />
       </main>
     </div>

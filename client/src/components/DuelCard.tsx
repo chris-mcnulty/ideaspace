@@ -14,18 +14,18 @@ interface DuelCardProps {
 
 export function DuelCard({ noteA, noteB, onChoose, isLoading = false }: DuelCardProps) {
   return (
-    <div className="flex flex-col md:flex-row gap-8 items-stretch w-full max-w-7xl mx-auto" data-testid="duel-container">
+    <div className="flex flex-col md:flex-row gap-4 md:gap-8 items-stretch w-full max-w-7xl mx-auto" data-testid="duel-container">
       {/* Left Note */}
       <div className="flex-1 flex flex-col min-w-0">
         <Card 
           className={cn(
-            "flex-1 p-8 transition-all cursor-pointer relative",
+            "flex-1 p-4 sm:p-6 md:p-8 transition-all cursor-pointer relative",
             "hover-elevate active-elevate-2"
           )}
           onClick={() => !isLoading && onChoose(noteA.id, noteB.id)}
           data-testid={`duel-option-${noteA.id}`}
         >
-          <div className="absolute -top-3 left-4">
+          <div className="hidden md:block absolute -top-3 left-4">
             <Badge variant="outline" className="text-xs font-mono bg-background">
               Press 1
             </Badge>
@@ -39,8 +39,8 @@ export function DuelCard({ noteA, noteB, onChoose, isLoading = false }: DuelCard
           )}
           
           <div className="flex flex-col h-full justify-between gap-6 mt-2">
-            <div className="flex-1 min-h-[120px]">
-              <p className="text-base leading-relaxed text-foreground">
+            <div className="flex-1 min-h-[80px] sm:min-h-[120px]">
+              <p className="text-sm sm:text-base leading-relaxed text-foreground">
                 {noteA.content}
               </p>
             </div>
@@ -65,7 +65,7 @@ export function DuelCard({ noteA, noteB, onChoose, isLoading = false }: DuelCard
       {/* VS Divider */}
       <div className="flex items-center justify-center md:py-8">
         <div className="relative">
-          <div className="text-6xl font-bold text-muted-foreground/20 select-none">
+          <div className="text-4xl md:text-6xl font-bold text-muted-foreground/20 select-none">
             VS
           </div>
         </div>
@@ -75,13 +75,13 @@ export function DuelCard({ noteA, noteB, onChoose, isLoading = false }: DuelCard
       <div className="flex-1 flex flex-col min-w-0">
         <Card 
           className={cn(
-            "flex-1 p-8 transition-all cursor-pointer relative",
+            "flex-1 p-4 sm:p-6 md:p-8 transition-all cursor-pointer relative",
             "hover-elevate active-elevate-2"
           )}
           onClick={() => !isLoading && onChoose(noteB.id, noteA.id)}
           data-testid={`duel-option-${noteB.id}`}
         >
-          <div className="absolute -top-3 left-4">
+          <div className="hidden md:block absolute -top-3 left-4">
             <Badge variant="outline" className="text-xs font-mono bg-background">
               Press 2
             </Badge>
@@ -95,8 +95,8 @@ export function DuelCard({ noteA, noteB, onChoose, isLoading = false }: DuelCard
           )}
           
           <div className="flex flex-col h-full justify-between gap-6 mt-2">
-            <div className="flex-1 min-h-[120px]">
-              <p className="text-base leading-relaxed text-foreground">
+            <div className="flex-1 min-h-[80px] sm:min-h-[120px]">
+              <p className="text-sm sm:text-base leading-relaxed text-foreground">
                 {noteB.content}
               </p>
             </div>
