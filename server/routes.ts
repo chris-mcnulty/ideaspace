@@ -239,6 +239,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return resolveWorkspaceIdentifier(identifier);
   }
 
+  // Client-side error telemetry endpoint (public; rate-limited via payload size)
+  app.post("/api/client-errors", async (req, res) => {
+    try {
+      const schema = z.object({
+        scope: z.string().max(100).optional(),
+        message: z.string().max(2000),
+        stack: z.string().max(10000).optional().nullable(),
+        componentStack: z.string().max(10000).optional().nullable(),
+        route: z.string().max(500).optional().nullable(),
+        userAgent: z.string().max(500).optional().nullable(),
+      });
+      const data = schema.parse(req.body ?? {});
+      const user = req.user as User | undefined;
+      const userId = user?.id ?? null;
+      const participantId = req.session?.participantId ?? null;
+
+      console.error("[client-error]", JSON.stringify({
+        scope: data.scope ?? "unknown",
+        route: data.route ?? null,
+        userId,
+        participantId,
+        message: data.message,
+        userAgent: data.userAgent ?? null,
+        stack: data.stack ?? null,
+        componentStack: data.componentStack ?? null,
+        at: new Date().toISOString(),
+      }));
+
+      res.status(204).send();
+    } catch (error) {
+      // Never let telemetry failures impact the client; log and 204
+      console.error("Failed to record client error:", error);
+      res.status(204).send();
+    }
+  });
+
   // Workspace code lookup (public endpoint for entry flow)
   app.get("/api/spaces/lookup/:code", async (req, res) => {
     try {

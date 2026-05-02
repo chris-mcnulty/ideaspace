@@ -7,6 +7,7 @@
   - Status: Active project on Replit.
 
 ## Backlog
+- [x] React error boundaries & graceful failure UI - Added reusable ErrorBoundary class component (branded fallback, retry/reload/home actions, dev-only stack display, telemetry POST that swallows its own errors), wrapped each major route via withBoundary HOC (hoisted to module-level constants for stable identity), added root-level <ErrorBoundary scope="root"> around provider tree, server POST /api/client-errors endpoint (zod-validated, structured log with userId/participantId/route/scope, always returns 204), and reusable QueryErrorState component for localized retry UI on partial query failures.
 - [ ] AI Suggest New Ideas - Generate new idea suggestions based on existing content, workspace purpose, and knowledge base documents
 - [ ] Import templates from CSV (with categories) and edit their contents in the system
 - [x] WCAG 2.1 AA accessibility pass - Added SkipToContent link, LiveAnnouncerProvider (polite + assertive aria-live regions), useRouteFocus hook (retries until #main-content lands), id="main-content" landmarks on all 20+ routed pages, aria-labels on icon-only buttons (StickyNote, UserProfileMenu, ShareLinksDialog, NotificationPanel), live announcements for note arrivals and facilitator phase navigations.

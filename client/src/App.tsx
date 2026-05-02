@@ -6,7 +6,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { SkipToContent } from "@/components/SkipToContent";
 import { LiveAnnouncerProvider } from "@/components/LiveAnnouncer";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useRouteFocus } from "@/hooks/useRouteFocus";
+import { ComponentType } from "react";
 import NotFound from "@/pages/not-found";
 
 import LandingPage from "@/pages/LandingPage";
@@ -51,6 +53,36 @@ import FacilitatorConsoleExample from "@/components/examples/FacilitatorConsole"
 import ResultsTabsExample from "@/components/examples/ResultsTabs";
 import ReadoutViewerExample from "@/components/examples/ReadoutViewer";
 
+function withBoundary(
+  Component: ComponentType<any>,
+  scope: string,
+): ComponentType<any> {
+  const Wrapped = (props: any) => (
+    <ErrorBoundary scope={scope}>
+      <Component {...props} />
+    </ErrorBoundary>
+  );
+  Wrapped.displayName = `WithBoundary(${scope})`;
+  return Wrapped;
+}
+
+const AdminPanelBoundary = withBoundary(AdminPanel, "admin-panel");
+const AdminMigrationsBoundary = withBoundary(AdminMigrations, "admin-migrations");
+const FacilitatorDashboardBoundary = withBoundary(FacilitatorDashboard, "facilitator-dashboard");
+const MyProjectsBoundary = withBoundary(MyProjects, "my-projects");
+const OrganizationHomeBoundary = withBoundary(OrganizationHome, "organization-home");
+const WaitingRoomBoundary = withBoundary(WaitingRoom, "waiting-room");
+const ParticipantViewBoundary = withBoundary(ParticipantView, "participant-view");
+const PairwiseVotingBoundary = withBoundary(PairwiseVoting, "pairwise-voting");
+const StackRankingBoundary = withBoundary(StackRanking, "stack-ranking");
+const MarketplaceBoundary = withBoundary(Marketplace, "marketplace");
+const SurveyBoundary = withBoundary(Survey, "survey");
+const PriorityMatrixBoundary = withBoundary(PriorityMatrixParticipant, "priority-matrix");
+const StaircaseBoundary = withBoundary(StaircaseParticipant, "staircase");
+const ResultsBoundary = withBoundary(Results, "results");
+const PublicResultsBoundary = withBoundary(PublicResults, "public-results");
+const FacilitatorWorkspaceBoundary = withBoundary(FacilitatorWorkspace, "facilitator-workspace");
+
 function Router() {
   useRouteFocus("main-content");
   return (
@@ -62,22 +94,22 @@ function Router() {
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/verify-email" component={VerifyEmail} />
-      <Route path="/admin" component={AdminPanel} />
-      <Route path="/admin/migrations" component={AdminMigrations} />
-      <Route path="/dashboard" component={FacilitatorDashboard} />
-      <Route path="/projects" component={MyProjects} />
-      <Route path="/o/:org" component={OrganizationHome} />
-      <Route path="/o/:org/s/:space" component={WaitingRoom} />
-      <Route path="/o/:org/s/:space/participate" component={ParticipantView} />
-      <Route path="/o/:org/s/:space/vote" component={PairwiseVoting} />
-      <Route path="/o/:org/s/:space/rank" component={StackRanking} />
-      <Route path="/o/:org/s/:space/marketplace" component={Marketplace} />
-      <Route path="/o/:org/s/:space/survey" component={Survey} />
-      <Route path="/o/:org/s/:space/priority-matrix" component={PriorityMatrixParticipant} />
-      <Route path="/o/:org/s/:space/staircase" component={StaircaseParticipant} />
-      <Route path="/o/:org/s/:space/results" component={Results} />
-      <Route path="/o/:org/s/:space/public-results" component={PublicResults} />
-      <Route path="/o/:org/s/:space/facilitate" component={FacilitatorWorkspace} />
+      <Route path="/admin" component={AdminPanelBoundary} />
+      <Route path="/admin/migrations" component={AdminMigrationsBoundary} />
+      <Route path="/dashboard" component={FacilitatorDashboardBoundary} />
+      <Route path="/projects" component={MyProjectsBoundary} />
+      <Route path="/o/:org" component={OrganizationHomeBoundary} />
+      <Route path="/o/:org/s/:space" component={WaitingRoomBoundary} />
+      <Route path="/o/:org/s/:space/participate" component={ParticipantViewBoundary} />
+      <Route path="/o/:org/s/:space/vote" component={PairwiseVotingBoundary} />
+      <Route path="/o/:org/s/:space/rank" component={StackRankingBoundary} />
+      <Route path="/o/:org/s/:space/marketplace" component={MarketplaceBoundary} />
+      <Route path="/o/:org/s/:space/survey" component={SurveyBoundary} />
+      <Route path="/o/:org/s/:space/priority-matrix" component={PriorityMatrixBoundary} />
+      <Route path="/o/:org/s/:space/staircase" component={StaircaseBoundary} />
+      <Route path="/o/:org/s/:space/results" component={ResultsBoundary} />
+      <Route path="/o/:org/s/:space/public-results" component={PublicResultsBoundary} />
+      <Route path="/o/:org/s/:space/facilitate" component={FacilitatorWorkspaceBoundary} />
       
       <Route path="/showcase" component={ComponentShowcase} />
       <Route path="/examples/landing" component={LandingPageExample} />
@@ -189,17 +221,19 @@ function ComponentShowcase() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider defaultTheme="dark" storageKey="aurora-theme">
-        <TooltipProvider>
-          <LiveAnnouncerProvider>
-            <SkipToContent targetId="main-content" />
-            <Toaster />
-            <Router />
-          </LiveAnnouncerProvider>
-        </TooltipProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
+    <ErrorBoundary scope="root">
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider defaultTheme="dark" storageKey="aurora-theme">
+          <TooltipProvider>
+            <LiveAnnouncerProvider>
+              <SkipToContent targetId="main-content" />
+              <Toaster />
+              <Router />
+            </LiveAnnouncerProvider>
+          </TooltipProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 
