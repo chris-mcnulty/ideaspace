@@ -235,7 +235,7 @@ export default function StackRanking() {
 
   if (!participantId) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div id="main-content" tabIndex={-1} className="min-h-screen flex items-center justify-center focus:outline-none">
         <Card className="p-8 max-w-md text-center">
           <p className="text-muted-foreground">Please join the workspace first</p>
           <Button onClick={() => navigate(`/o/${params.org}/s/${params.space}`)} className="mt-4">
@@ -248,7 +248,7 @@ export default function StackRanking() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div id="main-content" tabIndex={-1} className="min-h-screen flex items-center justify-center focus:outline-none" aria-busy="true">
         <Card className="p-8">
           <p className="text-muted-foreground">Loading notes...</p>
         </Card>

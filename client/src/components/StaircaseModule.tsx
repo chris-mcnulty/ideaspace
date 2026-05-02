@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
+import { useAnnouncer } from '@/components/LiveAnnouncer';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,6 +42,7 @@ export default function StaircaseModule({
   isFacilitator = false,
 }: StaircaseModuleProps) {
   const { toast } = useToast();
+  const { announce } = useAnnouncer();
   const canvasRef = useRef<SVGSVGElement>(null);
   const [draggedNote, setDraggedNote] = useState<DraggedNote | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -565,12 +567,28 @@ export default function StaircaseModule({
                   
                   const displayText = note.content.replace(/<[^>]*>?/gm, '');
                   
+                  const noteAriaLabel = `${displayText} on step ${stepIndex} of ${stepCount - 1}. Use arrow up or down to change step.`;
                   return (
                     <g
                       key={position.id || note.id}
                       transform={`translate(${displayX}, ${displayY})`}
                       onPointerDown={(e) => handleDragStart(e, note, position)}
-                      className={isReadOnly ? '' : 'cursor-grab'}
+                      onKeyDown={(e) => {
+                        if (isReadOnly) return;
+                        if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          handleStepChange(note, position, 1);
+                          announce(`${displayText.slice(0, 60)} moved up.`, 'polite');
+                        } else if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          handleStepChange(note, position, -1);
+                          announce(`${displayText.slice(0, 60)} moved down.`, 'polite');
+                        }
+                      }}
+                      tabIndex={isReadOnly ? -1 : 0}
+                      role={isReadOnly ? undefined : 'button'}
+                      aria-label={noteAriaLabel}
+                      className={`${isReadOnly ? '' : 'cursor-grab'} focus:outline-none`}
                       style={{ opacity: isDragging ? 0.7 : 1, touchAction: 'none' }}
                       data-testid={`staircase-note-${note.id}`}
                     >
@@ -583,6 +601,7 @@ export default function StaircaseModule({
                         fill={getCategoryColor(note.manualCategoryId, null, note.id)}
                         stroke={isDragging ? 'hsl(var(--primary))' : 'hsl(var(--border))'}
                         strokeWidth={isDragging ? 2 : 1}
+                        className="focus-visible:stroke-primary"
                       />
                       <text
                         x={0}

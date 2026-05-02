@@ -32,11 +32,11 @@ export default function JoinPage() {
   }, [params.code, setLocation]);
 
   return (
-    <div className="flex h-screen items-center justify-center">
+    <main id="main-content" tabIndex={-1} className="flex h-screen items-center justify-center focus:outline-none" aria-busy="true">
       <div className="text-center">
-        <div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
+        <div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" aria-hidden="true" />
         <p className="text-muted-foreground">Looking up workspace...</p>
       </div>
-    </div>
+    </main>
   );
 }

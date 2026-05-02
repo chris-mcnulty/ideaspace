@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useAnnouncer } from "@/components/LiveAnnouncer";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -38,6 +39,7 @@ export default function PairwiseVoting() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
+  const { announce } = useAnnouncer();
   const [participantId, setParticipantId] = useState<string | null>(null);
 
   useModuleNavigation({ spaceId: params.space!, orgSlug: params.org! });
@@ -96,6 +98,17 @@ export default function PairwiseVoting() {
       return await response.json();
     },
     onSuccess: (responseData) => {
+      const progress = responseData.progress;
+      if (progress?.isComplete) {
+        announce("Vote recorded. All comparisons complete.", "polite");
+      } else if (typeof progress?.completedPairs === "number" && typeof progress?.totalPairs === "number") {
+        announce(
+          `Vote recorded. ${progress.completedPairs} of ${progress.totalPairs} comparisons complete.`,
+          "polite",
+        );
+      } else {
+        announce("Vote recorded.", "polite");
+      }
       // Backend returns next pair directly - update cache immediately
       if (responseData.nextPair !== undefined) {
         const queryKey = [`/api/spaces/${params.space}/participants/${participantId}/next-pair`];

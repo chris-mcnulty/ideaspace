@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
+import { useAnnouncer } from '@/components/LiveAnnouncer';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,6 +47,7 @@ export default function PriorityMatrix({
   isFacilitator = false,
 }: PriorityMatrixProps) {
   const { toast } = useToast();
+  const { announce } = useAnnouncer();
   const isMobile = useIsMobile();
   const matrixRef = useRef<HTMLDivElement>(null);
   const [draggedNote, setDraggedNote] = useState<DraggedNote | null>(null);
@@ -291,6 +293,73 @@ export default function PriorityMatrix({
     updateMatrixMutation.mutate({ xAxisLabel, yAxisLabel });
   };
 
+  const handleNoteKeyDown = (
+    e: React.KeyboardEvent<HTMLDivElement>,
+    noteId: string,
+    noteText: string,
+  ) => {
+    if (isReadOnly) return;
+    const STEP = 5;
+    const current = localPositions.get(noteId) || { x: 50, y: 50 };
+    let { x, y } = current;
+    let handled = false;
+    switch (e.key) {
+      case 'ArrowLeft':
+        x = Math.max(0, x - STEP);
+        handled = true;
+        break;
+      case 'ArrowRight':
+        x = Math.min(100, x + STEP);
+        handled = true;
+        break;
+      case 'ArrowUp':
+        y = Math.min(100, y + STEP);
+        handled = true;
+        break;
+      case 'ArrowDown':
+        y = Math.max(0, y - STEP);
+        handled = true;
+        break;
+      case 'Home':
+        x = 0;
+        y = 0;
+        handled = true;
+        break;
+      case 'End':
+        x = 100;
+        y = 100;
+        handled = true;
+        break;
+      case 'Enter':
+      case ' ': {
+        e.preventDefault();
+        e.stopPropagation();
+        updatePositionMutation.mutate({ noteId, xCoord: x, yCoord: y });
+        announce(
+          `Saved ${noteText.slice(0, 60)} at ${xAxisLabel} ${Math.round(x)} percent, ${yAxisLabel} ${Math.round(y)} percent.`,
+          'polite',
+        );
+        return;
+      }
+      default:
+        return;
+    }
+    if (!handled) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setLocalPositions((prev) => {
+      const next = new Map(prev);
+      next.set(noteId, { x, y });
+      localPositionsRef.current = next;
+      return next;
+    });
+    updatePositionMutation.mutate({ noteId, xCoord: x, yCoord: y });
+    announce(
+      `${xAxisLabel} ${Math.round(x)} percent, ${yAxisLabel} ${Math.round(y)} percent.`,
+      'polite',
+    );
+  };
+
   const isLoading = notesLoading || categoriesLoading || matrixLoading || positionsLoading;
 
   if (isLoading) {
@@ -415,10 +484,13 @@ export default function PriorityMatrix({
               const noteColor = category?.color || noteColors[hash % noteColors.length];
 
               const isSelected = selectedNoteId === note.id;
+              const ariaLabel = isReadOnly
+                ? `${displayText} at ${xAxisLabel} ${Math.round(position.x)} percent, ${yAxisLabel} ${Math.round(position.y)} percent`
+                : `${displayText}. ${xAxisLabel} ${Math.round(position.x)} percent, ${yAxisLabel} ${Math.round(position.y)} percent. Use arrow keys to move, Enter to save.`;
               return (
                 <div
                   key={note.id}
-                  className={`absolute transform -translate-x-1/2 -translate-y-1/2 ${
+                  className={`absolute transform -translate-x-1/2 -translate-y-1/2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-lg ${
                     isDragging ? 'z-50' : 'z-10'
                   } ${!isReadOnly ? (tapMode ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing') : ''} ${
                     isSelected ? 'ring-4 ring-primary rounded-lg' : ''
@@ -431,6 +503,10 @@ export default function PriorityMatrix({
                   }}
                   onPointerDown={(e) => handlePointerDown(e, note.id)}
                   onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => handleNoteKeyDown(e, note.id, displayText)}
+                  tabIndex={isReadOnly ? -1 : 0}
+                  role={isReadOnly ? undefined : 'button'}
+                  aria-label={ariaLabel}
                   data-testid={`note-${note.id}`}
                 >
                   <div 
