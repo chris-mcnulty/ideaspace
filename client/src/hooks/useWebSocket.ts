@@ -104,12 +104,14 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
           return;
         }
 
-        // Skip reconnect on terminal policy/protocol closes — retrying just
-        // causes thundering-herd retries against an unrecoverable error
-        // (e.g. expired session for a userId-scoped channel).
-        // 1000 normal, 1001 going-away, 1002 protocol error, 1003 unsupported
-        // data, 1008 policy violation, 1011 server error during auth.
-        const terminalCloseCodes = new Set([1000, 1001, 1002, 1003, 1008, 1011]);
+        // Skip reconnect on truly terminal closes — auth/policy/protocol
+        // failures where retrying cannot succeed. Recoverable codes like
+        // 1001 (going-away, e.g. server restart) and 1011 (transient server
+        // error) deliberately fall through to the backoff loop so the client
+        // re-attaches once the server is back.
+        // 1000 normal close, 1002 protocol error, 1003 unsupported data,
+        // 1008 policy violation.
+        const terminalCloseCodes = new Set([1000, 1002, 1003, 1008]);
         if (terminalCloseCodes.has(event.code)) {
           wsDebug('terminal close — not reconnecting', { code: event.code });
           return;

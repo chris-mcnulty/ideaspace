@@ -6736,7 +6736,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req, res) => {
       try {
         // Middleware has already resolved/validated the workspace ID.
-        res.json(getPresenceForSpace(req.params.spaceId));
+        // Only the count is returned — userIds are kept server-internal to
+        // avoid leaking participant/user identity to guests or other
+        // unprivileged callers who happen to have workspace access.
+        const { count } = getPresenceForSpace(req.params.spaceId);
+        res.json({ count });
       } catch (e) {
         res.status(500).json({ error: "Failed to fetch presence" });
       }
