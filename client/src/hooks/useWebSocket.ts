@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 
 interface WebSocketMessage {
   type: string;
@@ -9,11 +9,23 @@ interface UseWebSocketOptions {
   spaceId?: string;
   userId?: string;
   onMessage?: (message: WebSocketMessage) => void;
-  onOpen?: () => void;
+  onOpen?: (info: { reconnected: boolean; attempt: number }) => void;
   onClose?: () => void;
   onError?: (error: Event) => void;
   enabled?: boolean;
 }
+
+// Toggle `localStorage.setItem('WS_DEBUG', '1')` in the browser to enable
+// verbose WebSocket tracing without recompiling.
+const wsDebug = (...args: unknown[]) => {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage?.getItem('WS_DEBUG') === '1') {
+      console.log('[ws]', ...args);
+    }
+  } catch {
+    /* ignore — private mode etc. */
+  }
+};
 
 export function useWebSocket(options: UseWebSocketOptions = {}) {
   const {
@@ -27,11 +39,15 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   } = options;
 
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const intentionalCloseRef = useRef(false);
-  const maxReconnectAttempts = 5;
-  const reconnectDelay = 2000;
+  // Capped exponential backoff: 500ms, 1s, 2s, 4s, 8s, 16s, 30s (max).
+  const baseDelayMs = 500;
+  const maxDelayMs = 30_000;
+  const maxReconnectAttempts = 20;
+
+  const [isConnected, setIsConnected] = useState(false);
 
   // Stash the latest callbacks in refs so changing inline handlers doesn't
   // tear down and rebuild the socket on every render.
@@ -60,9 +76,12 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       wsRef.current = ws;
 
       ws.addEventListener('open', () => {
-        console.log('[WebSocket] Connected');
+        const attempt = reconnectAttemptsRef.current;
+        const reconnected = attempt > 0;
+        wsDebug('open', { reconnected, attempt });
         reconnectAttemptsRef.current = 0;
-        onOpenRef.current?.();
+        setIsConnected(true);
+        onOpenRef.current?.({ reconnected, attempt });
       });
 
       ws.addEventListener('message', (event) => {
@@ -70,12 +89,13 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
           const message = JSON.parse(event.data) as WebSocketMessage;
           onMessageRef.current?.(message);
         } catch (error) {
-          console.error('[WebSocket] Failed to parse message:', error);
+          console.error('[ws] Failed to parse message:', error);
         }
       });
 
-      ws.addEventListener('close', () => {
-        console.log('[WebSocket] Disconnected');
+      ws.addEventListener('close', (event) => {
+        wsDebug('close', { code: event.code, reason: event.reason });
+        setIsConnected(false);
         onCloseRef.current?.();
 
         // Skip reconnect if the close was intentional (cleanup/unmount)
@@ -84,23 +104,38 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
           return;
         }
 
-        // Attempt to reconnect
+        // Skip reconnect on terminal policy/protocol closes — retrying just
+        // causes thundering-herd retries against an unrecoverable error
+        // (e.g. expired session for a userId-scoped channel).
+        // 1000 normal, 1001 going-away, 1002 protocol error, 1003 unsupported
+        // data, 1008 policy violation, 1011 server error during auth.
+        const terminalCloseCodes = new Set([1000, 1001, 1002, 1003, 1008, 1011]);
+        if (terminalCloseCodes.has(event.code)) {
+          wsDebug('terminal close — not reconnecting', { code: event.code });
+          return;
+        }
+
         if (enabled && reconnectAttemptsRef.current < maxReconnectAttempts) {
-          reconnectAttemptsRef.current++;
-          console.log(`[WebSocket] Reconnecting... (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})`);
-          
+          const attempt = reconnectAttemptsRef.current + 1;
+          reconnectAttemptsRef.current = attempt;
+          // Exponential backoff capped at maxDelayMs, plus small jitter.
+          const expDelay = Math.min(baseDelayMs * 2 ** (attempt - 1), maxDelayMs);
+          const jitter = Math.floor(Math.random() * 250);
+          const delay = expDelay + jitter;
+          wsDebug('reconnect scheduled', { attempt, delay });
+
           reconnectTimeoutRef.current = setTimeout(() => {
             connect();
-          }, reconnectDelay);
+          }, delay);
         }
       });
 
       ws.addEventListener('error', (error) => {
-        console.error('[WebSocket] Error:', error);
+        wsDebug('error', error);
         onErrorRef.current?.(error);
       });
     } catch (error) {
-      console.error('[WebSocket] Connection error:', error);
+      console.error('[ws] Connection error:', error);
     }
   }, [enabled, spaceId, userId]);
 
@@ -121,7 +156,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(message));
     } else {
-      console.warn('[WebSocket] Cannot send message, connection not open');
+      wsDebug('send dropped — socket not open');
     }
   }, []);
 
@@ -138,6 +173,6 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   return {
     send,
     disconnect,
-    isConnected: wsRef.current?.readyState === WebSocket.OPEN,
+    isConnected,
   };
 }

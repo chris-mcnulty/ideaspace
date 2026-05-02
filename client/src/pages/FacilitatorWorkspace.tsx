@@ -384,12 +384,35 @@ export default function FacilitatorWorkspace() {
           predicate: (query) => query.queryKey.includes('survey-responses')
         });
         break;
+      case 'presence_changed':
+        setPresenceCount(typeof message.data?.count === 'number' ? message.data.count : null);
+        break;
     }
   }, [params.space, toast]);
+
+  // Live presence count surfaced from WS `presence_changed` events.
+  const [presenceCount, setPresenceCount] = useState<number | null>(null);
+
+  // On (re)connect, re-sync any cached state for this workspace by invalidating
+  // every query whose key references the space. This makes the client
+  // "replay missed state" after a transient disconnect — no manual refresh
+  // required.
+  const handleSocketOpen = useCallback(({ reconnected }: { reconnected: boolean; attempt: number }) => {
+    if (!reconnected || !params.space) return;
+    const space = params.space;
+    queryClient.invalidateQueries({
+      predicate: (query) =>
+        query.queryKey.some(
+          (k) =>
+            (typeof k === 'string' && (k === space || k.includes(`/spaces/${space}`))),
+        ),
+    });
+  }, [params.space]);
 
   useWebSocket({
     spaceId: params.space,
     onMessage: handleWebSocketMessage,
+    onOpen: handleSocketOpen,
     enabled: !!params.space,
   });
 
@@ -1252,6 +1275,12 @@ export default function FacilitatorWorkspace() {
           <h2 className="text-2xl font-bold">Participants</h2>
           <p className="text-muted-foreground mt-1">
             {participants.length} participant{participants.length !== 1 ? 's' : ''} in this workspace
+            {presenceCount !== null && (
+              <>
+                {" · "}
+                <span data-testid="text-presence-count">{presenceCount} live</span>
+              </>
+            )}
           </p>
         </div>
       </div>

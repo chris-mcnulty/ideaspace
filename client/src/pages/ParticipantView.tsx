@@ -133,6 +133,20 @@ export default function ParticipantView() {
   // WebSocket connection
   const { isConnected } = useWebSocket({
     spaceId: params.space,
+    onOpen: ({ reconnected }) => {
+      // After a reconnect, re-sync any cached space-scoped state we might
+      // have missed while disconnected. Match both path-style keys
+      // (`/api/spaces/${space}/...`) and segmented keys (`['/api/spaces', spaceId, ...]`).
+      if (!reconnected || !params.space) return;
+      const space = params.space;
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          query.queryKey.some(
+            (k) =>
+              typeof k === 'string' && (k === space || k.includes(`/spaces/${space}`)),
+          ),
+      });
+    },
     onMessage: (message) => {
       // Handle note events with visual feedback
       if (message.type === 'note_created') {

@@ -6570,8 +6570,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // WebSocket server for real-time updates
   const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
 
+  // Guarded debug logger — set WS_DEBUG=1 (server) to surface verbose tracing.
+  const WS_DEBUG = process.env.WS_DEBUG === "1" || process.env.WS_DEBUG === "true";
+  const wsDebug = (...args: unknown[]) => {
+    if (WS_DEBUG) console.log("[ws]", ...args);
+  };
+
   const clients = new Map<string, Set<WebSocket>>();
   const userClients = new Map<string, Set<WebSocket>>();
+  // Per-socket metadata so we can build presence rosters and reap stale sockets.
+  type WsMeta = { spaceId: string | null; userId: string | null; isAlive: boolean };
+  const wsMeta = new WeakMap<WebSocket, WsMeta>();
 
   wss.on("connection", async (ws, req) => {
     const url = new URL(req.url!, `http://${req.headers.host}`);
@@ -6602,6 +6611,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }
 
+    wsMeta.set(ws, { spaceId, userId, isAlive: true });
+
     if (spaceId) {
       if (!clients.has(spaceId)) clients.set(spaceId, new Set());
       clients.get(spaceId)!.add(ws);
@@ -6612,6 +6623,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       userClients.get(userId)!.add(ws);
     }
 
+    // Heartbeat: clients reply to server pings automatically (browsers
+    // auto-pong ping frames at the protocol layer); we mark the socket alive
+    // when the pong arrives. Sockets without a pong between sweeps get
+    // terminated.
+    ws.on("pong", () => {
+      const meta = wsMeta.get(ws);
+      if (meta) meta.isAlive = true;
+    });
+
+    if (spaceId) broadcastPresence(spaceId);
+
     ws.on("close", () => {
       if (spaceId) {
         const spaceClients = clients.get(spaceId);
@@ -6619,6 +6641,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           spaceClients.delete(ws);
           if (spaceClients.size === 0) clients.delete(spaceId);
         }
+        broadcastPresence(spaceId);
       }
       if (userId) {
         const uc = userClients.get(userId);
@@ -6627,6 +6650,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (uc.size === 0) userClients.delete(userId);
         }
       }
+      wsMeta.delete(ws);
+      wsDebug("close", { spaceId, userId });
     });
 
     ws.on("message", (data) => {
@@ -6641,7 +6666,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("WebSocket message error:", error);
       }
     });
+
+    wsDebug("connect", { spaceId, userId });
   });
+
+  // Sweep stale sockets every 30s. Any socket that didn't pong since the
+  // previous sweep is terminated and cleaned up via its close handler.
+  const HEARTBEAT_MS = 30_000;
+  const heartbeatInterval = setInterval(() => {
+    wss.clients.forEach((ws) => {
+      const meta = wsMeta.get(ws);
+      if (!meta) return;
+      if (!meta.isAlive) {
+        wsDebug("terminating stale socket", { spaceId: meta.spaceId, userId: meta.userId });
+        try { ws.terminate(); } catch { /* ignore */ }
+        return;
+      }
+      meta.isAlive = false;
+      try { ws.ping(); } catch { /* ignore */ }
+    });
+  }, HEARTBEAT_MS);
+  wss.on("close", () => clearInterval(heartbeatInterval));
 
   function broadcast(message: any) {
     const payload = JSON.stringify(message);
@@ -6665,6 +6710,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   }
+
+  // Presence: count currently-connected sockets per workspace and emit a
+  // `presence_changed` event whenever it changes. Facilitators can also poll
+  // via GET /api/spaces/:spaceId/presence.
+  function getPresenceForSpace(spaceId: string): { count: number; userIds: string[] } {
+    const set = clients.get(spaceId);
+    if (!set) return { count: 0, userIds: [] };
+    const userIds = new Set<string>();
+    set.forEach((sock) => {
+      const meta = wsMeta.get(sock);
+      if (meta?.userId) userIds.add(meta.userId);
+    });
+    return { count: set.size, userIds: Array.from(userIds) };
+  }
+  function broadcastPresence(spaceId: string) {
+    // Only broadcast count over the wire — userIds are PII and only returned
+    // to authorized callers via the GET endpoint below.
+    const { count } = getPresenceForSpace(spaceId);
+    broadcastToSpace(spaceId, { type: "presence_changed", data: { spaceId, count } });
+  }
+  app.get(
+    "/api/spaces/:spaceId/presence",
+    createWorkspaceAccessMiddleware({}),
+    async (req, res) => {
+      try {
+        // Middleware has already resolved/validated the workspace ID.
+        res.json(getPresenceForSpace(req.params.spaceId));
+      } catch (e) {
+        res.status(500).json({ error: "Failed to fetch presence" });
+      }
+    },
+  );
 
   function broadcastToUser(userId: string, message: any) {
     const payload = JSON.stringify(message);
