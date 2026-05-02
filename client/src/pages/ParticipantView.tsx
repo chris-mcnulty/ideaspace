@@ -23,6 +23,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { QueryErrorState } from "@/components/QueryErrorState";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { isPhaseActive } from "@/lib/phaseUtils";
 import type { Organization, Space, Note, Participant, Category, WorkspaceModule, Idea } from "@shared/schema";
@@ -61,7 +62,7 @@ export default function ParticipantView() {
     queryKey: [`/api/organizations/${params.org}`],
   });
 
-  const { data: space } = useQuery<Space>({
+  const { data: space, isLoading: spaceLoading, error: spaceError, refetch: refetchSpace, isFetching: isRefetchingSpace } = useQuery<Space>({
     queryKey: [`/api/spaces/${params.space}`],
   });
 
@@ -388,6 +389,22 @@ export default function ParticipantView() {
     const index = category.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
     return colors[index % colors.length];
   };
+
+  if (spaceError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-6">
+        <div className="w-full max-w-md">
+          <QueryErrorState
+            title="Couldn't load this workspace"
+            error={spaceError}
+            onRetry={() => refetchSpace()}
+            isRetrying={isRefetchingSpace}
+            testId="error-participant-space"
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen flex-col bg-background">

@@ -54,18 +54,15 @@ import FacilitatorConsoleExample from "@/components/examples/FacilitatorConsole"
 import ResultsTabsExample from "@/components/examples/ResultsTabs";
 import ReadoutViewerExample from "@/components/examples/ReadoutViewer";
 
-// Wouter's <Route component={...}> expects ComponentType<RouteComponentProps<any>>,
-// so the boundary HOC must return that exact shape. We accept any inbound
-// component (page components have varying prop signatures, including no props)
-// and forward the route props through unchanged.
+type RouteComponent = ComponentType<RouteComponentProps>;
+
 function withBoundary(
-  Component: ComponentType<RouteComponentProps<any>> | ComponentType<Record<string, never>>,
+  Component: ComponentType,
   scope: string,
-): ComponentType<RouteComponentProps<any>> {
-  const Inner = Component as ComponentType<RouteComponentProps<any>>;
-  const Wrapped: ComponentType<RouteComponentProps<any>> = (props) => (
+): RouteComponent {
+  const Wrapped: RouteComponent = () => (
     <ErrorBoundary scope={scope}>
-      <Inner {...props} />
+      <Component />
     </ErrorBoundary>
   );
   Wrapped.displayName = `WithBoundary(${scope})`;

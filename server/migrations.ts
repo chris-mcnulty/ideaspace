@@ -29,6 +29,37 @@ export async function ensureNotificationsTable(): Promise<void> {
   `);
 }
 
+/**
+ * Ensure the client_errors telemetry table exists.
+ * Idempotent; safe to run on every startup.
+ */
+export async function ensureClientErrorsTable(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS client_errors (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      scope text,
+      message text NOT NULL,
+      stack text,
+      component_stack text,
+      route text,
+      user_agent text,
+      user_id varchar,
+      participant_id varchar,
+      ip_address text,
+      created_at timestamp NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_client_errors_created
+    ON client_errors(created_at DESC);
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_client_errors_user_created
+    ON client_errors(user_id, created_at DESC);
+  `);
+}
+
 export async function runStartupMigrations(): Promise<void> {
   await ensureNotificationsTable();
+  await ensureClientErrorsTable();
 }

@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { QueryErrorState } from "@/components/QueryErrorState";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import BrandHeader from "@/components/BrandHeader";
 import { SynozurAppSwitcher } from "@/components/SynozurAppSwitcher";
@@ -408,7 +409,7 @@ export default function FacilitatorWorkspace() {
   });
 
   // Fetch space
-  const { data: space, isLoading: spaceLoading } = useQuery<Space>({
+  const { data: space, isLoading: spaceLoading, error: spaceError, refetch: refetchSpace, isFetching: isRefetchingSpace } = useQuery<Space>({
     queryKey: [`/api/spaces/${params.space}`],
   });
 
@@ -1200,6 +1201,22 @@ export default function FacilitatorWorkspace() {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <p className="text-muted-foreground">Loading workspace...</p>
+      </div>
+    );
+  }
+
+  if (spaceError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-6">
+        <div className="w-full max-w-md">
+          <QueryErrorState
+            title="Couldn't load this workspace"
+            error={spaceError}
+            onRetry={() => refetchSpace()}
+            isRetrying={isRefetchingSpace}
+            testId="error-facilitator-space"
+          />
+        </div>
       </div>
     );
   }
