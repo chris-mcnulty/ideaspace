@@ -33,6 +33,17 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   const maxReconnectAttempts = 5;
   const reconnectDelay = 2000;
 
+  // Stash the latest callbacks in refs so changing inline handlers doesn't
+  // tear down and rebuild the socket on every render.
+  const onMessageRef = useRef(onMessage);
+  const onOpenRef = useRef(onOpen);
+  const onCloseRef = useRef(onClose);
+  const onErrorRef = useRef(onError);
+  useEffect(() => { onMessageRef.current = onMessage; }, [onMessage]);
+  useEffect(() => { onOpenRef.current = onOpen; }, [onOpen]);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+  useEffect(() => { onErrorRef.current = onError; }, [onError]);
+
   const connect = useCallback(() => {
     if (!enabled) return;
 
@@ -51,13 +62,13 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       ws.addEventListener('open', () => {
         console.log('[WebSocket] Connected');
         reconnectAttemptsRef.current = 0;
-        onOpen?.();
+        onOpenRef.current?.();
       });
 
       ws.addEventListener('message', (event) => {
         try {
           const message = JSON.parse(event.data) as WebSocketMessage;
-          onMessage?.(message);
+          onMessageRef.current?.(message);
         } catch (error) {
           console.error('[WebSocket] Failed to parse message:', error);
         }
@@ -65,7 +76,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
 
       ws.addEventListener('close', () => {
         console.log('[WebSocket] Disconnected');
-        onClose?.();
+        onCloseRef.current?.();
 
         // Skip reconnect if the close was intentional (cleanup/unmount)
         if (intentionalCloseRef.current) {
@@ -86,12 +97,12 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
 
       ws.addEventListener('error', (error) => {
         console.error('[WebSocket] Error:', error);
-        onError?.(error);
+        onErrorRef.current?.(error);
       });
     } catch (error) {
       console.error('[WebSocket] Connection error:', error);
     }
-  }, [enabled, spaceId, userId, onMessage, onOpen, onClose, onError]);
+  }, [enabled, spaceId, userId]);
 
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
