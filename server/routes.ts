@@ -24,6 +24,7 @@ import { generateWorkspaceCode, isValidWorkspaceCode } from "./services/workspac
 import { sendAccessRequestEmail, sendEmailVerification, sendPasswordReset, sendSessionInviteEmail, sendPhaseChangeNotificationEmail, sendResultsAvailableEmail, sendBulkNotifications, type SessionInviteEmailData, type PhaseChangeEmailData, type ResultsReadyEmailData } from "./services/email";
 import { randomBytes } from "crypto";
 import { fileUploadService } from "./services/file-upload";
+import { extractAndChunk } from "./services/kbExtraction";
 
 // Extend express-session types to include participantId
 declare module "express-session" {
@@ -2549,6 +2550,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Best-effort: extract text and persist FTS chunks. Don't fail the
+      // upload if extraction errors — the document is still usable for
+      // download even without searchable content.
+      try {
+        const extracted = await extractAndChunk(uploadedFile.filePath, uploadedFile.mimeType);
+        if (extracted.supported && extracted.chunks.length > 0) {
+          await storage.createKnowledgeBaseChunks(
+            extracted.chunks.map((content, chunkIndex) => ({
+              documentId: document.id,
+              chunkIndex,
+              content,
+            })),
+          );
+        } else if (!extracted.supported) {
+          console.info(`[kb-upload] No text extraction for ${uploadedFile.mimeType} doc ${document.id}; FTS will skip it.`);
+        }
+      } catch (extractErr) {
+        console.warn(`[kb-upload] Chunk extraction failed for doc ${document.id}:`, extractErr);
+      }
+
       res.status(201).json(document);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -2644,6 +2665,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Failed to fetch documents:", error);
       res.status(500).json({ error: "Failed to fetch documents" });
+    }
+  });
+
+  // Full-text search across knowledge base chunks (scoped by viewer's role).
+  app.get("/api/knowledge-base/search", requireAuth, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+      const scope = typeof req.query.scope === 'string' ? req.query.scope : 'system';
+      const scopeId = typeof req.query.scopeId === 'string' ? req.query.scopeId : undefined;
+      const limitRaw = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : 8;
+      const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(20, limitRaw)) : 8;
+
+      if (!q) {
+        return res.json({ query: '', results: [] });
+      }
+
+      // Scope-based permission + parameter assembly
+      const params: { query: string; spaceId?: string; organizationId?: string; includeSystem?: boolean; limit: number } = {
+        query: q,
+        limit,
+        includeSystem: true,
+      };
+
+      if (scope === 'system') {
+        if (currentUser.role !== 'global_admin') {
+          return res.status(403).json({ error: 'Only global admins can search system documents' });
+        }
+        // System-only: do not surface org/workspace docs.
+        // (no extra filters needed)
+      } else if (scope === 'organization') {
+        if (!scopeId) return res.status(400).json({ error: 'scopeId required for organization scope' });
+        if (currentUser.role !== 'global_admin') {
+          if (currentUser.role !== 'company_admin' || currentUser.organizationId !== scopeId) {
+            const cas = await storage.getCompanyAdminsByUser(currentUser.id);
+            if (!cas.some((ca) => ca.organizationId === scopeId)) {
+              return res.status(403).json({ error: 'Insufficient permissions' });
+            }
+          }
+        }
+        params.organizationId = scopeId;
+      } else if (scope === 'workspace') {
+        if (!scopeId) return res.status(400).json({ error: 'scopeId required for workspace scope' });
+        const space = await storage.getSpace(scopeId);
+        if (!space) return res.status(404).json({ error: 'Workspace not found' });
+        let ok = false;
+        if (currentUser.role === 'global_admin') ok = true;
+        else if (currentUser.role === 'company_admin' && currentUser.organizationId === space.organizationId) ok = true;
+        else {
+          const facs = await storage.getSpaceFacilitatorsBySpace(scopeId);
+          ok = facs.some((f) => f.userId === currentUser.id);
+        }
+        if (!ok) return res.status(403).json({ error: 'Insufficient permissions' });
+        params.spaceId = scopeId;
+        params.organizationId = space.organizationId;
+      } else {
+        return res.status(400).json({ error: 'Invalid scope' });
+      }
+
+      const results = await storage.searchKnowledgeBaseChunks(params);
+      res.json({ query: q, results });
+    } catch (error) {
+      console.error('Failed to search knowledge base:', error);
+      res.status(500).json({ error: 'Failed to search knowledge base' });
     }
   });
 

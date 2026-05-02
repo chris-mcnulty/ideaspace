@@ -40,6 +40,8 @@ import {
   type InsertKnowledgeBaseDocument,
   type DocumentWorkspaceAccess,
   type InsertDocumentWorkspaceAccess,
+  type KnowledgeBaseChunk,
+  type InsertKnowledgeBaseChunk,
   type WorkspaceTemplate,
   type InsertWorkspaceTemplate,
   type WorkspaceTemplateNote,
@@ -96,6 +98,7 @@ import {
   emailVerificationTokens,
   passwordResetTokens,
   knowledgeBaseDocuments,
+  knowledgeBaseChunks,
   documentWorkspaceAccess,
   workspaceTemplates,
   workspaceTemplateNotes,
@@ -301,6 +304,18 @@ export interface IStorage {
   deleteKnowledgeBaseDocument(id: string): Promise<boolean>;
   createDocumentWorkspaceAccess(access: InsertDocumentWorkspaceAccess): Promise<DocumentWorkspaceAccess>;
   getDocumentWorkspaceAccesses(documentId: string): Promise<DocumentWorkspaceAccess[]>;
+
+  // Knowledge Base Chunks (full-text search)
+  createKnowledgeBaseChunks(chunks: InsertKnowledgeBaseChunk[]): Promise<KnowledgeBaseChunk[]>;
+  deleteKnowledgeBaseChunksByDocument(documentId: string): Promise<number>;
+  getKnowledgeBaseChunksByDocument(documentId: string): Promise<KnowledgeBaseChunk[]>;
+  searchKnowledgeBaseChunks(params: {
+    query: string;
+    spaceId?: string;
+    organizationId?: string;
+    includeSystem?: boolean;
+    limit?: number;
+  }): Promise<Array<KnowledgeBaseChunk & { documentTitle: string; rank: number; snippet: string }>>;
 
   // Workspace Templates
   getWorkspaceTemplate(id: string): Promise<WorkspaceTemplate | undefined>;
@@ -1546,6 +1561,97 @@ export class DbStorage implements IStorage {
   async deleteKnowledgeBaseDocument(id: string): Promise<boolean> {
     const result = await db.delete(knowledgeBaseDocuments).where(eq(knowledgeBaseDocuments.id, id));
     return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Knowledge Base Chunks
+  async createKnowledgeBaseChunks(chunks: InsertKnowledgeBaseChunk[]): Promise<KnowledgeBaseChunk[]> {
+    if (chunks.length === 0) return [];
+    const rows = chunks.map((c) => ({
+      documentId: c.documentId,
+      chunkIndex: c.chunkIndex,
+      content: c.content,
+      searchVector: sql`to_tsvector('english', ${c.content})` as any,
+    }));
+    return db.insert(knowledgeBaseChunks).values(rows as any).returning();
+  }
+
+  async deleteKnowledgeBaseChunksByDocument(documentId: string): Promise<number> {
+    const result = await db.delete(knowledgeBaseChunks).where(eq(knowledgeBaseChunks.documentId, documentId));
+    return result.rowCount ?? 0;
+  }
+
+  async getKnowledgeBaseChunksByDocument(documentId: string): Promise<KnowledgeBaseChunk[]> {
+    return db.select().from(knowledgeBaseChunks)
+      .where(eq(knowledgeBaseChunks.documentId, documentId))
+      .orderBy(knowledgeBaseChunks.chunkIndex);
+  }
+
+  async searchKnowledgeBaseChunks(params: {
+    query: string;
+    spaceId?: string;
+    organizationId?: string;
+    includeSystem?: boolean;
+    limit?: number;
+  }): Promise<Array<KnowledgeBaseChunk & { documentTitle: string; rank: number; snippet: string }>> {
+    const { query, spaceId, organizationId, includeSystem = true, limit = 8 } = params;
+    if (!query || !query.trim()) return [];
+
+    // Build scope predicate. We always allow system docs unless caller opts out.
+    const scopeClauses: any[] = [];
+    if (includeSystem) {
+      scopeClauses.push(sql`${knowledgeBaseDocuments.scope} = 'system'`);
+    }
+    if (organizationId) {
+      scopeClauses.push(
+        sql`(${knowledgeBaseDocuments.scope} = 'organization' AND ${knowledgeBaseDocuments.organizationId} = ${organizationId})`,
+      );
+    }
+    if (spaceId) {
+      scopeClauses.push(
+        sql`(${knowledgeBaseDocuments.scope} = 'workspace' AND ${knowledgeBaseDocuments.spaceId} = ${spaceId})`,
+      );
+      // Multi-workspace docs surfaced through documentWorkspaceAccess
+      scopeClauses.push(sql`(
+        ${knowledgeBaseDocuments.scope} = 'multi_workspace' AND EXISTS (
+          SELECT 1 FROM ${documentWorkspaceAccess}
+          WHERE ${documentWorkspaceAccess.documentId} = ${knowledgeBaseDocuments.id}
+            AND ${documentWorkspaceAccess.spaceId} = ${spaceId}
+        )
+      )`);
+    }
+    if (scopeClauses.length === 0) return [];
+
+    const scopeSql = scopeClauses.reduce((acc, cur, i) =>
+      i === 0 ? cur : sql`${acc} OR ${cur}`,
+    );
+
+    const rows = await db.execute(sql`
+      SELECT
+        c.id, c.document_id AS "documentId", c.chunk_index AS "chunkIndex",
+        c.content, c.created_at AS "createdAt",
+        d.title AS "documentTitle",
+        ts_rank_cd(c.search_vector, plainto_tsquery('english', ${query})) AS rank,
+        ts_headline('english', c.content, plainto_tsquery('english', ${query}),
+          'MaxWords=35, MinWords=15, ShortWord=3, MaxFragments=2') AS snippet
+      FROM ${knowledgeBaseChunks} c
+      INNER JOIN ${knowledgeBaseDocuments} d ON d.id = c.document_id
+      WHERE c.search_vector @@ plainto_tsquery('english', ${query})
+        AND (${scopeSql})
+      ORDER BY rank DESC
+      LIMIT ${limit}
+    `);
+
+    return (rows.rows as any[]).map((r) => ({
+      id: r.id,
+      documentId: r.documentId,
+      chunkIndex: r.chunkIndex,
+      content: r.content,
+      searchVector: null as any,
+      createdAt: r.createdAt,
+      documentTitle: r.documentTitle,
+      rank: Number(r.rank),
+      snippet: r.snippet,
+    }));
   }
 
   async createDocumentWorkspaceAccess(access: InsertDocumentWorkspaceAccess): Promise<DocumentWorkspaceAccess> {

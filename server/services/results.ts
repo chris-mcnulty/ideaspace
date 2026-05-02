@@ -4,6 +4,15 @@ import { notes, votes, rankings, marketplaceAllocations, participants, spaces, k
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { CohortResult, PersonalizedResult } from "@shared/schema";
+import { storage } from "../storage";
+import { logAiUsage, extractUsageMetrics } from "./aiUsageLogger";
+import {
+  computeCohortInputsHash,
+  computePersonalizedInputsHash,
+  findCachedCohortResult,
+  findCachedPersonalizedResult,
+  type CohortInputs,
+} from "./resultsCache";
 
 // Schema for validating AI-generated cohort results
 const CohortResultSchema = z.object({
@@ -324,20 +333,63 @@ export async function generateCohortResults(
     return (a.id || '').localeCompare(b.id || '');
   });
 
-  // Fetch knowledge base documents for context (workspace, organization, and system level)
-  const kbDocs = await db
-    .select()
-    .from(knowledgeBaseDocuments)
-    .where(
-      sql`(${knowledgeBaseDocuments.scope} = 'workspace' AND ${knowledgeBaseDocuments.spaceId} = ${spaceId}) OR 
-          (${knowledgeBaseDocuments.scope} = 'organization' AND ${knowledgeBaseDocuments.organizationId} = ${space.organizationId}) OR 
-          ${knowledgeBaseDocuments.scope} = 'system'`
-    );
+  // Build a focused FTS query from the workspace's purpose + top-ranked note
+  // contents so we retrieve only the most relevant KB passages instead of
+  // dumping every document's title/description.
+  const queryTerms = [
+    space.purpose || '',
+    ...notesWithScores.slice(0, 12).map((n: any) => n.content || ''),
+  ].join(' ').slice(0, 4000);
 
-  // Build context for AI
-  const kbContext = kbDocs.length > 0
-    ? `\n\nRelevant Knowledge Base Documents:\n${kbDocs.map((doc: any) => `- ${doc.title}: ${doc.description || 'No description'}`).join('\n')}`
+  const kbChunks = queryTerms.trim().length > 0
+    ? await storage.searchKnowledgeBaseChunks({
+        query: queryTerms,
+        spaceId,
+        organizationId: space.organizationId ?? undefined,
+        includeSystem: true,
+        limit: 8,
+      })
+    : [];
+
+  const kbContext = kbChunks.length > 0
+    ? `\n\nRelevant Knowledge Base Excerpts (top ${kbChunks.length} matches):\n${kbChunks
+        .map((c) => `- [${c.documentTitle}] ${c.content.replace(/\s+/g, ' ').slice(0, 800)}`)
+        .join('\n')}`
     : '';
+
+  // Compute hash over all inputs so re-generations on identical state can be
+  // served from cache instead of re-calling OpenAI.
+  const cohortInputs: CohortInputs = {
+    spaceId,
+    notes: allNotes.map((n: any) => ({ id: n.id, content: n.content, manualCategoryId: n.manualCategoryId ?? null })),
+    votes: pairwiseVotes.map((v: any) => ({ winnerNoteId: v.winnerNoteId, loserNoteId: v.loserNoteId })),
+    rankings: rankingData.map((r: any) => ({ noteId: r.noteId, rank: r.rank, participantId: r.participantId })),
+    marketplaceAllocations: marketplaceData.map((a: any) => ({ noteId: a.noteId, participantId: a.participantId, coinsAllocated: a.coinsAllocated })),
+    matrixPositions: Array.from(matrixPositionsByNote.entries()).map(([noteId, p]) => ({ noteId, xCoord: p.x, yCoord: p.y })),
+    staircasePositions: Array.from(staircaseScoresByNote.entries()).map(([noteId, score]) => ({ noteId, score })),
+    surveyResponses: hasSurvey
+      ? (await db.select().from(surveyResponses).where(eq(surveyResponses.spaceId, spaceId)))
+          .map((r: any) => ({ noteId: r.noteId, questionId: r.questionId, participantId: r.participantId, score: r.score }))
+      : [],
+    enabledModules: enabledModuleTypes,
+    kbChunkIds: kbChunks.map((c) => c.id),
+  };
+  const inputsHash = computeCohortInputsHash(cohortInputs);
+
+  const cached = await findCachedCohortResult(spaceId, inputsHash);
+  if (cached) {
+    // Track the cache hit so we can report token savings.
+    await logAiUsage({
+      organizationId: space.organizationId ?? undefined,
+      spaceId,
+      userId: generatedBy,
+      modelName: 'gpt-4o',
+      operation: 'cohort-results-cache-hit',
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      metadata: { cacheHit: true, cohortResultId: cached.id, inputsHash },
+    });
+    return cached;
+  }
 
   // Build module-aware data summary
   const enabledModulesDescription = [
@@ -458,6 +510,24 @@ Include ALL ideas in the topIdeas array, ranked by combined score (highest to lo
   const parsed = JSON.parse(rawResponse);
   const validated = CohortResultSchema.parse(parsed);
 
+  // Track AI token usage for cost monitoring.
+  const usage = extractUsageMetrics(completion);
+  if (usage) {
+    await logAiUsage({
+      organizationId: space.organizationId ?? undefined,
+      spaceId,
+      userId: generatedBy,
+      modelName: 'gpt-4o',
+      operation: 'cohort-results',
+      usage,
+      metadata: {
+        cacheHit: false,
+        kbChunks: kbChunks.length,
+        inputsHash,
+      },
+    });
+  }
+
   // Save to database
   const [cohortResult] = await db
     .insert(cohortResults)
@@ -469,11 +539,14 @@ Include ALL ideas in the topIdeas array, ranked by combined score (highest to lo
       topIdeas: validated.topIdeas,
       insights: validated.insights,
       recommendations: validated.recommendations || null,
+      inputsHash,
       metadata: {
         totalNotes: allNotes.length,
         totalVotes: pairwiseVotes.length,
         totalRankings: rankingData.length,
         totalAllocations: marketplaceData.length,
+        kbChunks: kbChunks.length,
+        kbChunkIds: kbChunks.map((c) => c.id),
         generatedAt: new Date().toISOString(),
       },
     })
@@ -787,6 +860,27 @@ async function generatePersonalizedResultsFromCache(params: {
     winsByNote, comparisonsByNote, categoryNameById,
   } = params;
 
+  // Personalized results are deterministic per (cohort, participant, cohort
+  // inputs hash). If the cohort result was served from cache and we already
+  // have a personalized row matching it, skip the OpenAI round-trip.
+  const personalHash = computePersonalizedInputsHash({
+    spaceId,
+    participantId: participant.id,
+    cohortResultId: cohortResultId || null,
+    inputsHash: cohortResult?.inputsHash || cohortResultId || '',
+  });
+  const cachedPersonal = await findCachedPersonalizedResult(spaceId, participant.id, personalHash);
+  if (cachedPersonal) {
+    await logAiUsage({
+      spaceId,
+      modelName: 'gpt-4o',
+      operation: 'personalized-results-cache-hit',
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      metadata: { cacheHit: true, personalizedResultId: cachedPersonal.id, personalHash },
+    });
+    return cachedPersonal;
+  }
+
   const noteImpact = participantNotes.map((note) => {
     const wins = winsByNote.get(note.id) ?? 0;
     const totalComparisons = comparisonsByNote.get(note.id) ?? 0;
@@ -877,6 +971,17 @@ Include their top 3 contributions in topContributions array.`,
   const parsed = JSON.parse(rawResponse);
   const validated = PersonalizedResultSchema.parse(parsed);
 
+  const personalUsage = extractUsageMetrics(completion);
+  if (personalUsage) {
+    await logAiUsage({
+      spaceId,
+      modelName: 'gpt-4o',
+      operation: 'personalized-results',
+      usage: personalUsage,
+      metadata: { cacheHit: false, personalHash, participantId: participant.id },
+    });
+  }
+
   const [personalResult] = await db
     .insert(personalizedResults)
     .values({
@@ -888,6 +993,7 @@ Include their top 3 contributions in topContributions array.`,
       topContributions: validated.topContributions,
       insights: validated.insights,
       recommendations: validated.recommendations || null,
+      inputsHash: personalHash,
     })
     .returning();
 

@@ -1,7 +1,16 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, boolean, integer, jsonb, real, unique, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, boolean, integer, jsonb, real, unique, index, customType } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// Custom Postgres tsvector column type for full-text search.
+// Drizzle treats it as a string at the application layer; we always set it
+// from server-side `to_tsvector('english', ...)` SQL expressions.
+export const tsvector = customType<{ data: string; driverData: string }>({
+  dataType() {
+    return "tsvector";
+  },
+});
 
 // System-wide and organization-level settings table
 // For system-wide settings: organizationId is null
@@ -335,6 +344,21 @@ export const knowledgeBaseDocuments = pgTable("knowledge_base_documents", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Knowledge Base Chunks: Extracted text chunks from KB documents, indexed for full-text search.
+// Populated on upload (and via backfill) so AI grounding can retrieve only the most relevant
+// passages instead of dumping whole documents into the prompt.
+export const knowledgeBaseChunks = pgTable("knowledge_base_chunks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  documentId: varchar("document_id").notNull().references(() => knowledgeBaseDocuments.id, { onDelete: "cascade" }),
+  chunkIndex: integer("chunk_index").notNull(), // 0-based ordering within the document
+  content: text("content").notNull(), // Plain-text chunk (~500 words)
+  searchVector: tsvector("search_vector"), // Populated via to_tsvector('english', content) on insert
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  documentIdx: index("idx_kb_chunks_document").on(table.documentId),
+  searchVectorIdx: index("idx_kb_chunks_search_vector").using("gin", table.searchVector),
+}));
+
 // Document Workspace Access: Junction table for multi-workspace document sharing
 export const documentWorkspaceAccess = pgTable("document_workspace_access", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -410,10 +434,12 @@ export const cohortResults = pgTable("cohort_results", {
   insights: text("insights").notNull(), // AI-generated insights from the data
   recommendations: text("recommendations"), // Actionable recommendations for the cohort
   metadata: jsonb("metadata"), // Additional data: voting stats, participation stats, etc.
+  inputsHash: text("inputs_hash"), // sha256 of inputs (notes/votes/rankings/modules/kb chunks) for cache lookup
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   spaceIdx: index("idx_cohort_results_space").on(table.spaceId),
+  inputsHashIdx: index("idx_cohort_results_inputs_hash").on(table.spaceId, table.inputsHash),
 }));
 
 // Personalized Results: AI-generated insights tailored to individual participants
@@ -427,11 +453,13 @@ export const personalizedResults = pgTable("personalized_results", {
   topContributions: jsonb("top_contributions"), // Their most impactful ideas
   insights: text("insights").notNull(), // Personalized insights
   recommendations: text("recommendations"), // Personalized next steps
+  inputsHash: text("inputs_hash"), // sha256 of inputs for cache lookup
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   spaceIdx: index("idx_personalized_results_space").on(table.spaceId),
   participantIdx: index("idx_personalized_results_participant").on(table.participantId),
+  participantHashIdx: index("idx_personalized_results_participant_hash").on(table.participantId, table.inputsHash),
 }));
 
 // IDEAS-CENTRIC ARCHITECTURE: Core idea entities independent of modules
@@ -791,6 +819,14 @@ export const insertDocumentWorkspaceAccessSchema = createInsertSchema(documentWo
   id: true,
   createdAt: true,
 });
+
+export const insertKnowledgeBaseChunkSchema = createInsertSchema(knowledgeBaseChunks).omit({
+  id: true,
+  createdAt: true,
+  searchVector: true,
+});
+export type InsertKnowledgeBaseChunk = z.infer<typeof insertKnowledgeBaseChunkSchema>;
+export type KnowledgeBaseChunk = typeof knowledgeBaseChunks.$inferSelect;
 
 export const insertWorkspaceTemplateSchema = createInsertSchema(workspaceTemplates).omit({
   id: true,

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Upload, FileText, Trash2, Download } from "lucide-react";
+import { Upload, FileText, Trash2, Download, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { KnowledgeBaseDocument, Space } from "@shared/schema";
 
@@ -38,6 +38,37 @@ export function KnowledgeBaseManager({ scope, scopeId, title, description }: Kno
   const [documentDescription, setDocumentDescription] = useState("");
   const [workspaceSelectionMode, setWorkspaceSelectionMode] = useState<'all' | 'specific'>('all');
   const [selectedWorkspaceIds, setSelectedWorkspaceIds] = useState<string[]>([]);
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Debounce search input to avoid hammering the FTS endpoint on every keystroke.
+  useEffect(() => {
+    const handle = setTimeout(() => setSearchQuery(searchInput.trim()), 300);
+    return () => clearTimeout(handle);
+  }, [searchInput]);
+
+  interface KbSearchHit {
+    id: string;
+    documentId: string;
+    documentTitle: string;
+    chunkIndex: number;
+    snippet: string;
+    rank: number;
+  }
+
+  const { data: searchData, isFetching: searchFetching } = useQuery<{ query: string; results: KbSearchHit[] }>({
+    queryKey: ['/api/knowledge-base/search', scope, scopeId, searchQuery],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.append('q', searchQuery);
+      params.append('scope', scope);
+      if (scopeId) params.append('scopeId', scopeId);
+      const response = await fetch(`/api/knowledge-base/search?${params}`, { credentials: 'include' });
+      if (!response.ok) throw new Error('Search failed');
+      return response.json();
+    },
+    enabled: searchQuery.length >= 2,
+  });
 
   const queryKey = scopeId
     ? ["/api/knowledge-base/documents", scope, scopeId]
@@ -342,6 +373,65 @@ export function KnowledgeBaseManager({ scope, scopeId, title, description }: Kno
         </div>
       </CardHeader>
       <CardContent>
+        <div className="mb-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search inside documents..."
+              className="pl-9 pr-9"
+              data-testid="input-kb-search"
+            />
+            {searchInput && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                onClick={() => setSearchInput("")}
+                data-testid="button-kb-search-clear"
+                aria-label="Clear search"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+          {searchQuery.length >= 2 && (
+            <div className="mt-3 space-y-2" data-testid="kb-search-results">
+              {searchFetching ? (
+                <p className="text-sm text-muted-foreground">Searching...</p>
+              ) : !searchData || searchData.results.length === 0 ? (
+                <p className="text-sm text-muted-foreground" data-testid="text-kb-search-empty">
+                  No matches found.
+                </p>
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    {searchData.results.length} match{searchData.results.length === 1 ? '' : 'es'}
+                  </p>
+                  {searchData.results.map((hit) => (
+                    <div
+                      key={hit.id}
+                      className="rounded-md border p-3"
+                      data-testid={`kb-search-hit-${hit.id}`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-sm font-medium truncate">{hit.documentTitle}</span>
+                        <Badge variant="outline" className="text-xs">chunk {hit.chunkIndex + 1}</Badge>
+                      </div>
+                      <p
+                        className="text-sm text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground"
+                        // ts_headline returns <b>...</b> wrappers around matches; safe because Postgres only injects bold tags around our own content.
+                        dangerouslySetInnerHTML={{ __html: hit.snippet }}
+                      />
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+        </div>
         {isLoading ? (
           <div className="text-center py-8 text-muted-foreground" data-testid="loading-documents">
             Loading documents...
