@@ -6,7 +6,7 @@ import { setupAuth } from "./auth";
 import { ensureUploadDirs } from "./middleware/uploadMiddleware";
 import { pool } from "./db";
 import { sessionMiddleware } from "./session";
-import { ensureNotificationsTable, ensureClientErrorsTable, ensurePerformanceIndexes } from "./migrations";
+import { ensureNotificationsTable, ensureClientErrorsTable } from "./migrations";
 
 const app = express();
 
@@ -36,30 +36,22 @@ app.use(passport.session());
 // Setup passport authentication strategies
 setupAuth();
 
+// Slow-handler timing middleware: in non-production, log API requests that
+// take longer than SLOW_HANDLER_MS (default 200ms) so performance regressions
+// are visible during development without flooding logs in production.
+const SLOW_HANDLER_MS = parseInt(process.env.SLOW_HANDLER_MS || "200", 10);
 app.use((req, res, next) => {
+  if (process.env.NODE_ENV === "production") {
+    return next();
+  }
   const start = Date.now();
   const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
 
   res.on("finish", () => {
+    if (!path.startsWith("/api")) return;
     const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
-      log(logLine);
+    if (duration >= SLOW_HANDLER_MS) {
+      log(`SLOW ${req.method} ${path} ${res.statusCode} in ${duration}ms`);
     }
   });
 
@@ -80,7 +72,6 @@ app.use((req, res, next) => {
   try {
     await ensureNotificationsTable();
     await ensureClientErrorsTable();
-    await ensurePerformanceIndexes();
   } catch (error) {
     console.error("Failed to run startup migrations:", error);
   }

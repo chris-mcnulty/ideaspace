@@ -647,24 +647,89 @@ Include their top 3 contributions in topContributions array.`,
 }
 
 /**
- * Batch generate personalized results for all participants in a workspace
+ * Batch generate personalized results for all participants in a workspace.
+ *
+ * Pre-fetches every workspace-scoped table once (participants/notes/votes/
+ * rankings/marketplace_allocations + the cohort result), then groups by
+ * participantId in memory so the per-participant AI loop only issues OpenAI
+ * calls — no per-participant DB round-trips.
  */
 export async function generateAllPersonalizedResults(
   spaceId: string,
   cohortResultId: string
 ): Promise<PersonalizedResult[]> {
-  // Fetch all participants
-  const allParticipants = await db
-    .select()
-    .from(participants)
-    .where(eq(participants.spaceId, spaceId));
+  // Pre-batch every per-space dataset that generatePersonalizedResults needs.
+  const [
+    allParticipants,
+    allNotes,
+    allVotes,
+    allRankings,
+    allAllocations,
+    cohortResultRow,
+  ] = await Promise.all([
+    db.select().from(participants).where(eq(participants.spaceId, spaceId)),
+    db.select().from(notes).where(eq(notes.spaceId, spaceId)),
+    db.select().from(votes).where(eq(votes.spaceId, spaceId)),
+    db.select().from(rankings).where(eq(rankings.spaceId, spaceId)),
+    db.select().from(marketplaceAllocations).where(eq(marketplaceAllocations.spaceId, spaceId)),
+    db.select().from(cohortResults).where(eq(cohortResults.id, cohortResultId)).limit(1),
+  ]);
+
+  const cohortResult: CohortResult | null = cohortResultRow[0] || null;
+
+  // Group per-participant collections once so each participant lookup is O(1).
+  const notesByParticipant = new Map<string, typeof allNotes>();
+  for (const n of allNotes) {
+    if (!n.participantId) continue;
+    const list = notesByParticipant.get(n.participantId) ?? [];
+    list.push(n);
+    notesByParticipant.set(n.participantId, list);
+  }
+  const votesByParticipant = new Map<string, typeof allVotes>();
+  for (const v of allVotes) {
+    const list = votesByParticipant.get(v.participantId) ?? [];
+    list.push(v);
+    votesByParticipant.set(v.participantId, list);
+  }
+  const rankingsByParticipant = new Map<string, typeof allRankings>();
+  for (const r of allRankings) {
+    const list = rankingsByParticipant.get(r.participantId) ?? [];
+    list.push(r);
+    rankingsByParticipant.set(r.participantId, list);
+  }
+  const allocationsByParticipant = new Map<string, typeof allAllocations>();
+  for (const a of allAllocations) {
+    const list = allocationsByParticipant.get(a.participantId) ?? [];
+    list.push(a);
+    allocationsByParticipant.set(a.participantId, list);
+  }
+
+  // Pre-compute global vote tallies per note (used to score every participant's
+  // contributions). Avoids re-scanning allVotes for each participant.
+  const winsByNote = new Map<string, number>();
+  const comparisonsByNote = new Map<string, number>();
+  for (const v of allVotes) {
+    winsByNote.set(v.winnerNoteId, (winsByNote.get(v.winnerNoteId) ?? 0) + 1);
+    comparisonsByNote.set(v.winnerNoteId, (comparisonsByNote.get(v.winnerNoteId) ?? 0) + 1);
+    comparisonsByNote.set(v.loserNoteId, (comparisonsByNote.get(v.loserNoteId) ?? 0) + 1);
+  }
 
   const results: PersonalizedResult[] = [];
 
-  // Generate results for each participant
   for (const participant of allParticipants) {
     try {
-      const result = await generatePersonalizedResults(spaceId, participant.id, cohortResultId);
+      const result = await generatePersonalizedResultsFromCache({
+        spaceId,
+        cohortResultId,
+        participant,
+        cohortResult,
+        participantNotes: notesByParticipant.get(participant.id) ?? [],
+        participantVotes: votesByParticipant.get(participant.id) ?? [],
+        participantRankings: rankingsByParticipant.get(participant.id) ?? [],
+        participantAllocations: allocationsByParticipant.get(participant.id) ?? [],
+        winsByNote,
+        comparisonsByNote,
+      });
       results.push(result);
     } catch (error) {
       console.error(`Failed to generate results for participant ${participant.id}:`, error);
@@ -673,4 +738,137 @@ export async function generateAllPersonalizedResults(
   }
 
   return results;
+}
+
+type ParticipantRow = typeof participants.$inferSelect;
+type NoteRow = typeof notes.$inferSelect;
+type VoteRow = typeof votes.$inferSelect;
+type RankingRow = typeof rankings.$inferSelect;
+type AllocationRow = typeof marketplaceAllocations.$inferSelect;
+
+/**
+ * AI + persistence half of generatePersonalizedResults, operating purely on
+ * pre-fetched data (no DB reads). Used by generateAllPersonalizedResults to
+ * avoid per-participant round-trips.
+ */
+async function generatePersonalizedResultsFromCache(params: {
+  spaceId: string;
+  cohortResultId: string;
+  participant: ParticipantRow;
+  cohortResult: CohortResult | null;
+  participantNotes: NoteRow[];
+  participantVotes: VoteRow[];
+  participantRankings: RankingRow[];
+  participantAllocations: AllocationRow[];
+  winsByNote: Map<string, number>;
+  comparisonsByNote: Map<string, number>;
+}): Promise<PersonalizedResult> {
+  const {
+    spaceId, cohortResultId, participant, cohortResult,
+    participantNotes, participantVotes, participantRankings, participantAllocations,
+    winsByNote, comparisonsByNote,
+  } = params;
+
+  const noteImpact = participantNotes.map((note) => {
+    const wins = winsByNote.get(note.id) ?? 0;
+    const totalComparisons = comparisonsByNote.get(note.id) ?? 0;
+    return {
+      noteId: note.id,
+      content: note.content,
+      wins,
+      totalComparisons,
+      winRate: totalComparisons > 0 ? wins / totalComparisons : 0,
+    };
+  });
+
+  noteImpact.sort((a, b) => b.winRate - a.winRate);
+
+  const personalContext = `
+Participant: ${participant.displayName}
+
+Contributions:
+- Total Ideas: ${participantNotes.length}
+- Ideas by Category: ${Object.entries(
+    participantNotes.reduce<Record<string, number>>((acc, note) => {
+      const cat = note.manualCategoryId || 'Uncategorized';
+      acc[cat] = (acc[cat] || 0) + 1;
+      return acc;
+    }, {})
+  ).map(([cat, count]) => `${cat} (${count})`).join(', ')}
+
+Engagement:
+- Pairwise Votes Cast: ${participantVotes.length}
+- Rankings Submitted: ${participantRankings.length > 0 ? 'Yes' : 'No'}
+- Marketplace Allocations: ${participantAllocations.length > 0 ? 'Yes' : 'No'}
+
+Top Contributions by Impact:
+${noteImpact.slice(0, 5).map((n, idx) => `${idx + 1}. "${n.content}" - Win rate: ${(n.winRate * 100).toFixed(1)}% (${n.wins}/${n.totalComparisons})`).join('\n')}
+
+${cohortResult ? `
+Cohort Summary:
+${cohortResult.summary}
+
+Key Themes Identified:
+${cohortResult.keyThemes?.join(', ') || 'None identified'}
+` : ''}
+`;
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      {
+        role: "system",
+        content: `You are a personal coach providing tailored feedback to a participant in a collaborative envisioning session. Analyze their contributions, engagement, and alignment with the cohort to provide meaningful insights and recommendations.`,
+      },
+      {
+        role: "user",
+        content: `Analyze this participant's session performance and generate personalized results:
+
+${personalContext}
+
+Please provide your analysis in the following JSON format:
+{
+  "personalSummary": "A 1-2 paragraph personalized summary of their session experience and contributions",
+  "alignmentScore": number (0-100, how aligned their ideas and votes were with cohort consensus),
+  "topContributions": [
+    {
+      "noteId": "id",
+      "content": "idea text",
+      "impact": "description of why this idea was impactful"
+    }
+  ],
+  "insights": "2-3 paragraphs of personalized insights about their thinking style, contribution patterns, and engagement",
+  "recommendations": "Personalized next steps and development suggestions based on their session performance"
+}
+
+Include their top 3 contributions in topContributions array.`,
+      },
+    ],
+    response_format: { type: "json_object" },
+    temperature: 0.7,
+  });
+
+  const rawResponse = completion.choices[0].message.content;
+  if (!rawResponse) {
+    throw new Error("Empty response from OpenAI");
+  }
+
+  const parsed = JSON.parse(rawResponse);
+  const validated = PersonalizedResultSchema.parse(parsed);
+
+  const [personalResult] = await db
+    .insert(personalizedResults)
+    .values({
+      spaceId,
+      participantId: participant.id,
+      cohortResultId: cohortResultId || null,
+      personalSummary: validated.personalSummary,
+      alignmentScore: validated.alignmentScore,
+      topContributions: validated.topContributions,
+      insights: validated.insights,
+      recommendations: validated.recommendations || null,
+    })
+    .returning();
+
+  return personalResult;
 }

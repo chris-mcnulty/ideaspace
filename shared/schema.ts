@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, boolean, integer, jsonb, real, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, boolean, integer, jsonb, real, unique, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -89,6 +89,7 @@ export const projects = pgTable("projects", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   uniqueOrgSlug: unique().on(table.organizationId, table.slug),
+  organizationIdx: index("idx_projects_organization").on(table.organizationId),
 }));
 
 // Project Members: Links users to projects for access control
@@ -100,6 +101,8 @@ export const projectMembers = pgTable("project_members", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
   uniqueProjectUser: unique().on(table.projectId, table.userId),
+  userIdx: index("idx_project_members_user").on(table.userId),
+  projectIdx: index("idx_project_members_project").on(table.projectId),
 }));
 
 export const users = pgTable("users", {
@@ -172,7 +175,10 @@ export const spaces = pgTable("spaces", {
   templateScope: text("template_scope").default("organization"), // 'system' (global) or 'organization' (org-specific)
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  organizationIdx: index("idx_spaces_organization").on(table.organizationId),
+  projectIdx: index("idx_spaces_project").on(table.projectId),
+}));
 
 export const participants = pgTable("participants", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -184,7 +190,10 @@ export const participants = pgTable("participants", {
   isOnline: boolean("is_online").notNull().default(false),
   profileData: jsonb("profile_data"), // For registered users: email, company, job_title, etc.
   joinedAt: timestamp("joined_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  spaceIdx: index("idx_participants_space").on(table.spaceId),
+  userIdx: index("idx_participants_user").on(table.userId),
+}));
 
 export const categories = pgTable("categories", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -192,7 +201,9 @@ export const categories = pgTable("categories", {
   name: text("name").notNull(),
   color: text("color").notNull().default("blue"), // Color identifier for UI
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  spaceIdx: index("idx_categories_space").on(table.spaceId),
+}));
 
 export const notes = pgTable("notes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -208,7 +219,10 @@ export const notes = pgTable("notes", {
   isSeed: boolean("is_seed").notNull().default(false), // True when note was pushed from Ideas Hub as seed idea
   sourceIdeaId: varchar("source_idea_id").references(() => ideas.id), // Links back to source idea if this is a seed
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  spaceIdx: index("idx_notes_space").on(table.spaceId),
+  participantIdx: index("idx_notes_participant").on(table.participantId),
+}));
 
 export const votes = pgTable("votes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -217,7 +231,10 @@ export const votes = pgTable("votes", {
   winnerNoteId: varchar("winner_note_id").notNull().references(() => notes.id),
   loserNoteId: varchar("loser_note_id").notNull().references(() => notes.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  spaceIdx: index("idx_votes_space").on(table.spaceId),
+  participantIdx: index("idx_votes_participant").on(table.participantId),
+}));
 
 export const rankings = pgTable("rankings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -226,7 +243,10 @@ export const rankings = pgTable("rankings", {
   noteId: varchar("note_id").notNull().references(() => notes.id),
   rank: integer("rank").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  spaceIdx: index("idx_rankings_space").on(table.spaceId),
+  participantIdx: index("idx_rankings_participant").on(table.participantId),
+}));
 
 // Marketplace allocations: participants distribute coins among notes
 export const marketplaceAllocations = pgTable("marketplace_allocations", {
@@ -236,7 +256,9 @@ export const marketplaceAllocations = pgTable("marketplace_allocations", {
   noteId: varchar("note_id").notNull().references(() => notes.id),
   coinsAllocated: integer("coins_allocated").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  spaceIdx: index("idx_marketplace_allocations_space").on(table.spaceId),
+}));
 
 // Survey Questions: Customizable questions for participants to rate ideas
 export const surveyQuestions = pgTable("survey_questions", {
@@ -245,7 +267,9 @@ export const surveyQuestions = pgTable("survey_questions", {
   questionText: text("question_text").notNull(),
   sortOrder: integer("sort_order").notNull().default(0), // Order of questions in the survey
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  spaceIdx: index("idx_survey_questions_space").on(table.spaceId),
+}));
 
 // Survey Responses: Participant ratings for each idea on each survey question
 export const surveyResponses = pgTable("survey_responses", {
@@ -256,7 +280,9 @@ export const surveyResponses = pgTable("survey_responses", {
   questionId: varchar("question_id").notNull().references(() => surveyQuestions.id),
   score: integer("score").notNull(), // 1-5 rating
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  spaceIdx: index("idx_survey_responses_space").on(table.spaceId),
+}));
 
 // Association table: company admins can manage specific organizations
 export const companyAdmins = pgTable("company_admins", {
@@ -272,7 +298,10 @@ export const spaceFacilitators = pgTable("space_facilitators", {
   userId: varchar("user_id").notNull().references(() => users.id),
   spaceId: varchar("space_id").notNull().references(() => spaces.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  userIdx: index("idx_space_facilitators_user").on(table.userId),
+  spaceIdx: index("idx_space_facilitators_space").on(table.spaceId),
+}));
 
 // Access requests: users/guests requesting access to workspaces where guest_allowed=false
 export const accessRequests = pgTable("access_requests", {
@@ -312,7 +341,10 @@ export const documentWorkspaceAccess = pgTable("document_workspace_access", {
   documentId: varchar("document_id").notNull().references(() => knowledgeBaseDocuments.id, { onDelete: "cascade" }),
   spaceId: varchar("space_id").notNull().references(() => spaces.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  documentIdx: index("idx_document_workspace_access_document").on(table.documentId),
+  spaceIdx: index("idx_document_workspace_access_space").on(table.spaceId),
+}));
 
 // Workspace Templates: Reusable workspace configurations with seeded content
 export const workspaceTemplates = pgTable("workspace_templates", {
@@ -380,7 +412,9 @@ export const cohortResults = pgTable("cohort_results", {
   metadata: jsonb("metadata"), // Additional data: voting stats, participation stats, etc.
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  spaceIdx: index("idx_cohort_results_space").on(table.spaceId),
+}));
 
 // Personalized Results: AI-generated insights tailored to individual participants
 export const personalizedResults = pgTable("personalized_results", {
@@ -395,7 +429,10 @@ export const personalizedResults = pgTable("personalized_results", {
   recommendations: text("recommendations"), // Personalized next steps
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  spaceIdx: index("idx_personalized_results_space").on(table.spaceId),
+  participantIdx: index("idx_personalized_results_participant").on(table.participantId),
+}));
 
 // IDEAS-CENTRIC ARCHITECTURE: Core idea entities independent of modules
 
@@ -419,7 +456,9 @@ export const ideas = pgTable("ideas", {
   metadata: jsonb("metadata"), // Flexible storage for source provenance, import details, formatting options
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  spaceIdx: index("idx_ideas_space").on(table.spaceId),
+}));
 
 // Idea Contributions: Track participant contributions and revisions to ideas
 export const ideaContributions = pgTable("idea_contributions", {
@@ -429,7 +468,10 @@ export const ideaContributions = pgTable("idea_contributions", {
   contributionType: text("contribution_type").notNull().default("create"), // 'create', 'edit', 'merge'
   revisionData: jsonb("revision_data"), // Stores old/new content for tracking changes
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  ideaIdx: index("idx_idea_contributions_idea").on(table.ideaId),
+  participantIdx: index("idx_idea_contributions_participant").on(table.participantId),
+}));
 
 // Module type and config definitions
 export const MODULE_TYPES = [

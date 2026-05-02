@@ -1592,7 +1592,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Facilitators see orgs where they have workspace assignments
       else if (user.role === "facilitator") {
         const assignments = await storage.getSpaceFacilitatorsByUser(user.id);
-        const assignedSpaceIds = assignments.map((a: any) => a.spaceId);
+        const assignedSpaceIds = assignments.map((a) => a.spaceId);
         const assignedSpaces = await storage.getSpacesByIds(assignedSpaceIds);
         const orgIds = Array.from(
           new Set(assignedSpaces.map(s => s.organizationId).filter(Boolean) as string[])
@@ -1776,7 +1776,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Facilitators can only see workspaces they're assigned to
       else if (currentUser.role === "facilitator") {
         const facilitatorAssignments = await storage.getSpaceFacilitatorsByUser(currentUser.id);
-        const assignedSpaceIds = facilitatorAssignments.map((a: any) => a.spaceId);
+        const assignedSpaceIds = facilitatorAssignments.map((a) => a.spaceId);
         spaces = await storage.getSpacesByIds(assignedSpaceIds);
       }
       // Regular users don't have access to any workspaces as facilitators
@@ -1785,9 +1785,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Enrich each workspace with stats and project info using batched queries
-      const spaceIds = spaces.map((s: any) => s.id);
-      const orgIds = Array.from(new Set(spaces.map((s: any) => s.organizationId).filter(Boolean))) as string[];
-      const projectIds = Array.from(new Set(spaces.map((s: any) => s.projectId).filter(Boolean))) as string[];
+      const spaceIds = spaces.map((s) => s.id);
+      const orgIds = Array.from(new Set(spaces.map((s) => s.organizationId).filter((id): id is string => Boolean(id))));
+      const projectIds = Array.from(new Set(spaces.map((s) => s.projectId).filter((id): id is string => Boolean(id))));
 
       const [participantCounts, noteCounts, orgs, projectsList] = await Promise.all([
         storage.getParticipantCountsBySpaces(spaceIds),
