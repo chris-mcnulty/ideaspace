@@ -422,7 +422,10 @@ export function KnowledgeBaseManager({ scope, scopeId, title, description }: Kno
                       </div>
                       <p
                         className="text-sm text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground"
-                        // ts_headline returns <b>...</b> wrappers around matches; safe because Postgres only injects bold tags around our own content.
+                        // Snippet is HTML-escaped server-side and only the
+                        // <b>/</b> highlight tags (which we generate from
+                        // private markers) are reintroduced after escaping,
+                        // so this is safe to render as HTML.
                         dangerouslySetInnerHTML={{ __html: hit.snippet }}
                       />
                     </div>

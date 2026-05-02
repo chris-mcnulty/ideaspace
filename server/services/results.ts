@@ -335,7 +335,8 @@ export async function generateCohortResults(
 
   // Build a focused FTS query from the workspace's purpose + top-ranked note
   // contents so we retrieve only the most relevant KB passages instead of
-  // dumping every document's title/description.
+  // dumping every document's title/description. The storage layer ORs
+  // tokens together so multi-note queries still match relevant chunks.
   const queryTerms = [
     space.purpose || '',
     ...notesWithScores.slice(0, 12).map((n: any) => n.content || ''),
@@ -585,6 +586,28 @@ export async function generatePersonalizedResults(
     cohortResult = result || null;
   }
 
+  // Cache short-circuit: if we already generated a personalized result for
+  // this (cohort, participant, cohort inputs) tuple, return it without
+  // re-calling OpenAI. This mirrors the batch path so single-participant
+  // regenerations also benefit from caching.
+  const personalHash = computePersonalizedInputsHash({
+    spaceId,
+    participantId,
+    cohortResultId: cohortResultId || null,
+    inputsHash: cohortResult?.inputsHash || cohortResultId || '',
+  });
+  const cachedSingle = await findCachedPersonalizedResult(spaceId, participantId, personalHash);
+  if (cachedSingle) {
+    await logAiUsage({
+      spaceId,
+      modelName: 'gpt-4o',
+      operation: 'personalized-results-cache-hit',
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      metadata: { cacheHit: true, personalizedResultId: cachedSingle.id, personalHash },
+    });
+    return cachedSingle;
+  }
+
   // Fetch participant's contributions
   const participantNotes = await db
     .select()
@@ -713,6 +736,17 @@ Include their top 3 contributions in topContributions array.`,
   const parsed = JSON.parse(rawResponse);
   const validated = PersonalizedResultSchema.parse(parsed);
 
+  const personalUsage = extractUsageMetrics(completion);
+  if (personalUsage) {
+    await logAiUsage({
+      spaceId,
+      modelName: 'gpt-4o',
+      operation: 'personalized-results',
+      usage: personalUsage,
+      metadata: { cacheHit: false, personalHash, participantId },
+    });
+  }
+
   // Save to database
   const [personalResult] = await db
     .insert(personalizedResults)
@@ -725,6 +759,7 @@ Include their top 3 contributions in topContributions array.`,
       topContributions: validated.topContributions,
       insights: validated.insights,
       recommendations: validated.recommendations || null,
+      inputsHash: personalHash,
     })
     .returning();
 

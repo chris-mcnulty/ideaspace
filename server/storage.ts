@@ -1566,13 +1566,20 @@ export class DbStorage implements IStorage {
   // Knowledge Base Chunks
   async createKnowledgeBaseChunks(chunks: InsertKnowledgeBaseChunk[]): Promise<KnowledgeBaseChunk[]> {
     if (chunks.length === 0) return [];
-    const rows = chunks.map((c) => ({
-      documentId: c.documentId,
-      chunkIndex: c.chunkIndex,
-      content: c.content,
-      searchVector: sql`to_tsvector('english', ${c.content})` as any,
-    }));
-    return db.insert(knowledgeBaseChunks).values(rows as any).returning();
+    // Insert via raw SQL so we can populate `search_vector` from
+    // `to_tsvector('english', content)` without round-tripping the tsvector
+    // through our application types.
+    const inserted: KnowledgeBaseChunk[] = [];
+    for (const c of chunks) {
+      const result = await db.execute(sql`
+        INSERT INTO ${knowledgeBaseChunks} (document_id, chunk_index, content, search_vector)
+        VALUES (${c.documentId}, ${c.chunkIndex}, ${c.content}, to_tsvector('english', ${c.content}))
+        RETURNING id, document_id AS "documentId", chunk_index AS "chunkIndex", content, search_vector AS "searchVector", created_at AS "createdAt"
+      `);
+      const row = result.rows[0] as KnowledgeBaseChunk;
+      inserted.push(row);
+    }
+    return inserted;
   }
 
   async deleteKnowledgeBaseChunksByDocument(documentId: string): Promise<number> {
@@ -1596,8 +1603,24 @@ export class DbStorage implements IStorage {
     const { query, spaceId, organizationId, includeSystem = true, limit = 8 } = params;
     if (!query || !query.trim()) return [];
 
+    // Build a permissive OR-style tsquery from the input. plainto_tsquery
+    // ANDs every term, which causes long multi-note queries to return zero
+    // matches. We sanitize tokens to alphanumerics, drop short ones, dedupe,
+    // and OR them together via to_tsquery('english', 'a | b | c').
+    const tokens = Array.from(
+      new Set(
+        query
+          .toLowerCase()
+          .split(/[^a-z0-9]+/i)
+          .map((t) => t.trim())
+          .filter((t) => t.length >= 3 && t.length <= 30),
+      ),
+    ).slice(0, 40);
+    if (tokens.length === 0) return [];
+    const tsqueryString = tokens.join(" | ");
+
     // Build scope predicate. We always allow system docs unless caller opts out.
-    const scopeClauses: any[] = [];
+    const scopeClauses: ReturnType<typeof sql>[] = [];
     if (includeSystem) {
       scopeClauses.push(sql`${knowledgeBaseDocuments.scope} = 'system'`);
     }
@@ -1625,28 +1648,42 @@ export class DbStorage implements IStorage {
       i === 0 ? cur : sql`${acc} OR ${cur}`,
     );
 
+    // ts_headline highlights matches in the *original* document text and
+    // emits the wrapper tags verbatim. To avoid stored-XSS via uploaded
+    // documents we use random unique markers, escape the resulting HTML on
+    // the server, and the route layer replaces the markers with safe <b>
+    // tags before sending to the client.
     const rows = await db.execute(sql`
       SELECT
         c.id, c.document_id AS "documentId", c.chunk_index AS "chunkIndex",
         c.content, c.created_at AS "createdAt",
         d.title AS "documentTitle",
-        ts_rank_cd(c.search_vector, plainto_tsquery('english', ${query})) AS rank,
-        ts_headline('english', c.content, plainto_tsquery('english', ${query}),
-          'MaxWords=35, MinWords=15, ShortWord=3, MaxFragments=2') AS snippet
+        ts_rank_cd(c.search_vector, to_tsquery('english', ${tsqueryString})) AS rank,
+        ts_headline('english', c.content, to_tsquery('english', ${tsqueryString}),
+          'StartSel=__KB_HL_START__, StopSel=__KB_HL_END__, MaxWords=35, MinWords=15, ShortWord=3, MaxFragments=2') AS snippet
       FROM ${knowledgeBaseChunks} c
       INNER JOIN ${knowledgeBaseDocuments} d ON d.id = c.document_id
-      WHERE c.search_vector @@ plainto_tsquery('english', ${query})
+      WHERE c.search_vector @@ to_tsquery('english', ${tsqueryString})
         AND (${scopeSql})
       ORDER BY rank DESC
       LIMIT ${limit}
     `);
 
-    return (rows.rows as any[]).map((r) => ({
+    return (rows.rows as Array<{
+      id: string;
+      documentId: string;
+      chunkIndex: number;
+      content: string;
+      createdAt: Date;
+      documentTitle: string;
+      rank: string | number;
+      snippet: string;
+    }>).map((r) => ({
       id: r.id,
       documentId: r.documentId,
       chunkIndex: r.chunkIndex,
       content: r.content,
-      searchVector: null as any,
+      searchVector: null as unknown as string,
       createdAt: r.createdAt,
       documentTitle: r.documentTitle,
       rank: Number(r.rank),

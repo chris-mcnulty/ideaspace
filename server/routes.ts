@@ -2725,7 +2725,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const results = await storage.searchKnowledgeBaseChunks(params);
-      res.json({ query: q, results });
+      // Server-side highlight sanitization: escape the snippet (which
+      // contains user-uploaded text) and then replace our private marker
+      // tokens with <b>/</b>. This makes it safe for the client to render
+      // as HTML — the only unescaped tags are the bold wrappers we control.
+      const escapeHtml = (s: string) => s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+      const safeResults = results.map((r) => ({
+        ...r,
+        snippet: escapeHtml(r.snippet)
+          .replace(/__KB_HL_START__/g, '<b>')
+          .replace(/__KB_HL_END__/g, '</b>'),
+      }));
+      res.json({ query: q, results: safeResults });
     } catch (error) {
       console.error('Failed to search knowledge base:', error);
       res.status(500).json({ error: 'Failed to search knowledge base' });
