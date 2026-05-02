@@ -400,7 +400,7 @@ export default function StaircaseModule({
               </div>
 
               {!isReadOnly && placedNotes.length > 0 && (
-                <div className="mt-4" data-testid="staircase-placed-panel">
+                <div className="mt-4 lg:hidden" data-testid="staircase-placed-panel">
                   <h3 className="text-sm font-semibold text-foreground mb-2">Placed Notes</h3>
                   <p className="text-xs text-muted-foreground mb-3">
                     Use the up/down buttons to fine-tune each note's step.

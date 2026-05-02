@@ -78,7 +78,7 @@ function SortableNote({ note, rank, onMoveUp, onMoveDown, canMoveUp, canMoveDown
           </p>
         </div>
 
-        <div className="flex flex-col gap-1 shrink-0">
+        <div className="flex flex-col gap-1 shrink-0 lg:hidden">
           <Button
             type="button"
             variant="outline"

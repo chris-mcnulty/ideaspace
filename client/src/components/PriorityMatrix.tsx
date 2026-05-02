@@ -317,6 +317,7 @@ export default function PriorityMatrix({
                 setTapMode(prev => !prev);
                 setSelectedNoteId(null);
               }}
+              className="sm:hidden"
               data-testid="button-toggle-tap-mode"
             >
               <MousePointer2 className="h-4 w-4 mr-2" />
@@ -345,8 +346,8 @@ export default function PriorityMatrix({
         </div>
       )}
 
-      <Card className="flex-1 relative">
-        <CardContent className="p-0 h-full">
+      <Card className="flex-1 relative overflow-hidden">
+        <CardContent className="p-0 h-full overflow-hidden">
           <div 
             ref={matrixRef}
             className="relative w-full h-full min-h-[400px] sm:min-h-[500px]"
