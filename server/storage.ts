@@ -131,6 +131,23 @@ export function normalizeEmail(email: string | null | undefined): string | null 
   return email.toLowerCase().trim();
 }
 
+/**
+ * Result row returned by full-text search over the knowledge base. The
+ * `searchVector` column from `knowledge_base_chunks` is intentionally not
+ * exposed here because it isn't needed by callers and is a Postgres-internal
+ * representation of the indexed text.
+ */
+export interface KnowledgeBaseSearchHit {
+  id: string;
+  documentId: string;
+  chunkIndex: number;
+  content: string;
+  createdAt: Date;
+  documentTitle: string;
+  rank: number;
+  snippet: string;
+}
+
 export interface IStorage {
   // System Settings
   getSystemSetting(key: string, organizationId?: string | null): Promise<SystemSetting | undefined>;
@@ -315,7 +332,7 @@ export interface IStorage {
     organizationId?: string;
     includeSystem?: boolean;
     limit?: number;
-  }): Promise<Array<KnowledgeBaseChunk & { documentTitle: string; rank: number; snippet: string }>>;
+  }): Promise<KnowledgeBaseSearchHit[]>;
 
   // Workspace Templates
   getWorkspaceTemplate(id: string): Promise<WorkspaceTemplate | undefined>;
@@ -1599,7 +1616,7 @@ export class DbStorage implements IStorage {
     organizationId?: string;
     includeSystem?: boolean;
     limit?: number;
-  }): Promise<Array<KnowledgeBaseChunk & { documentTitle: string; rank: number; snippet: string }>> {
+  }): Promise<KnowledgeBaseSearchHit[]> {
     const { query, spaceId, organizationId, includeSystem = true, limit = 8 } = params;
     if (!query || !query.trim()) return [];
 
@@ -1683,7 +1700,6 @@ export class DbStorage implements IStorage {
       documentId: r.documentId,
       chunkIndex: r.chunkIndex,
       content: r.content,
-      searchVector: null as unknown as string,
       createdAt: r.createdAt,
       documentTitle: r.documentTitle,
       rank: Number(r.rank),

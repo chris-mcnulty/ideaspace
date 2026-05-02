@@ -11,6 +11,7 @@ import {
   computePersonalizedInputsHash,
   findCachedCohortResult,
   findCachedPersonalizedResult,
+  hashKbChunkContents,
   type CohortInputs,
 } from "./resultsCache";
 
@@ -359,9 +360,33 @@ export async function generateCohortResults(
     : '';
 
   // Compute hash over all inputs so re-generations on identical state can be
-  // served from cache instead of re-calling OpenAI.
+  // served from cache instead of re-calling OpenAI. We include every
+  // prompt-affecting input — workspace name/purpose, enabled modules and
+  // their config (matrix labels, staircase range/labels, survey question
+  // text/order), categories, the per-participant data, and a content hash
+  // over the KB chunks fed into grounding so that document edits invalidate
+  // the cache even when chunk ids stay the same.
   const cohortInputs: CohortInputs = {
     spaceId,
+    workspaceName: space.name ?? null,
+    workspacePurpose: space.purpose ?? null,
+    enabledModules: enabledModuleTypes,
+    matrixAxes: hasPriorityMatrix
+      ? { xLabel: matrixXLabel, yLabel: matrixYLabel }
+      : null,
+    staircaseConfig: hasStaircase
+      ? {
+          label: `${staircaseMinLabel}|${staircaseMaxLabel}`,
+          minScore: staircaseMinScore,
+          maxScore: staircaseMaxScore,
+        }
+      : null,
+    surveyQuestions: surveyQuestionsList.map((q) => ({
+      id: q.id,
+      text: q.questionText,
+      order: q.sortOrder,
+    })),
+    categories: allCategories.map((c: any) => ({ id: c.id, name: c.name })),
     notes: allNotes.map((n: any) => ({ id: n.id, content: n.content, manualCategoryId: n.manualCategoryId ?? null })),
     votes: pairwiseVotes.map((v: any) => ({ winnerNoteId: v.winnerNoteId, loserNoteId: v.loserNoteId })),
     rankings: rankingData.map((r: any) => ({ noteId: r.noteId, rank: r.rank, participantId: r.participantId })),
@@ -372,8 +397,8 @@ export async function generateCohortResults(
       ? (await db.select().from(surveyResponses).where(eq(surveyResponses.spaceId, spaceId)))
           .map((r: any) => ({ noteId: r.noteId, questionId: r.questionId, participantId: r.participantId, score: r.score }))
       : [],
-    enabledModules: enabledModuleTypes,
     kbChunkIds: kbChunks.map((c) => c.id),
+    kbContentHash: hashKbChunkContents(kbChunks.map((c) => ({ id: c.id, content: c.content }))),
   };
   const inputsHash = computeCohortInputsHash(cohortInputs);
 
@@ -593,6 +618,7 @@ export async function generatePersonalizedResults(
   const personalHash = computePersonalizedInputsHash({
     spaceId,
     participantId,
+    participantDisplayName: participant.displayName ?? null,
     cohortResultId: cohortResultId || null,
     inputsHash: cohortResult?.inputsHash || cohortResultId || '',
   });
@@ -901,6 +927,7 @@ async function generatePersonalizedResultsFromCache(params: {
   const personalHash = computePersonalizedInputsHash({
     spaceId,
     participantId: participant.id,
+    participantDisplayName: participant.displayName ?? null,
     cohortResultId: cohortResultId || null,
     inputsHash: cohortResult?.inputsHash || cohortResultId || '',
   });

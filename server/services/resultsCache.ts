@@ -8,9 +8,31 @@ import { and, desc, eq } from "drizzle-orm";
  * result. If any of these change, the hash changes and the cached result is
  * implicitly invalidated (we just don't find a match — old rows stay around
  * for audit but won't be served).
+ *
+ * We deliberately include every prompt-affecting input we could find, including
+ * workspace metadata (name/purpose), enabled module config, category names
+ * (which are surfaced in the prompt), survey question text/order,
+ * priority-matrix axis labels, staircase labels/ranges, and a content hash
+ * over the KB chunks fed into grounding. Adding a new input here is the
+ * correct way to ensure cache invalidation when that input changes.
  */
 export interface CohortInputs {
   spaceId: string;
+  // Workspace-level prompt context
+  workspaceName?: string | null;
+  workspacePurpose?: string | null;
+  // Module configuration the prompt depends on
+  enabledModules: string[];
+  moduleConfig?: Record<string, unknown> | null;
+  matrixAxes?: { xLabel?: string | null; yLabel?: string | null } | null;
+  staircaseConfig?: {
+    label?: string | null;
+    minScore?: number | null;
+    maxScore?: number | null;
+  } | null;
+  surveyQuestions?: Array<{ id: string; text: string; order: number }>;
+  categories?: Array<{ id: string; name: string }>;
+  // Per-participant data
   notes: Array<{ id: string; content: string; manualCategoryId: string | null }>;
   votes: Array<{ winnerNoteId: string; loserNoteId: string }>;
   rankings: Array<{ noteId: string; rank: number; participantId: string }>;
@@ -18,20 +40,51 @@ export interface CohortInputs {
   matrixPositions: Array<{ noteId: string; xCoord: number; yCoord: number }>;
   staircasePositions: Array<{ noteId: string; score: number }>;
   surveyResponses: Array<{ noteId: string; questionId: string; participantId: string; score: number }>;
-  enabledModules: string[];
-  kbChunkIds: string[]; // chunk ids retrieved for grounding
+  // KB grounding
+  kbChunkIds: string[];
+  kbContentHash?: string;
 }
 
-function stableStringify(value: any): string {
+function stableStringify(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return "[" + value.map(stableStringify).join(",") + "]";
-  const keys = Object.keys(value).sort();
-  return "{" + keys.map((k) => JSON.stringify(k) + ":" + stableStringify(value[k])).join(",") + "}";
+  const obj = value as Record<string, unknown>;
+  const keys = Object.keys(obj).sort();
+  return "{" + keys.map((k) => JSON.stringify(k) + ":" + stableStringify(obj[k])).join(",") + "}";
+}
+
+/**
+ * Hash a list of KB chunk contents so that edits to source documents (which
+ * may change chunk content even when chunk IDs stay the same) invalidate the
+ * cache. Inputs are sorted by id for stability.
+ */
+export function hashKbChunkContents(
+  chunks: Array<{ id: string; content: string }>,
+): string {
+  const sorted = [...chunks].sort((a, b) => a.id.localeCompare(b.id));
+  const h = createHash("sha256");
+  for (const c of sorted) {
+    h.update(c.id);
+    h.update("\u0001");
+    h.update(c.content);
+    h.update("\u0002");
+  }
+  return h.digest("hex");
 }
 
 export function computeCohortInputsHash(inputs: CohortInputs): string {
   const normalized = {
     spaceId: inputs.spaceId,
+    workspaceName: inputs.workspaceName ?? null,
+    workspacePurpose: inputs.workspacePurpose ?? null,
+    enabledModules: [...inputs.enabledModules].sort(),
+    moduleConfig: inputs.moduleConfig ?? null,
+    matrixAxes: inputs.matrixAxes ?? null,
+    staircaseConfig: inputs.staircaseConfig ?? null,
+    surveyQuestions: [...(inputs.surveyQuestions ?? [])].sort((a, b) =>
+      a.order - b.order || a.id.localeCompare(b.id),
+    ),
+    categories: [...(inputs.categories ?? [])].sort((a, b) => a.id.localeCompare(b.id)),
     notes: [...inputs.notes].sort((a, b) => a.id.localeCompare(b.id)),
     votes: [...inputs.votes].sort((a, b) =>
       (a.winnerNoteId + a.loserNoteId).localeCompare(b.winnerNoteId + b.loserNoteId),
@@ -47,8 +100,8 @@ export function computeCohortInputsHash(inputs: CohortInputs): string {
     surveyResponses: [...inputs.surveyResponses].sort((a, b) =>
       (a.participantId + a.questionId + a.noteId).localeCompare(b.participantId + b.questionId + b.noteId),
     ),
-    enabledModules: [...inputs.enabledModules].sort(),
     kbChunkIds: [...inputs.kbChunkIds].sort(),
+    kbContentHash: inputs.kbContentHash ?? null,
   };
   return createHash("sha256").update(stableStringify(normalized)).digest("hex");
 }
@@ -66,6 +119,7 @@ export async function findCachedCohortResult(spaceId: string, inputsHash: string
 export interface PersonalizedInputs {
   spaceId: string;
   participantId: string;
+  participantDisplayName?: string | null;
   cohortResultId: string | null;
   inputsHash: string; // matches the cohort inputs hash this was generated against
 }
@@ -76,6 +130,7 @@ export function computePersonalizedInputsHash(inputs: PersonalizedInputs): strin
       stableStringify({
         spaceId: inputs.spaceId,
         participantId: inputs.participantId,
+        participantDisplayName: inputs.participantDisplayName ?? null,
         cohortResultId: inputs.cohortResultId,
         cohortInputsHash: inputs.inputsHash,
       }),
