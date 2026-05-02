@@ -28,24 +28,24 @@ app.use(express.urlencoded({ extended: false }));
 
 // Session configuration with PostgreSQL store for persistence across reboots
 // Supports multi-device SSO - each device gets its own session stored in the database
-app.use(
-  session({
-    store: new PgStore({
-      pool: pool,
-      tableName: 'session',
-      createTableIfMissing: true,
-    }),
-    secret: process.env.SESSION_SECRET || "nebula-session-secret-change-in-production",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: process.env.NODE_ENV === "production",
-      httpOnly: true,
-      sameSite: "lax", // Required for OAuth redirects
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days (matches Vega)
-    },
-  })
-);
+export const sessionMiddleware = session({
+  store: new PgStore({
+    pool: pool,
+    tableName: 'session',
+    createTableIfMissing: true,
+  }),
+  secret: process.env.SESSION_SECRET || "nebula-session-secret-change-in-production",
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === "production",
+    httpOnly: true,
+    sameSite: "lax", // Required for OAuth redirects
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days (matches Vega)
+  },
+});
+
+app.use(sessionMiddleware);
 
 // Initialize passport and session support
 app.use(passport.initialize());

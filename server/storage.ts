@@ -67,6 +67,8 @@ import {
   type InsertStaircaseModule,
   type StaircasePosition,
   type InsertStaircasePosition,
+  type Notification,
+  type InsertNotification,
   type SystemSetting,
   type InsertSystemSetting,
   type ServicePlan,
@@ -107,6 +109,7 @@ import {
   priorityMatrixPositions,
   staircaseModules,
   staircasePositions,
+  notifications,
 } from "@shared/schema";
 import { eq, and, desc, or, isNull, gte, lte, sql } from "drizzle-orm";
 
@@ -382,6 +385,13 @@ export interface IStorage {
   upsertStaircasePosition(position: InsertStaircasePosition): Promise<StaircasePosition>;
   lockStaircasePosition(id: string, participantId: string): Promise<boolean>;
   unlockStaircasePosition(id: string): Promise<boolean>;
+
+  // Notifications (in-app)
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  getNotificationsByUser(userId: string, limit?: number): Promise<Notification[]>;
+  getUnreadNotificationCount(userId: string): Promise<number>;
+  markNotificationRead(id: string, userId: string): Promise<Notification | undefined>;
+  markAllNotificationsRead(userId: string): Promise<number>;
 }
 
 export class DbStorage implements IStorage {
@@ -2007,6 +2017,40 @@ export class DbStorage implements IStorage {
       .set({ lockedBy: null, lockedAt: null })
       .where(eq(staircasePositions.id, id));
     return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Notifications (in-app)
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const [created] = await db.insert(notifications).values(notification).returning();
+    return created;
+  }
+
+  async getNotificationsByUser(userId: string, limit: number = 30): Promise<Notification[]> {
+    return db.select().from(notifications)
+      .where(eq(notifications.userId, userId))
+      .orderBy(desc(notifications.createdAt))
+      .limit(limit);
+  }
+
+  async getUnreadNotificationCount(userId: string): Promise<number> {
+    const rows = await db.select().from(notifications)
+      .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
+    return rows.length;
+  }
+
+  async markNotificationRead(id: string, userId: string): Promise<Notification | undefined> {
+    const [updated] = await db.update(notifications)
+      .set({ readAt: new Date() })
+      .where(and(eq(notifications.id, id), eq(notifications.userId, userId)))
+      .returning();
+    return updated;
+  }
+
+  async markAllNotificationsRead(userId: string): Promise<number> {
+    const result = await db.update(notifications)
+      .set({ readAt: new Date() })
+      .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
+    return result.rowCount || 0;
   }
 }
 

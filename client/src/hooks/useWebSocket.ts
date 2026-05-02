@@ -7,6 +7,7 @@ interface WebSocketMessage {
 
 interface UseWebSocketOptions {
   spaceId?: string;
+  userId?: string;
   onMessage?: (message: WebSocketMessage) => void;
   onOpen?: () => void;
   onClose?: () => void;
@@ -17,6 +18,7 @@ interface UseWebSocketOptions {
 export function useWebSocket(options: UseWebSocketOptions = {}) {
   const {
     spaceId,
+    userId,
     onMessage,
     onOpen,
     onClose,
@@ -27,6 +29,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
+  const intentionalCloseRef = useRef(false);
   const maxReconnectAttempts = 5;
   const reconnectDelay = 2000;
 
@@ -36,7 +39,10 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     try {
       // Determine WebSocket URL based on current location
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const params = spaceId ? `?spaceId=${spaceId}` : '';
+      const qs = new URLSearchParams();
+      if (spaceId) qs.set('spaceId', spaceId);
+      if (userId) qs.set('userId', userId);
+      const params = qs.toString() ? `?${qs.toString()}` : '';
       const wsUrl = `${protocol}//${window.location.host}/ws${params}`;
 
       const ws = new WebSocket(wsUrl);
@@ -60,7 +66,13 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       ws.addEventListener('close', () => {
         console.log('[WebSocket] Disconnected');
         onClose?.();
-        
+
+        // Skip reconnect if the close was intentional (cleanup/unmount)
+        if (intentionalCloseRef.current) {
+          intentionalCloseRef.current = false;
+          return;
+        }
+
         // Attempt to reconnect
         if (enabled && reconnectAttemptsRef.current < maxReconnectAttempts) {
           reconnectAttemptsRef.current++;
@@ -79,15 +91,16 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     } catch (error) {
       console.error('[WebSocket] Connection error:', error);
     }
-  }, [enabled, spaceId, onMessage, onOpen, onClose, onError]);
+  }, [enabled, spaceId, userId, onMessage, onOpen, onClose, onError]);
 
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
-    
+
     if (wsRef.current) {
+      intentionalCloseRef.current = true;
       wsRef.current.close();
       wsRef.current = null;
     }

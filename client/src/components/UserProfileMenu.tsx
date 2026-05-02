@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { User, Settings, LogOut, Shield, LayoutDashboard, FolderKanban } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { NotificationBell } from "@/components/NotificationBell";
 
 export function UserProfileMenu() {
   const { user, isAdmin } = useAuth();
@@ -97,8 +98,10 @@ export function UserProfileMenu() {
   const displayName = user.displayName || user.username;
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <>
+      <NotificationBell />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
           className="relative h-9 w-9 rounded-full"
@@ -170,7 +173,8 @@ export function UserProfileMenu() {
           <LogOut className="mr-2 h-4 w-4" />
           <span>{isLoggingOut ? "Logging out..." : "Log out"}</span>
         </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   );
 }

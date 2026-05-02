@@ -608,6 +608,19 @@ export const staircasePositions = pgTable("staircase_positions", {
   uniqueStaircaseNote: unique().on(table.staircaseId, table.noteId, table.moduleRunId),
 }));
 
+// In-app notifications - persistent, per-user notification feed
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(), // recipient
+  type: text("type").notNull(), // participant_joined | phase_changed | results_ready | access_request_submitted | access_request_approved | access_request_denied | ai_generation_completed
+  title: text("title").notNull(),
+  body: text("body"),
+  link: text("link"), // optional in-app link to navigate to
+  spaceId: varchar("space_id"), // optional related workspace for filtering
+  readAt: timestamp("read_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Insert schemas
 export const insertSystemSettingSchema = createInsertSchema(systemSettings).omit({
   id: true,
@@ -854,6 +867,12 @@ export const insertStaircasePositionSchema = createInsertSchema(staircasePositio
   updatedAt: true,
 });
 
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  createdAt: true,
+  readAt: true,
+});
+
 // Types
 export type SystemSetting = typeof systemSettings.$inferSelect;
 export type InsertSystemSetting = z.infer<typeof insertSystemSettingSchema>;
@@ -962,3 +981,6 @@ export type InsertStaircaseModule = z.infer<typeof insertStaircaseModuleSchema>;
 
 export type StaircasePosition = typeof staircasePositions.$inferSelect;
 export type InsertStaircasePosition = z.infer<typeof insertStaircasePositionSchema>;
+
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;

@@ -1856,6 +1856,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           });
         }
+
+        // Persist in-app notifications for all linked workspace users
+        try {
+          const org = await storage.getOrganization(space.organizationId);
+          const link = `/o/${org?.slug || space.organizationId}/s/${space.code || spaceId}`;
+          const recipients = new Set<string>();
+          const sf = await storage.getSpaceFacilitatorsBySpace(spaceId);
+          sf.forEach(f => recipients.add(f.userId));
+          const ps = await storage.getParticipantsBySpace(spaceId);
+          ps.forEach(p => { if (p.userId) recipients.add(p.userId); });
+          await Promise.all(Array.from(recipients).map(uid => notifyUser({
+            userId: uid,
+            type: "phase_changed",
+            title: `${space.name}: phase is now ${phase}`,
+            body: `Workspace status updated to "${data.status}".`,
+            link,
+            spaceId,
+          })));
+        } catch (e) { console.error("[notify phase_changed]", e); }
       }
       
       res.json(space);
@@ -2087,6 +2106,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } catch (emailError) {
           console.error(`Failed to send email to user ${userId}:`, emailError);
         }
+        // Persist in-app notification regardless of email outcome
+        await notifyUser({
+          userId,
+          type: "access_request_submitted",
+          title: `Access request: ${space.name}`,
+          body: `${data.name} (${data.email}) is requesting access.`,
+          link: `/admin?tab=access-requests&spaceId=${data.spaceId}`,
+          spaceId: data.spaceId,
+        });
       }
 
       res.status(201).json(accessRequest);
@@ -2180,6 +2208,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: data.status,
         resolvedBy: currentUser.id,
       });
+
+      // Notify the requester (if they have a user account)
+      try {
+        const requesterUser = await storage.getUserByEmail(request.email);
+        if (requesterUser) {
+          const org = await storage.getOrganization(space.organizationId);
+          const link = `/o/${org?.slug || space.organizationId}/s/${space.code || space.id}`;
+          if (data.status === "approved") {
+            await notifyUser({
+              userId: requesterUser.id,
+              type: "access_request_approved",
+              title: `Access granted: ${space.name}`,
+              body: `Your request to join ${space.name} was approved.`,
+              link,
+              spaceId: space.id,
+            });
+          } else {
+            await notifyUser({
+              userId: requesterUser.id,
+              type: "access_request_denied",
+              title: `Access declined: ${space.name}`,
+              body: `Your request to join ${space.name} was declined.`,
+              link: null,
+              spaceId: space.id,
+            });
+          }
+        }
+      } catch (e) { console.error("[notify access_request_resolution]", e); }
 
       // If approved, add user as participant to the workspace
       if (data.status === "approved") {
@@ -2864,6 +2920,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (req.session) {
         req.session.participantId = participant.id;
       }
+
+      // Broadcast to both raw and resolved keys (clients may connect by code)
+      const joinPayload = {
+        type: "participant_joined",
+        data: { spaceId, participantId: participant.id, displayName: participant.displayName },
+      };
+      broadcastToSpace(spaceId, joinPayload);
+      if (data.spaceId !== spaceId) broadcastToSpace(data.spaceId, joinPayload);
+      try {
+        const facilitators = await storage.getSpaceFacilitatorsBySpace(spaceId);
+        const org = await storage.getOrganization(space.organizationId);
+        const link = `/o/${org?.slug || space.organizationId}/s/${space.code || spaceId}`;
+        await Promise.all(facilitators.map(f => notifyUser({
+          userId: f.userId,
+          type: "participant_joined",
+          title: `${participant.displayName} joined ${space.name}`,
+          body: null,
+          link,
+          spaceId,
+        })));
+      } catch (e) { console.error("[notify participant_joined]", e); }
       
       res.status(201).json(participant);
     } catch (error) {
@@ -3431,6 +3508,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           newCategoriesCreated: newCategoriesToCreate.length
         } 
       });
+
+      // Notify the facilitator who triggered AI categorization
+      try {
+        const triggerUser = req.user as User | undefined;
+        if (triggerUser?.id) {
+          const org = await storage.getOrganization(space.organizationId);
+          const link = `/o/${org?.slug || space.organizationId}/s/${space.code || spaceId}`;
+          await notifyUser({
+            userId: triggerUser.id,
+            type: "ai_generation_completed",
+            title: `AI categorization complete: ${space.name}`,
+            body: `${result.categories.length} notes categorized into ${new Set(result.categories.map(c => c.category)).size} categories.`,
+            link,
+            spaceId,
+          });
+        }
+      } catch (e) { console.error("[notify ai_generation_completed]", e); }
       
       res.json({ 
         success: true, 
@@ -5912,6 +6006,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate cohort results
       const cohortResult = await generateCohortResults(spaceId, currentUser.id);
 
+      // Notify linked participants + facilitators that results are ready
+      try {
+        const org = await storage.getOrganization(space.organizationId);
+        const link = `/o/${org?.slug || space.organizationId}/s/${space.code || spaceId}/results`;
+        const recipients = new Set<string>();
+        const ps = await storage.getParticipantsBySpace(spaceId);
+        ps.forEach(p => { if (p.userId) recipients.add(p.userId); });
+        const sf = await storage.getSpaceFacilitatorsBySpace(spaceId);
+        sf.forEach(f => recipients.add(f.userId));
+        await Promise.all(Array.from(recipients).map(uid => notifyUser({
+          userId: uid,
+          type: "results_ready",
+          title: `Results ready: ${space.name}`,
+          body: "Cohort results have been generated. Tap to view.",
+          link,
+          spaceId,
+        })));
+      } catch (e) { console.error("[notify results_ready]", e); }
+
       res.json(cohortResult);
     } catch (error: any) {
       console.error("Failed to generate cohort results:", error);
@@ -6304,34 +6417,110 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============================================
+  // In-app Notifications API
+  // ============================================
+  app.get("/api/notifications", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as User;
+      const limit = Math.min(parseInt(String(req.query.limit || "30"), 10) || 30, 100);
+      const items = await storage.getNotificationsByUser(user.id, limit);
+      const unreadCount = await storage.getUnreadNotificationCount(user.id);
+      res.json({ items, unreadCount });
+    } catch (e) {
+      console.error("Failed to fetch notifications:", e);
+      res.status(500).json({ error: "Failed to fetch notifications" });
+    }
+  });
+
+  app.post("/api/notifications/:id/read", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as User;
+      const updated = await storage.markNotificationRead(req.params.id, user.id);
+      if (!updated) return res.status(404).json({ error: "Notification not found" });
+      res.json(updated);
+    } catch (e) {
+      res.status(500).json({ error: "Failed to mark notification read" });
+    }
+  });
+
+  app.post("/api/notifications/mark-all-read", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as User;
+      const count = await storage.markAllNotificationsRead(user.id);
+      res.json({ count });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to mark all notifications read" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   // WebSocket server for real-time updates
   const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
 
   const clients = new Map<string, Set<WebSocket>>();
+  const userClients = new Map<string, Set<WebSocket>>();
 
-  wss.on("connection", (ws, req) => {
+  wss.on("connection", async (ws, req) => {
     const url = new URL(req.url!, `http://${req.headers.host}`);
     const spaceId = url.searchParams.get("spaceId");
+    const requestedUserId = url.searchParams.get("userId");
 
-    if (!spaceId) {
-      ws.close(1008, "Missing spaceId");
+    if (!spaceId && !requestedUserId) {
+      ws.close(1008, "Missing spaceId or userId");
       return;
     }
 
-    // Add client to the space's client set
-    if (!clients.has(spaceId)) {
-      clients.set(spaceId, new Set());
+    // Authenticate userId-scoped channels against the express session.
+    // Anonymous space-only subscriptions remain allowed (participant flows).
+    let userId: string | null = null;
+    if (requestedUserId) {
+      try {
+        const { sessionMiddleware } = await import("./index");
+        const sessionUserId = await new Promise<string | null>((resolve) => {
+          sessionMiddleware(req as any, {} as any, () => {
+            const s = (req as any).session;
+            const sid = s?.passport?.user;
+            resolve(typeof sid === "string" ? sid : null);
+          });
+        });
+        if (sessionUserId && sessionUserId === requestedUserId) {
+          userId = sessionUserId;
+        } else {
+          ws.close(1008, "Unauthorized userId channel");
+          return;
+        }
+      } catch (e) {
+        console.error("[WS auth] Failed to verify session:", e);
+        ws.close(1011, "Session verification failed");
+        return;
+      }
     }
-    clients.get(spaceId)!.add(ws);
+
+    if (spaceId) {
+      if (!clients.has(spaceId)) clients.set(spaceId, new Set());
+      clients.get(spaceId)!.add(ws);
+    }
+
+    if (userId) {
+      if (!userClients.has(userId)) userClients.set(userId, new Set());
+      userClients.get(userId)!.add(ws);
+    }
 
     ws.on("close", () => {
-      const spaceClients = clients.get(spaceId);
-      if (spaceClients) {
-        spaceClients.delete(ws);
-        if (spaceClients.size === 0) {
-          clients.delete(spaceId);
+      if (spaceId) {
+        const spaceClients = clients.get(spaceId);
+        if (spaceClients) {
+          spaceClients.delete(ws);
+          if (spaceClients.size === 0) clients.delete(spaceId);
+        }
+      }
+      if (userId) {
+        const uc = userClients.get(userId);
+        if (uc) {
+          uc.delete(ws);
+          if (uc.size === 0) userClients.delete(userId);
         }
       }
     });
@@ -6339,9 +6528,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     ws.on("message", (data) => {
       try {
         const message = JSON.parse(data.toString());
-        
+
         // Broadcast presence updates
-        if (message.type === "presence") {
+        if (message.type === "presence" && spaceId) {
           broadcastToSpace(spaceId, message);
         }
       } catch (error) {
@@ -6372,6 +6561,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   }
+
+  function broadcastToUser(userId: string, message: any) {
+    const payload = JSON.stringify(message);
+    const uc = userClients.get(userId);
+    if (uc) {
+      uc.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(payload);
+        }
+      });
+    }
+  }
+
+  // Helper: persist a notification and push to that user's WS connections
+  async function notifyUser(params: {
+    userId: string;
+    type: string;
+    title: string;
+    body?: string | null;
+    link?: string | null;
+    spaceId?: string | null;
+  }) {
+    try {
+      const created = await storage.createNotification({
+        userId: params.userId,
+        type: params.type,
+        title: params.title,
+        body: params.body ?? null,
+        link: params.link ?? null,
+        spaceId: params.spaceId ?? null,
+      });
+      broadcastToUser(params.userId, { type: "notification", data: created });
+    } catch (err) {
+      console.error("[notify] Failed to create/dispatch notification:", err);
+    }
+  }
+
+  // Expose notifyUser for downstream producer routes registered above
+  (app as any).locals.notifyUser = notifyUser;
 
   return httpServer;
 }
