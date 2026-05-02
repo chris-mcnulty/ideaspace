@@ -1,22 +1,21 @@
 import fs from "fs/promises";
 import path from "path";
 
-/**
- * Knowledge Base text extraction & chunking.
- *
- * Supports the same formats the upload route allows:
- *   - text/plain, text/markdown, text/csv, text/html, application/json
- *   - application/csv (alt CSV mime)
- *   - application/pdf (via pdf-parse)
- *   - application/msword (.doc — best-effort, treated as binary text)
- *   - application/vnd.openxmlformats-officedocument.wordprocessingml.document
- *     (.docx via mammoth)
- *   - application/vnd.ms-excel (.xls via xlsx)
- *   - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
- *     (.xlsx via xlsx)
- */
+// Minimal local types for dynamically-imported, untyped extraction libs.
+interface PdfParseModule {
+  PDFParse?: new (opts: { data: Buffer }) => { getText(): Promise<{ text: string }> };
+  default?: { PDFParse?: PdfParseModule["PDFParse"] };
+}
+interface MammothModule {
+  extractRawText(input: { buffer: Buffer }): Promise<{ value: string }>;
+  default?: MammothModule;
+}
+interface XlsxModule {
+  read(buffer: Buffer, opts: { type: "buffer" }): { SheetNames: string[]; Sheets: Record<string, unknown> };
+  utils: { sheet_to_csv(sheet: unknown): string };
+  default?: XlsxModule;
+}
 
-const TEXT_MIME_PREFIXES = ["text/"];
 const TEXT_LIKE_MIMES = new Set([
   "text/plain",
   "text/markdown",
@@ -27,11 +26,9 @@ const TEXT_LIKE_MIMES = new Set([
   "application/x-ndjson",
 ]);
 const PDF_MIME = "application/pdf";
-const DOCX_MIME =
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const DOC_MIME = "application/msword";
-const XLSX_MIME =
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const XLS_MIME = "application/vnd.ms-excel";
 
 const WORDS_PER_CHUNK = 500;
@@ -43,7 +40,7 @@ export function isExtractableMime(mimeType: string): boolean {
   if (mimeType === PDF_MIME) return true;
   if (mimeType === DOCX_MIME || mimeType === DOC_MIME) return true;
   if (mimeType === XLSX_MIME || mimeType === XLS_MIME) return true;
-  return TEXT_MIME_PREFIXES.some((p) => mimeType.startsWith(p));
+  return mimeType.startsWith("text/");
 }
 
 function stripHtml(input: string): string {
@@ -60,28 +57,27 @@ function stripHtml(input: string): string {
 }
 
 async function extractPdf(buffer: Buffer): Promise<string> {
-  // pdf-parse v2 exposes a class-based API: `new PDFParse({ data }).getText()`.
-  const mod = (await import("pdf-parse")) as any;
-  const PDFParse = mod.PDFParse || mod.default?.PDFParse;
+  const mod = (await import("pdf-parse")) as unknown as PdfParseModule;
+  const PDFParse = mod.PDFParse ?? mod.default?.PDFParse;
   if (!PDFParse) throw new Error("pdf-parse: PDFParse export missing");
-  const parser = new PDFParse({ data: buffer });
-  const out = await parser.getText();
+  const out = await new PDFParse({ data: buffer }).getText();
   return (out?.text || "").replace(/\s+\n/g, "\n").trim();
 }
 
 async function extractDocx(buffer: Buffer): Promise<string> {
-  const mammoth: any = await import("mammoth");
+  const mod = (await import("mammoth")) as unknown as MammothModule;
+  const mammoth = mod.default ?? mod;
   const result = await mammoth.extractRawText({ buffer });
   return (result?.value || "").trim();
 }
 
 async function extractSpreadsheet(buffer: Buffer): Promise<string> {
-  const xlsx: any = await import("xlsx");
+  const mod = (await import("xlsx")) as unknown as XlsxModule;
+  const xlsx = mod.default ?? mod;
   const wb = xlsx.read(buffer, { type: "buffer" });
   const parts: string[] = [];
-  for (const name of wb.SheetNames as string[]) {
-    const sheet = wb.Sheets[name];
-    const csv = xlsx.utils.sheet_to_csv(sheet);
+  for (const name of wb.SheetNames) {
+    const csv = xlsx.utils.sheet_to_csv(wb.Sheets[name]);
     if (csv && csv.trim().length > 0) {
       parts.push(`# Sheet: ${name}\n${csv}`);
     }
@@ -89,17 +85,11 @@ async function extractSpreadsheet(buffer: Buffer): Promise<string> {
   return parts.join("\n\n").trim();
 }
 
-/**
- * Read a file from local storage and return its plain-text representation.
- * Returns null when extraction is not possible for that mime type.
- */
 export async function extractTextFromFile(
   filePath: string,
   mimeType: string,
 ): Promise<string | null> {
-  if (!isExtractableMime(mimeType)) {
-    return null;
-  }
+  if (!isExtractableMime(mimeType)) return null;
 
   let buffer: Buffer;
   try {
@@ -110,18 +100,11 @@ export async function extractTextFromFile(
   }
 
   try {
-    if (mimeType === PDF_MIME) {
-      return await extractPdf(buffer);
-    }
-    if (mimeType === DOCX_MIME) {
-      return await extractDocx(buffer);
-    }
-    if (mimeType === XLSX_MIME || mimeType === XLS_MIME) {
-      return await extractSpreadsheet(buffer);
-    }
+    if (mimeType === PDF_MIME) return await extractPdf(buffer);
+    if (mimeType === DOCX_MIME) return await extractDocx(buffer);
+    if (mimeType === XLSX_MIME || mimeType === XLS_MIME) return await extractSpreadsheet(buffer);
     if (mimeType === DOC_MIME) {
-      // Legacy .doc binary format. mammoth doesn't support it; fall back to
-      // a permissive ASCII strip so we at least index any embedded text.
+      // Legacy .doc is not supported by mammoth; salvage embedded ASCII.
       const ascii = buffer.toString("latin1").replace(/[^\x20-\x7E\n\r\t]+/g, " ");
       return ascii.replace(/\s+/g, " ").trim();
     }
@@ -137,17 +120,11 @@ export async function extractTextFromFile(
   }
 }
 
-/**
- * Split text into overlapping word chunks suitable for FTS indexing.
- */
 export function chunkText(text: string): string[] {
   const normalized = text.replace(/\r\n/g, "\n").trim();
   if (!normalized) return [];
-
   const words = normalized.split(/\s+/);
-  if (words.length <= WORDS_PER_CHUNK) {
-    return [normalized];
-  }
+  if (words.length <= WORDS_PER_CHUNK) return [normalized];
 
   const chunks: string[] = [];
   const step = WORDS_PER_CHUNK - CHUNK_OVERLAP_WORDS;
@@ -170,8 +147,6 @@ export async function extractAndChunk(
   mimeType: string,
 ): Promise<ExtractedChunks> {
   const text = await extractTextFromFile(filePath, mimeType);
-  if (text === null) {
-    return { supported: false, chunks: [] };
-  }
+  if (text === null) return { supported: false, chunks: [] };
   return { supported: true, chunks: chunkText(text) };
 }

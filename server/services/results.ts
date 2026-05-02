@@ -334,10 +334,7 @@ export async function generateCohortResults(
     return (a.id || '').localeCompare(b.id || '');
   });
 
-  // Build a focused FTS query from the workspace's purpose + top-ranked note
-  // contents so we retrieve only the most relevant KB passages instead of
-  // dumping every document's title/description. The storage layer ORs
-  // tokens together so multi-note queries still match relevant chunks.
+  // FTS query from workspace purpose + top-ranked notes.
   const queryTerms = [
     space.purpose || '',
     ...notesWithScores.slice(0, 12).map((n: any) => n.content || ''),
@@ -359,13 +356,7 @@ export async function generateCohortResults(
         .join('\n')}`
     : '';
 
-  // Compute hash over all inputs so re-generations on identical state can be
-  // served from cache instead of re-calling OpenAI. We include every
-  // prompt-affecting input — workspace name/purpose, enabled modules and
-  // their config (matrix labels, staircase range/labels, survey question
-  // text/order), categories, the per-participant data, and a content hash
-  // over the KB chunks fed into grounding so that document edits invalidate
-  // the cache even when chunk ids stay the same.
+  // Hash over every prompt-affecting input; cache invalidates on any change.
   const cohortInputs: CohortInputs = {
     spaceId,
     workspaceName: space.name ?? null,
@@ -611,10 +602,7 @@ export async function generatePersonalizedResults(
     cohortResult = result || null;
   }
 
-  // Cache short-circuit: if we already generated a personalized result for
-  // this (cohort, participant, cohort inputs) tuple, return it without
-  // re-calling OpenAI. This mirrors the batch path so single-participant
-  // regenerations also benefit from caching.
+  // Cache short-circuit for single-participant regenerations.
   const personalHash = computePersonalizedInputsHash({
     spaceId,
     participantId,

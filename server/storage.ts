@@ -1583,9 +1583,7 @@ export class DbStorage implements IStorage {
   // Knowledge Base Chunks
   async createKnowledgeBaseChunks(chunks: InsertKnowledgeBaseChunk[]): Promise<KnowledgeBaseChunk[]> {
     if (chunks.length === 0) return [];
-    // Insert via raw SQL so we can populate `search_vector` from
-    // `to_tsvector('english', content)` without round-tripping the tsvector
-    // through our application types.
+    // Raw INSERT so search_vector is populated server-side via to_tsvector.
     const inserted: KnowledgeBaseChunk[] = [];
     for (const c of chunks) {
       const result = await db.execute(sql`
@@ -1620,10 +1618,8 @@ export class DbStorage implements IStorage {
     const { query, spaceId, organizationId, includeSystem = true, limit = 8 } = params;
     if (!query || !query.trim()) return [];
 
-    // Build a permissive OR-style tsquery from the input. plainto_tsquery
-    // ANDs every term, which causes long multi-note queries to return zero
-    // matches. We sanitize tokens to alphanumerics, drop short ones, dedupe,
-    // and OR them together via to_tsquery('english', 'a | b | c').
+    // OR-style tsquery: sanitize tokens and join with ` | ` so multi-term
+    // input still matches relevant chunks (plainto_tsquery would AND them).
     const tokens = Array.from(
       new Set(
         query
@@ -1665,11 +1661,8 @@ export class DbStorage implements IStorage {
       i === 0 ? cur : sql`${acc} OR ${cur}`,
     );
 
-    // ts_headline highlights matches in the *original* document text and
-    // emits the wrapper tags verbatim. To avoid stored-XSS via uploaded
-    // documents we use random unique markers, escape the resulting HTML on
-    // the server, and the route layer replaces the markers with safe <b>
-    // tags before sending to the client.
+    // ts_headline emits private markers; route layer escapes the snippet
+    // and replaces markers with controlled <b>/</b> tags (XSS-safe).
     const rows = await db.execute(sql`
       SELECT
         c.id, c.document_id AS "documentId", c.chunk_index AS "chunkIndex",

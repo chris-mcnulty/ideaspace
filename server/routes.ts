@@ -2719,16 +2719,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         if (!ok) return res.status(403).json({ error: 'Insufficient permissions' });
         params.spaceId = scopeId;
-        params.organizationId = space.organizationId;
+        params.organizationId = space.organizationId ?? undefined;
       } else {
         return res.status(400).json({ error: 'Invalid scope' });
       }
 
       const results = await storage.searchKnowledgeBaseChunks(params);
-      // Server-side highlight sanitization: escape the snippet (which
-      // contains user-uploaded text) and then replace our private marker
-      // tokens with <b>/</b>. This makes it safe for the client to render
-      // as HTML — the only unescaped tags are the bold wrappers we control.
+      // Escape snippet HTML before reintroducing controlled <b> tags.
       const escapeHtml = (s: string) => s
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
