@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useState, useEffect } from "react";
 import { KnowledgeBaseManager } from "@/components/KnowledgeBaseManager";
+import { QueryErrorState } from "@/components/QueryErrorState";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -1207,7 +1208,7 @@ function WorkspaceTemplateCard({
 }
 
 function TemplateDetails({ templateId }: { templateId: string }) {
-  const { data: templateDetails, isLoading } = useQuery<{
+  const { data: templateDetails, isLoading, error, refetch, isFetching } = useQuery<{
     notes: any[];
     documents: any[];
   }>({
@@ -1222,8 +1223,18 @@ function TemplateDetails({ templateId }: { templateId: string }) {
     );
   }
 
-  if (!templateDetails) {
-    return <p className="text-sm text-muted-foreground">Failed to load template details</p>;
+  if (error || !templateDetails) {
+    return (
+      <div className="py-2">
+        <QueryErrorState
+          title="Couldn't load template details"
+          error={error}
+          onRetry={() => refetch()}
+          isRetrying={isFetching}
+          testId={`error-template-${templateId}`}
+        />
+      </div>
+    );
   }
 
   const { notes = [], documents = [] } = templateDetails;

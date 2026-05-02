@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { OrgSwitcher } from "@/components/OrgSwitcher";
+import { QueryErrorState } from "@/components/QueryErrorState";
 import { NewWorkspaceDialog } from "@/components/NewWorkspaceDialog";
 import { SynozurAppSwitcher } from "@/components/SynozurAppSwitcher";
 import { useEffect, useState } from "react";
@@ -63,7 +64,7 @@ export default function MyProjects() {
   });
 
   // Fetch user's projects with workspace counts
-  const { data: projects = [], isLoading: projectsLoading } = useQuery<Project[]>({
+  const { data: projects = [], isLoading: projectsLoading, error: projectsError, refetch: refetchProjects, isFetching: isRefetchingProjects } = useQuery<Project[]>({
     queryKey: ["/api/my-projects/detailed"],
     enabled: !!user,
   });
@@ -195,6 +196,14 @@ export default function MyProjects() {
               <Skeleton key={i} className="h-48" data-testid={`skeleton-project-${i}`} />
             ))}
           </div>
+        ) : projectsError ? (
+          <QueryErrorState
+            title="Couldn't load your projects"
+            error={projectsError}
+            onRetry={() => refetchProjects()}
+            isRetrying={isRefetchingProjects}
+            testId="error-projects"
+          />
         ) : Object.keys(projectsByOrg).length === 0 ? (
           <Card className="text-center py-12">
             <CardContent>

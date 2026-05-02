@@ -9,6 +9,7 @@ import { LiveAnnouncerProvider } from "@/components/LiveAnnouncer";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useRouteFocus } from "@/hooks/useRouteFocus";
 import { ComponentType } from "react";
+import type { RouteComponentProps } from "wouter";
 import NotFound from "@/pages/not-found";
 
 import LandingPage from "@/pages/LandingPage";
@@ -53,13 +54,18 @@ import FacilitatorConsoleExample from "@/components/examples/FacilitatorConsole"
 import ResultsTabsExample from "@/components/examples/ResultsTabs";
 import ReadoutViewerExample from "@/components/examples/ReadoutViewer";
 
+// Wouter's <Route component={...}> expects ComponentType<RouteComponentProps<any>>,
+// so the boundary HOC must return that exact shape. We accept any inbound
+// component (page components have varying prop signatures, including no props)
+// and forward the route props through unchanged.
 function withBoundary(
-  Component: ComponentType<any>,
+  Component: ComponentType<RouteComponentProps<any>> | ComponentType<Record<string, never>>,
   scope: string,
-): ComponentType<any> {
-  const Wrapped = (props: any) => (
+): ComponentType<RouteComponentProps<any>> {
+  const Inner = Component as ComponentType<RouteComponentProps<any>>;
+  const Wrapped: ComponentType<RouteComponentProps<any>> = (props) => (
     <ErrorBoundary scope={scope}>
-      <Component {...props} />
+      <Inner {...props} />
     </ErrorBoundary>
   );
   Wrapped.displayName = `WithBoundary(${scope})`;

@@ -69,6 +69,8 @@ import {
   type InsertStaircasePosition,
   type Notification,
   type InsertNotification,
+  type ClientError,
+  type InsertClientError,
   type SystemSetting,
   type InsertSystemSetting,
   type ServicePlan,
@@ -110,6 +112,7 @@ import {
   staircaseModules,
   staircasePositions,
   notifications,
+  clientErrors,
 } from "@shared/schema";
 import { eq, and, desc, or, isNull, gte, lte, sql } from "drizzle-orm";
 
@@ -392,6 +395,9 @@ export interface IStorage {
   getUnreadNotificationCount(userId: string): Promise<number>;
   markNotificationRead(id: string, userId: string): Promise<Notification | undefined>;
   markAllNotificationsRead(userId: string): Promise<number>;
+
+  // Client errors (telemetry)
+  createClientError(record: InsertClientError): Promise<ClientError>;
 }
 
 export class DbStorage implements IStorage {
@@ -2051,6 +2057,11 @@ export class DbStorage implements IStorage {
       .set({ readAt: new Date() })
       .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
     return result.rowCount || 0;
+  }
+
+  async createClientError(record: InsertClientError): Promise<ClientError> {
+    const [created] = await db.insert(clientErrors).values(record).returning();
+    return created;
   }
 }
 

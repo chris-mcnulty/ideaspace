@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { OrgSwitcher } from "@/components/OrgSwitcher";
+import { QueryErrorState } from "@/components/QueryErrorState";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { NewWorkspaceDialog } from "@/components/NewWorkspaceDialog";
@@ -88,7 +89,7 @@ export default function FacilitatorDashboard() {
     enabled: !!user,
   });
 
-  const { data: workspaces, isLoading } = useQuery<WorkspaceWithStats[]>({
+  const { data: workspaces, isLoading, error: workspacesError, refetch: refetchWorkspaces, isFetching: isRefetchingWorkspaces } = useQuery<WorkspaceWithStats[]>({
     queryKey: ["/api/my-workspaces"],
     enabled: !!user,
   });
@@ -324,6 +325,14 @@ export default function FacilitatorDashboard() {
               </Card>
             ))}
           </div>
+        ) : workspacesError ? (
+          <QueryErrorState
+            title="Couldn't load your workspaces"
+            error={workspacesError}
+            onRetry={() => refetchWorkspaces()}
+            isRetrying={isRefetchingWorkspaces}
+            testId="error-workspaces"
+          />
         ) : !workspaces || workspaces.length === 0 ? (
           <Card data-testid="card-no-workspaces">
             <CardHeader>

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Sparkles, Trophy, Award, Target, TrendingUp, Download, Mail } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
+import { QueryErrorState } from "@/components/QueryErrorState";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import type { PersonalizedResult, Organization, Space, Participant, Project } from "@shared/schema";
@@ -35,7 +36,7 @@ export default function Results() {
   });
 
   // Fetch personalized results for the participant
-  const { data: personalizedResults, isLoading, error } = useQuery<PersonalizedResult>({
+  const { data: personalizedResults, isLoading, error, refetch: refetchResults, isFetching: isRefetchingResults } = useQuery<PersonalizedResult>({
     queryKey: [`/api/spaces/${spaceId}/results/personalized`],
     retry: false,
     enabled: !!spaceId,
@@ -326,13 +327,22 @@ export default function Results() {
         </header>
         
         <div className="flex flex-1 items-center justify-center p-6">
+          {!isNotParticipant ? (
+            <div className="w-full max-w-md">
+              <QueryErrorState
+                title="Couldn't load your results"
+                error={error}
+                onRetry={() => refetchResults()}
+                isRetrying={isRefetchingResults}
+                testId="error-personalized-results"
+              />
+            </div>
+          ) : (
           <Card className="max-w-md text-center">
             <CardHeader>
               <CardTitle>Personalized Results</CardTitle>
               <CardDescription>
-                {isNotParticipant 
-                  ? "This page is for workspace participants only."
-                  : "Failed to load results. Please try again later."}
+                This page is for workspace participants only.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -357,6 +367,7 @@ export default function Results() {
               )}
             </CardContent>
           </Card>
+          )}
         </div>
       </div>
     );

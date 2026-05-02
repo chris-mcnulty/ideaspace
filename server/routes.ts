@@ -239,8 +239,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return resolveWorkspaceIdentifier(identifier);
   }
 
-  // Client-side error telemetry endpoint (public; rate-limited via payload size)
+  // Simple in-memory token-bucket rate limiter for the public client-error
+  // telemetry endpoint. Keyed by client IP; window resets every 60s.
+  const clientErrorRateLimiter = new Map<string, { count: number; windowStart: number }>();
+  const CLIENT_ERROR_WINDOW_MS = 60_000;
+  const CLIENT_ERROR_MAX_PER_WINDOW = 30;
+
+  // Client-side error telemetry endpoint. Public so unauthenticated users can
+  // also report errors (e.g. on the landing page). Protected against abuse by
+  // payload-size validation (Zod max lengths) AND a per-IP rate limit.
   app.post("/api/client-errors", async (req, res) => {
+    const ip =
+      (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ||
+      req.ip ||
+      req.socket.remoteAddress ||
+      "unknown";
+
+    // Rate limit check
+    const now = Date.now();
+    const bucket = clientErrorRateLimiter.get(ip);
+    if (!bucket || now - bucket.windowStart > CLIENT_ERROR_WINDOW_MS) {
+      clientErrorRateLimiter.set(ip, { count: 1, windowStart: now });
+    } else {
+      bucket.count += 1;
+      if (bucket.count > CLIENT_ERROR_MAX_PER_WINDOW) {
+        return res.status(429).json({ error: "Too many error reports" });
+      }
+    }
+
+    // Best-effort cleanup so the map doesn't grow unbounded
+    if (clientErrorRateLimiter.size > 5000) {
+      for (const [key, value] of Array.from(clientErrorRateLimiter.entries())) {
+        if (now - value.windowStart > CLIENT_ERROR_WINDOW_MS) {
+          clientErrorRateLimiter.delete(key);
+        }
+      }
+    }
+
     try {
       const schema = z.object({
         scope: z.string().max(100).optional(),
@@ -255,6 +290,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = user?.id ?? null;
       const participantId = req.session?.participantId ?? null;
 
+      // Structured log line via the same console transport used by the rest
+      // of the server. Sensitive PII is not included beyond the user/participant id.
       console.error("[client-error]", JSON.stringify({
         scope: data.scope ?? "unknown",
         route: data.route ?? null,
@@ -262,10 +299,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         participantId,
         message: data.message,
         userAgent: data.userAgent ?? null,
-        stack: data.stack ?? null,
-        componentStack: data.componentStack ?? null,
+        ip,
         at: new Date().toISOString(),
       }));
+
+      // Persist a lightweight record for later analysis. Failures here never
+      // impact the response — telemetry must never break the client.
+      try {
+        await storage.createClientError({
+          scope: data.scope ?? null,
+          message: data.message,
+          stack: data.stack ?? null,
+          componentStack: data.componentStack ?? null,
+          route: data.route ?? null,
+          userAgent: data.userAgent ?? null,
+          userId,
+          participantId,
+          ipAddress: ip,
+        });
+      } catch (persistError) {
+        console.error("Failed to persist client error record:", persistError);
+      }
 
       res.status(204).send();
     } catch (error) {

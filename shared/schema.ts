@@ -609,6 +609,20 @@ export const staircasePositions = pgTable("staircase_positions", {
 }));
 
 // In-app notifications - persistent, per-user notification feed
+export const clientErrors = pgTable("client_errors", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  scope: text("scope"),
+  message: text("message").notNull(),
+  stack: text("stack"),
+  componentStack: text("component_stack"),
+  route: text("route"),
+  userAgent: text("user_agent"),
+  userId: varchar("user_id"),
+  participantId: varchar("participant_id"),
+  ipAddress: text("ip_address"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const notifications = pgTable("notifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull(), // recipient
@@ -984,3 +998,10 @@ export type InsertStaircasePosition = z.infer<typeof insertStaircasePositionSche
 
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+
+export const insertClientErrorSchema = createInsertSchema(clientErrors).omit({
+  id: true,
+  createdAt: true,
+});
+export type ClientError = typeof clientErrors.$inferSelect;
+export type InsertClientError = z.infer<typeof insertClientErrorSchema>;
