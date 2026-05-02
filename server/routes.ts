@@ -249,11 +249,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // also report errors (e.g. on the landing page). Protected against abuse by
   // payload-size validation (Zod max lengths) AND a per-IP rate limit.
   app.post("/api/client-errors", async (req, res) => {
-    const ip =
-      (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ||
-      req.ip ||
-      req.socket.remoteAddress ||
-      "unknown";
+    // Use Express' trusted req.ip (resolved via the `trust proxy` setting)
+    // rather than raw x-forwarded-for to prevent header-spoofed rate-limit bypass.
+    const ip = req.ip || req.socket.remoteAddress || "unknown";
 
     // Rate limit check
     const now = Date.now();
