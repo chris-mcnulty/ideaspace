@@ -1973,6 +1973,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         });
       }
+
+      // Persist in-app notifications for facilitators + linked participants
+      try {
+        const space = await storage.getSpace(spaceId);
+        if (space) {
+          const org = await storage.getOrganization(space.organizationId);
+          const link = `/o/${org?.slug || space.organizationId}/s/${space.code || spaceId}`;
+          const recipients = new Set<string>();
+          const sf = await storage.getSpaceFacilitatorsBySpace(spaceId);
+          sf.forEach(f => recipients.add(f.userId));
+          const ps = await storage.getParticipantsBySpace(spaceId);
+          ps.forEach(p => { if (p.userId) recipients.add(p.userId); });
+          await Promise.all(Array.from(recipients).map(uid => notifyUser({
+            userId: uid,
+            type: "phase_changed",
+            title: `${space.name}: ${phase} phase active`,
+            body: `Facilitator advanced participants to the ${phase} phase.`,
+            link,
+            spaceId,
+          })));
+        }
+      } catch (e) { console.error("[notify navigate phase_changed]", e); }
       
       res.json({ success: true, phase });
     } catch (error) {
@@ -6597,9 +6619,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("[notify] Failed to create/dispatch notification:", err);
     }
   }
-
-  // Expose notifyUser for downstream producer routes registered above
-  (app as any).locals.notifyUser = notifyUser;
 
   return httpServer;
 }
