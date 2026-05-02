@@ -120,7 +120,7 @@ export default function AdminPanel() {
         </div>
       </header>
 
-      <main className="container mx-auto px-6 py-8">
+      <main id="main-content" tabIndex={-1} className="container mx-auto px-6 py-8 focus:outline-none">
         <div className="mb-6">
           <h1 className="text-3xl font-bold">Admin Panel</h1>
           <p className="text-muted-foreground mt-1">

@@ -4,6 +4,9 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { SkipToContent } from "@/components/SkipToContent";
+import { LiveAnnouncerProvider } from "@/components/LiveAnnouncer";
+import { useRouteFocus } from "@/hooks/useRouteFocus";
 import NotFound from "@/pages/not-found";
 
 import LandingPage from "@/pages/LandingPage";
@@ -49,6 +52,7 @@ import ResultsTabsExample from "@/components/examples/ResultsTabs";
 import ReadoutViewerExample from "@/components/examples/ReadoutViewer";
 
 function Router() {
+  useRouteFocus("main-content");
   return (
     <Switch>
       <Route path="/" component={LandingPage} />
@@ -132,7 +136,7 @@ function ComponentShowcase() {
         </div>
       </header>
 
-      <main className="container mx-auto px-6 py-12">
+      <main id="main-content" tabIndex={-1} className="container mx-auto px-6 py-12 focus:outline-none">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {components.map((component) => (
             <a
@@ -188,8 +192,11 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="dark" storageKey="aurora-theme">
         <TooltipProvider>
-          <Toaster />
-          <Router />
+          <LiveAnnouncerProvider>
+            <SkipToContent targetId="main-content" />
+            <Toaster />
+            <Router />
+          </LiveAnnouncerProvider>
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>

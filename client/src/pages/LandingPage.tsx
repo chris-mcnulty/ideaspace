@@ -92,7 +92,7 @@ export default function LandingPage() {
         </div>
       </header>
 
-      <main>
+      <main id="main-content" tabIndex={-1} className="focus:outline-none">
         {/* Hero Section with Background Image */}
         <section 
           className="relative overflow-hidden px-6 py-12 md:py-16 lg:py-20"

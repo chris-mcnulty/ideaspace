@@ -18,6 +18,7 @@ import {
 import { Plus, Users, User, Clock, Vote, ListOrdered, Coins, ClipboardList, Lightbulb, Sparkles, Timer } from "lucide-react";
 import { CountdownTimer } from "@/components/CountdownTimer";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useAnnouncer } from "@/components/LiveAnnouncer";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -30,6 +31,7 @@ export default function ParticipantView() {
   const params = useParams() as { org: string; space: string };
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { announce } = useAnnouncer();
   const { isAuthenticated } = useAuth();
   const [noteContent, setNoteContent] = useState("");
   const [showNoteForm, setShowNoteForm] = useState(false);
@@ -153,6 +155,7 @@ export default function ParticipantView() {
             description: `${authorName} shared a new idea`,
             duration: 2000,
           });
+          announce(`${authorName} shared a new idea`);
         }
       }
       if (message.type === 'note_updated' || message.type === 'note_deleted') {
@@ -186,10 +189,12 @@ export default function ParticipantView() {
           };
           
           if (phaseRoutes[phase as keyof typeof phaseRoutes]) {
+            const dest = phase === 'results' ? 'results page' : `${phase.replace('-', ' ')} phase`;
             toast({
               title: "Phase Change",
-              description: `Navigating to ${phase === 'results' ? 'results page' : phase.replace('-', ' ') + ' phase'}...`,
+              description: `Navigating to ${dest}...`,
             });
+            announce(`Facilitator moved the session to the ${dest}`, "assertive");
             navigate(phaseRoutes[phase as keyof typeof phaseRoutes]);
           }
         }
@@ -472,7 +477,7 @@ export default function ParticipantView() {
       </div>
 
       {/* WHITEBOARD AREA - with proper dark mode support */}
-      <main className="flex-1 overflow-hidden bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+      <main id="main-content" tabIndex={-1} className="flex-1 overflow-hidden bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none">
         <div className="h-full overflow-auto p-8">
           <div className="mx-auto max-w-7xl">
             {/* Create Note Button (floating on white) - Only show when ideation is active */}

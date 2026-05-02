@@ -337,7 +337,7 @@ export default function PairwiseVoting() {
         </div>
       </header>
       
-      <main className="flex-1 p-4 sm:p-8 space-y-6 sm:space-y-8">
+      <main id="main-content" tabIndex={-1} className="flex-1 p-4 sm:p-8 space-y-6 sm:space-y-8 focus:outline-none">
         {/* Workspace Info Section */}
         {org && space && (
           <div className="max-w-4xl mx-auto text-center space-y-2">

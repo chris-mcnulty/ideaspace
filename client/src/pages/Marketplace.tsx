@@ -237,7 +237,7 @@ export default function Marketplace() {
         </div>
       </header>
       
-      <main className="flex-1 container mx-auto px-4 py-4 sm:py-8 max-w-4xl">
+      <main id="main-content" tabIndex={-1} className="flex-1 container mx-auto px-4 py-4 sm:py-8 max-w-4xl focus:outline-none">
         <div className="mb-4 sm:mb-6">
           <h1 className="text-2xl sm:text-3xl font-bold mb-2">Marketplace Allocation</h1>
           <p className="text-sm sm:text-base text-muted-foreground">

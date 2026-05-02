@@ -1,6 +1,7 @@
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { useAnnouncer } from "@/components/LiveAnnouncer";
 
 interface UseModuleNavigationOptions {
   spaceId: string;
@@ -11,6 +12,7 @@ interface UseModuleNavigationOptions {
 export function useModuleNavigation({ spaceId, orgSlug, onMessage }: UseModuleNavigationOptions) {
   const [location, navigate] = useLocation();
   const { toast } = useToast();
+  const { announce } = useAnnouncer();
 
   const ws = useWebSocket({
     spaceId,
@@ -31,10 +33,12 @@ export function useModuleNavigation({ spaceId, orgSlug, onMessage }: UseModuleNa
           };
           const route = phaseRoutes[phase as string];
           if (route && route !== location) {
+            const dest = phase === 'results' ? 'results page' : `${String(phase).replace('-', ' ')} phase`;
             toast({
               title: "Phase Change",
-              description: `Navigating to ${phase === 'results' ? 'results page' : String(phase).replace('-', ' ') + ' phase'}...`,
+              description: `Navigating to ${dest}...`,
             });
+            announce(`Facilitator moved the session to the ${dest}`, "assertive");
             navigate(route);
           }
         }

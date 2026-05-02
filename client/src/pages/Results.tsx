@@ -404,7 +404,7 @@ export default function Results() {
         </div>
       </header>
 
-      <main className="container mx-auto px-6 py-8 max-w-4xl">
+      <main id="main-content" tabIndex={-1} className="container mx-auto px-6 py-8 max-w-4xl focus:outline-none">
         <div className="mb-8 text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
             <Trophy className="h-8 w-8 text-primary" />

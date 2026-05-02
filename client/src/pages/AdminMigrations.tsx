@@ -48,7 +48,7 @@ export default function AdminMigrations() {
   });
 
   return (
-    <div className="min-h-screen bg-background p-4">
+    <div id="main-content" tabIndex={-1} className="min-h-screen bg-background p-4 focus:outline-none">
       <div className="max-w-lg mx-auto space-y-4">
         <div className="flex items-center gap-2 mb-6">
           <Link href="/admin">

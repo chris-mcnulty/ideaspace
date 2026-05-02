@@ -428,6 +428,7 @@ export function NotificationPanel({ spaceId, participants, currentPhase }: Notif
                     onClick={addBulkRecipient}
                     disabled={!bulkEmail || !bulkName}
                     data-testid="button-add-recipient"
+                    aria-label="Add recipient"
                   >
                     <Plus className="h-4 w-4" />
                   </Button>
@@ -449,6 +450,7 @@ export function NotificationPanel({ spaceId, participants, currentPhase }: Notif
                           className="h-6 w-6"
                           onClick={() => removeBulkRecipient(index)}
                           data-testid={`button-remove-recipient-${index}`}
+                          aria-label="Remove recipient"
                         >
                           <X className="h-3 w-3" />
                         </Button>

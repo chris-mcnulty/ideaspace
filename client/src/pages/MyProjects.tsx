@@ -188,7 +188,7 @@ export default function MyProjects() {
         </div>
       </div>
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
+      <main id="main-content" tabIndex={-1} className="max-w-7xl mx-auto px-4 py-8 focus:outline-none">
         {isLoading ? (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3].map((i) => (

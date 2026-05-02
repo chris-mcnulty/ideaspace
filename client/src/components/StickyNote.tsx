@@ -127,8 +127,9 @@ export default function StickyNote({
                 onEdit();
               }}
               data-testid="button-edit-note"
+              aria-label="Edit note"
             >
-              <Edit2 className="h-3.5 w-3.5" />
+              <Edit2 className="h-3.5 w-3.5" aria-hidden="true" />
             </Button>
           )}
           {canDelete && onDelete && (
@@ -141,8 +142,9 @@ export default function StickyNote({
                 onDelete();
               }}
               data-testid="button-delete-note"
+              aria-label="Delete note"
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
             </Button>
           )}
         </div>

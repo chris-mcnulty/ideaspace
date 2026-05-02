@@ -106,6 +106,7 @@ export function UserProfileMenu() {
           variant="ghost"
           className="relative h-9 w-9 rounded-full"
           data-testid="button-user-menu"
+          aria-label={`Account menu for ${displayName}`}
         >
           <Avatar className="h-9 w-9">
             <AvatarFallback className="bg-primary/10 text-primary font-semibold">

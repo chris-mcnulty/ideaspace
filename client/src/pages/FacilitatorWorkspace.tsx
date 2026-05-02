@@ -2411,7 +2411,7 @@ export default function FacilitatorWorkspace() {
         </div>
       </section>
 
-      <main className="container mx-auto px-6 py-8">
+      <main id="main-content" tabIndex={-1} className="container mx-auto px-6 py-8 focus:outline-none">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList>
             {facilitatorTabs.map(tab => {

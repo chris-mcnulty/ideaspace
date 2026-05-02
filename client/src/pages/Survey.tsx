@@ -66,7 +66,7 @@ export default function Survey() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 container mx-auto px-4 sm:px-6 py-4 sm:py-8">
+      <main id="main-content" tabIndex={-1} className="flex-1 container mx-auto px-4 sm:px-6 py-4 sm:py-8 focus:outline-none">
         <SurveyView spaceId={params.space} participantId={participantId} />
       </main>
     </div>

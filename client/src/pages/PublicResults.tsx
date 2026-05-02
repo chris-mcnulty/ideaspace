@@ -94,7 +94,7 @@ export default function PublicResults() {
     <div className="min-h-screen flex flex-col bg-background">
       <Header org={org} />
       
-      <main className="flex-1 p-6 md:p-8 max-w-6xl mx-auto w-full">
+      <main id="main-content" tabIndex={-1} className="flex-1 p-6 md:p-8 max-w-6xl mx-auto w-full focus:outline-none">
         {/* Workspace Header */}
         <div className="text-center mb-8">
           {org && (

@@ -232,7 +232,7 @@ export default function WaitingRoomPage() {
 
   // User has permission or guest access is allowed - show normal waiting room
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div id="main-content" tabIndex={-1} className="flex min-h-screen flex-col bg-background focus:outline-none">
       <header className="sticky top-0 z-50 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-full items-center justify-end gap-3 px-6">
           <ThemeToggle />

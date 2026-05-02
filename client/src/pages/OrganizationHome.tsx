@@ -89,7 +89,7 @@ export default function OrganizationHomePage() {
         </div>
       </section>
 
-      <main className="container mx-auto px-6 py-12 md:py-16">
+      <main id="main-content" tabIndex={-1} className="container mx-auto px-6 py-12 md:py-16 focus:outline-none">
 
         <div>
           {spacesLoading ? (

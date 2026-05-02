@@ -9,6 +9,7 @@
 ## Backlog
 - [ ] AI Suggest New Ideas - Generate new idea suggestions based on existing content, workspace purpose, and knowledge base documents
 - [ ] Import templates from CSV (with categories) and edit their contents in the system
+- [x] WCAG 2.1 AA accessibility pass - Added SkipToContent link, LiveAnnouncerProvider (polite + assertive aria-live regions), useRouteFocus hook (retries until #main-content lands), id="main-content" landmarks on all 20+ routed pages, aria-labels on icon-only buttons (StickyNote, UserProfileMenu, ShareLinksDialog, NotificationPanel), live announcements for note arrivals and facilitator phase navigations.
 - [x] Mobile-friendly participant modules (≥360px no h-scroll, ≥44px touch targets) - Updated 6 modules: PriorityMatrix (tap-to-place fallback w/ auto-enable on mobile), Staircase (Placed Notes panel w/ up/down step buttons + horizontal-scroll SVG canvas), Survey, Pairwise (DuelCard + header), StackRanking (up/down buttons), Marketplace (responsive allocation cards). Headers truncate org name on small screens; participant page wrappers use px-4 sm:px-6 + py-3 sm:py-4.
 - [x] Phase 1: Add Projects table and API (completed) - Schema, storage, and API routes for project CRUD
 - [x] Phase 2: UI/Navigation for Projects (completed) - Projects tab in Admin Panel, workspace grouping by project in Dashboard

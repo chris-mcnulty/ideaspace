@@ -58,7 +58,7 @@ export default function StaircaseParticipant() {
         </div>
       </header>
 
-      <main className="flex-1 p-3 sm:p-6">
+      <main id="main-content" tabIndex={-1} className="flex-1 p-3 sm:p-6 focus:outline-none">
         <div className="mx-auto max-w-7xl">
           <StaircaseModule spaceId={params.space} />
         </div>

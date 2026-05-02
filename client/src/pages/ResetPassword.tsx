@@ -132,7 +132,7 @@ export default function ResetPassword() {
         </div>
       </header>
 
-      <main className="flex-1 flex items-center justify-center px-6 py-12">
+      <main id="main-content" tabIndex={-1} className="flex-1 flex items-center justify-center px-6 py-12 focus:outline-none">
         <Card className="w-full max-w-md shadow-lg">
           <CardHeader className="space-y-1">
             <div className="flex items-center justify-center gap-2 mb-2">
