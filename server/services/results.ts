@@ -572,9 +572,6 @@ Contributions:
       const manualName = note.manualCategoryId
         ? categoryNameById.get(note.manualCategoryId)
         : undefined;
-      // Preserve legacy fallback semantics: prefer the manual category name
-      // when set, then any legacy `category` field on the note row, then
-      // the literal 'Uncategorized'.
       const cat = manualName ?? (note as { category?: string }).category ?? 'Uncategorized';
       acc[cat] = (acc[cat] || 0) + 1;
       return acc;
@@ -814,9 +811,6 @@ Contributions:
       const manualName = note.manualCategoryId
         ? categoryNameById.get(note.manualCategoryId)
         : undefined;
-      // Preserve legacy fallback semantics: prefer the manual category name
-      // when set, then any legacy `category` field on the note row, then
-      // the literal 'Uncategorized'.
       const cat = manualName ?? (note as { category?: string }).category ?? 'Uncategorized';
       acc[cat] = (acc[cat] || 0) + 1;
       return acc;

@@ -1,8 +1,9 @@
 -- Additive performance-index migration.
--- All tables already exist in production; this migration only adds the
--- secondary indexes declared in shared/schema.ts via Drizzle's index() helper.
--- IF NOT EXISTS guards make this safe to apply against populated databases
--- where some indexes may have been created out-of-band.
+-- This repository bootstraps databases with `npm run db:push` (see replit.md
+-- "Database Migrations" section); migrations/ is used only for additive
+-- changes against already-populated databases. This file therefore only
+-- creates the secondary indexes declared in shared/schema.ts via Drizzle's
+-- index() helper. IF NOT EXISTS guards keep it idempotent.
 CREATE INDEX IF NOT EXISTS "idx_categories_space" ON "categories" USING btree ("space_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_cohort_results_space" ON "cohort_results" USING btree ("space_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_document_workspace_access_document" ON "document_workspace_access" USING btree ("document_id");--> statement-breakpoint
