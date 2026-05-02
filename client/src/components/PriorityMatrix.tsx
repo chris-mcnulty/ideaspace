@@ -215,6 +215,7 @@ export default function PriorityMatrix({
 
   const handleMatrixClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (isReadOnly || !tapMode || !selectedNoteId) return;
+    if (e.target !== e.currentTarget) return;
     const rect = matrixRef.current?.getBoundingClientRect();
     if (!rect) return;
 
@@ -429,6 +430,7 @@ export default function PriorityMatrix({
                     touchAction: tapMode ? 'auto' : 'none',
                   }}
                   onPointerDown={(e) => handlePointerDown(e, note.id)}
+                  onClick={(e) => e.stopPropagation()}
                   data-testid={`note-${note.id}`}
                 >
                   <div 
