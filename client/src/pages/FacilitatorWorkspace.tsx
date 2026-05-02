@@ -318,8 +318,6 @@ export default function FacilitatorWorkspace() {
 
   // WebSocket connection for real-time updates
   const handleWebSocketMessage = useCallback((message: { type: string; data: any }) => {
-    console.log('[FacilitatorWorkspace] WebSocket message:', message);
-    
     switch (message.type) {
       case 'note_created':
       case 'note_updated':
@@ -392,8 +390,6 @@ export default function FacilitatorWorkspace() {
   useWebSocket({
     spaceId: params.space,
     onMessage: handleWebSocketMessage,
-    onOpen: () => console.log('[FacilitatorWorkspace] WebSocket connected'),
-    onClose: () => console.log('[FacilitatorWorkspace] WebSocket disconnected'),
     enabled: !!params.space,
   });
 

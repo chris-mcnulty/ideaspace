@@ -665,6 +665,7 @@ export async function generateAllPersonalizedResults(
     allVotes,
     allRankings,
     allAllocations,
+    allCategories,
     cohortResultRow,
   ] = await Promise.all([
     db.select().from(participants).where(eq(participants.spaceId, spaceId)),
@@ -672,10 +673,13 @@ export async function generateAllPersonalizedResults(
     db.select().from(votes).where(eq(votes.spaceId, spaceId)),
     db.select().from(rankings).where(eq(rankings.spaceId, spaceId)),
     db.select().from(marketplaceAllocations).where(eq(marketplaceAllocations.spaceId, spaceId)),
+    db.select().from(categories).where(eq(categories.spaceId, spaceId)),
     db.select().from(cohortResults).where(eq(cohortResults.id, cohortResultId)).limit(1),
   ]);
 
   const cohortResult: CohortResult | null = cohortResultRow[0] || null;
+  const categoryNameById = new Map<string, string>();
+  for (const c of allCategories) categoryNameById.set(c.id, c.name);
 
   // Group per-participant collections once so each participant lookup is O(1).
   const notesByParticipant = new Map<string, typeof allNotes>();
@@ -729,6 +733,7 @@ export async function generateAllPersonalizedResults(
         participantAllocations: allocationsByParticipant.get(participant.id) ?? [],
         winsByNote,
         comparisonsByNote,
+        categoryNameById,
       });
       results.push(result);
     } catch (error) {
@@ -762,11 +767,12 @@ async function generatePersonalizedResultsFromCache(params: {
   participantAllocations: AllocationRow[];
   winsByNote: Map<string, number>;
   comparisonsByNote: Map<string, number>;
+  categoryNameById: Map<string, string>;
 }): Promise<PersonalizedResult> {
   const {
     spaceId, cohortResultId, participant, cohortResult,
     participantNotes, participantVotes, participantRankings, participantAllocations,
-    winsByNote, comparisonsByNote,
+    winsByNote, comparisonsByNote, categoryNameById,
   } = params;
 
   const noteImpact = participantNotes.map((note) => {
@@ -790,7 +796,9 @@ Contributions:
 - Total Ideas: ${participantNotes.length}
 - Ideas by Category: ${Object.entries(
     participantNotes.reduce<Record<string, number>>((acc, note) => {
-      const cat = note.manualCategoryId || 'Uncategorized';
+      const cat = note.manualCategoryId
+        ? (categoryNameById.get(note.manualCategoryId) ?? 'Uncategorized')
+        : 'Uncategorized';
       acc[cat] = (acc[cat] || 0) + 1;
       return acc;
     }, {})
