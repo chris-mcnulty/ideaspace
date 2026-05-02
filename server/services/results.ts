@@ -536,6 +536,15 @@ export async function generatePersonalizedResults(
     .from(marketplaceAllocations)
     .where(and(eq(marketplaceAllocations.spaceId, spaceId), eq(marketplaceAllocations.participantId, participantId)));
 
+  // Pre-fetch workspace categories so manualCategoryId can be resolved to a
+  // human-readable category name (kept consistent with the cached batch path).
+  const allCategories = await db
+    .select()
+    .from(categories)
+    .where(eq(categories.spaceId, spaceId));
+  const categoryNameById = new Map<string, string>();
+  for (const c of allCategories) categoryNameById.set(c.id, c.name);
+
   // Calculate impact scores for participant's notes
   const allVotes = await db.select().from(votes).where(eq(votes.spaceId, spaceId));
   const noteImpact = participantNotes.map((note: any) => {
@@ -559,12 +568,14 @@ Participant: ${participant.displayName}
 Contributions:
 - Total Ideas: ${participantNotes.length}
 - Ideas by Category: ${Object.entries(
-    participantNotes.reduce((acc: any, note: any) => {
-      const cat = note.category || 'Uncategorized';
+    participantNotes.reduce<Record<string, number>>((acc, note) => {
+      const cat = note.manualCategoryId
+        ? (categoryNameById.get(note.manualCategoryId) ?? 'Uncategorized')
+        : 'Uncategorized';
       acc[cat] = (acc[cat] || 0) + 1;
       return acc;
-    }, {} as Record<string, number>)
-  ).map(([cat, count]: any) => `${cat} (${count})`).join(', ')}
+    }, {})
+  ).map(([cat, count]) => `${cat} (${count})`).join(', ')}
 
 Engagement:
 - Pairwise Votes Cast: ${participantVotes.length}
