@@ -4,6 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import passport from "passport";
 import multer from "multer";
 import { storage } from "./storage";
+import { getUserIdFromUpgradeRequest } from "./session";
 import oauthRoutes from "./routes/auth-oauth";
 import entraRoutes from "./routes/auth-entra";
 import { db } from "./db";
@@ -6499,14 +6500,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     let userId: string | null = null;
     if (requestedUserId) {
       try {
-        const { sessionMiddleware } = await import("./index");
-        const sessionUserId = await new Promise<string | null>((resolve) => {
-          sessionMiddleware(req as any, {} as any, () => {
-            const s = (req as any).session;
-            const sid = s?.passport?.user;
-            resolve(typeof sid === "string" ? sid : null);
-          });
-        });
+        const sessionUserId = await getUserIdFromUpgradeRequest(req);
         if (sessionUserId && sessionUserId === requestedUserId) {
           userId = sessionUserId;
         } else {

@@ -5,6 +5,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Popover,
   PopoverContent,
@@ -48,7 +49,7 @@ export function NotificationBell() {
 
   const queryKey = useMemo(() => ["/api/notifications"], []);
 
-  const { data } = useQuery<NotificationsResponse>({
+  const { data, isLoading } = useQuery<NotificationsResponse>({
     queryKey,
     enabled: !!user,
     refetchInterval: 60_000,
@@ -162,7 +163,19 @@ export function NotificationBell() {
           )}
         </div>
         <ScrollArea className="max-h-96">
-          {items.length === 0 ? (
+          {isLoading ? (
+            <div className="p-3 space-y-3" data-testid="loading-notifications">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="flex gap-3">
+                  <Skeleton className="h-2 w-2 rounded-full mt-1.5" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-3 w-full" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : items.length === 0 ? (
             <div
               className="p-8 text-center text-sm text-muted-foreground"
               data-testid="text-no-notifications"

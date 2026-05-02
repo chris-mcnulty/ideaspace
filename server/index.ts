@@ -1,15 +1,14 @@
 import express, { type Request, Response, NextFunction } from "express";
-import session from "express-session";
-import connectPgSimple from "connect-pg-simple";
 import passport from "passport";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { setupAuth } from "./auth";
 import { ensureUploadDirs } from "./middleware/uploadMiddleware";
 import { pool } from "./db";
+import { sessionMiddleware } from "./session";
+import { ensureNotificationsTable } from "./migrations";
 
 const app = express();
-const PgStore = connectPgSimple(session);
 
 // Trust entire proxy chain (required for secure cookies behind Replit's reverse proxy)
 app.set('trust proxy', true);
@@ -26,25 +25,8 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: false }));
 
-// Session configuration with PostgreSQL store for persistence across reboots
-// Supports multi-device SSO - each device gets its own session stored in the database
-export const sessionMiddleware = session({
-  store: new PgStore({
-    pool: pool,
-    tableName: 'session',
-    createTableIfMissing: true,
-  }),
-  secret: process.env.SESSION_SECRET || "nebula-session-secret-change-in-production",
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: process.env.NODE_ENV === "production",
-    httpOnly: true,
-    sameSite: "lax", // Required for OAuth redirects
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days (matches Vega)
-  },
-});
-
+// Session configuration imported from ./session so the same middleware can be
+// reused for WebSocket upgrade authentication.
 app.use(sessionMiddleware);
 
 // Initialize passport and session support
@@ -94,6 +76,13 @@ app.use((req, res, next) => {
     process.exit(1);
   }
   
+  // Run startup DB migrations (idempotent) before serving traffic
+  try {
+    await ensureNotificationsTable();
+  } catch (error) {
+    console.error("Failed to run startup migrations:", error);
+  }
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
