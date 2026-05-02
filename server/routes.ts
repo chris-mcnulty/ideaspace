@@ -1300,7 +1300,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ssoProvider: 'entra',
       });
       
-      console.log(`[Entra] Linked tenant ${currentUser.entraTenantId} to org ${org.name}`);
+      console.info(`[Entra] Linked tenant ${currentUser.entraTenantId} to org ${org.name}`);
       
       res.json({ 
         success: true, 
