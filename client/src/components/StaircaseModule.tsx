@@ -345,8 +345,8 @@ export default function StaircaseModule({
                 </h3>
                 <p className="text-xs text-muted-foreground mt-1">
                   {unplacedNotes.length > 0
-                    ? 'Click a step number to place each note on the staircase'
-                    : 'Drag notes on the staircase to change their position'}
+                    ? 'Tap a step number to place each note on the staircase'
+                    : 'Use the up/down buttons to adjust each note\'s step.'}
                 </p>
               </div>
               <div className="space-y-2 max-h-[540px] overflow-y-auto pr-1">
@@ -394,7 +394,7 @@ export default function StaircaseModule({
                 })}
                 {placedNotes.length > 0 && unplacedNotes.length === 0 && (
                   <p className="text-xs text-muted-foreground text-center py-4">
-                    All {placedNotes.length} notes have been placed on the staircase. Drag them on the canvas, or use the up/down buttons below, to adjust their positions.
+                    All {placedNotes.length} notes have been placed. Use the up/down buttons below to adjust their positions.
                   </p>
                 )}
               </div>
@@ -463,11 +463,17 @@ export default function StaircaseModule({
               )}
             </div>
 
-            <div className="flex-1 min-w-0 overflow-x-auto">
+            <div className="lg:hidden flex items-center justify-between gap-2 px-2 text-xs text-muted-foreground" data-testid="staircase-mobile-axis-labels">
+              <span className="font-semibold text-foreground truncate">{minLabel}</span>
+              <ArrowRight className="h-3 w-3 shrink-0" />
+              <span className="font-semibold text-foreground truncate text-right">{maxLabel}</span>
+            </div>
+
+            <div className="hidden lg:block flex-1 min-w-0">
               <svg
                 ref={canvasRef}
                 viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}
-                className="w-full border rounded-lg bg-muted/10 min-w-[640px]"
+                className="w-full border rounded-lg bg-muted/10"
                 style={{ maxHeight: '600px' }}
                 onPointerMove={handleDragMove}
                 onPointerUp={handleDragEnd}

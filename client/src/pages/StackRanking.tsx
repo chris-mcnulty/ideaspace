@@ -59,7 +59,7 @@ function SortableNote({ note, rank, onMoveUp, onMoveDown, canMoveUp, canMoveDown
             size="icon"
             {...attributes}
             {...listeners}
-            className="cursor-grab active:cursor-grabbing touch-none"
+            className="cursor-grab active:cursor-grabbing touch-none h-11 w-11 sm:h-9 sm:w-9"
             data-testid={`drag-handle-${note.id}`}
             aria-label="Drag to reorder"
           >
