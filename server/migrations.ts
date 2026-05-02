@@ -59,7 +59,47 @@ export async function ensureClientErrorsTable(): Promise<void> {
   `);
 }
 
+/**
+ * Ensure performance indexes exist on hot foreign-key columns.
+ * Idempotent — uses CREATE INDEX IF NOT EXISTS so safe on every startup.
+ * Targets the most frequent N+1 / aggregation lookups: notes/votes/rankings/
+ * marketplace_allocations/survey_responses by spaceId, participants by space,
+ * spaces by organizationId/projectId, projects by organizationId.
+ */
+export async function ensurePerformanceIndexes(): Promise<void> {
+  const statements = [
+    `CREATE INDEX IF NOT EXISTS idx_notes_space ON notes(space_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_notes_participant ON notes(participant_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_votes_space ON votes(space_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_votes_participant ON votes(participant_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_rankings_space ON rankings(space_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_rankings_participant ON rankings(participant_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_marketplace_allocations_space ON marketplace_allocations(space_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_survey_responses_space ON survey_responses(space_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_survey_questions_space ON survey_questions(space_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_participants_space ON participants(space_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_participants_user ON participants(user_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_categories_space ON categories(space_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_spaces_organization ON spaces(organization_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_spaces_project ON spaces(project_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_projects_organization ON projects(organization_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_project_members_project ON project_members(project_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_space_facilitators_user ON space_facilitators(user_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_space_facilitators_space ON space_facilitators(space_id);`,
+  ];
+  for (const sql of statements) {
+    try {
+      await pool.query(sql);
+    } catch (err) {
+      // Log but never fail startup — indexes are best-effort optimization.
+      console.error("Failed to create performance index:", sql, err);
+    }
+  }
+}
+
 export async function runStartupMigrations(): Promise<void> {
   await ensureNotificationsTable();
   await ensureClientErrorsTable();
+  await ensurePerformanceIndexes();
 }

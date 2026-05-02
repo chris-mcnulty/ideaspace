@@ -114,7 +114,7 @@ import {
   notifications,
   clientErrors,
 } from "@shared/schema";
-import { eq, and, desc, or, isNull, gte, lte, sql } from "drizzle-orm";
+import { eq, and, desc, or, isNull, gte, lte, sql, inArray } from "drizzle-orm";
 
 /**
  * Normalize email addresses for consistent storage and lookup.
@@ -144,6 +144,7 @@ export interface IStorage {
   
   // Organizations
   getOrganization(id: string): Promise<Organization | undefined>;
+  getOrganizationsByIds(ids: string[]): Promise<Organization[]>;
   getOrganizationBySlug(slug: string): Promise<Organization | undefined>;
   getOrganizationByDomain(domain: string): Promise<Organization | undefined>;
   getOrganizationByEntraTenantId(entraTenantId: string): Promise<Organization | undefined>;
@@ -153,8 +154,10 @@ export interface IStorage {
 
   // Projects
   getProject(id: string): Promise<Project | undefined>;
+  getProjectsByIds(ids: string[]): Promise<Project[]>;
   getProjectBySlug(organizationId: string, slug: string): Promise<Project | undefined>;
   getProjectsByOrganization(organizationId: string): Promise<Project[]>;
+  getProjectsByOrganizations(organizationIds: string[]): Promise<Project[]>;
   getDefaultProject(organizationId: string): Promise<Project | undefined>;
   createProject(project: InsertProject): Promise<Project>;
   updateProject(id: string, project: Partial<InsertProject>): Promise<Project | undefined>;
@@ -184,7 +187,12 @@ export interface IStorage {
   getSpaceByCode(code: string): Promise<Space | undefined>;
   getAllSpaces(): Promise<Space[]>;
   getSpacesByOrganization(organizationId: string): Promise<Space[]>;
+  getSpacesByOrganizations(organizationIds: string[]): Promise<Space[]>;
+  getSpacesByIds(ids: string[]): Promise<Space[]>;
   getSpacesByProject(projectId: string): Promise<Space[]>;
+  getSpacesByProjects(projectIds: string[]): Promise<Space[]>;
+  getNoteCountsBySpaces(spaceIds: string[]): Promise<Map<string, number>>;
+  getParticipantCountsBySpaces(spaceIds: string[]): Promise<Map<string, number>>;
   createSpace(space: InsertSpace): Promise<Space>;
   updateSpace(id: string, space: Partial<InsertSpace>): Promise<Space | undefined>;
   deleteSpace(id: string): Promise<boolean>;
@@ -484,6 +492,11 @@ export class DbStorage implements IStorage {
     return org;
   }
 
+  async getOrganizationsByIds(ids: string[]): Promise<Organization[]> {
+    if (ids.length === 0) return [];
+    return db.select().from(organizations).where(inArray(organizations.id, ids));
+  }
+
   async getOrganizationBySlug(slug: string): Promise<Organization | undefined> {
     const [org] = await db.select().from(organizations).where(eq(organizations.slug, slug)).limit(1);
     return org;
@@ -541,6 +554,18 @@ export class DbStorage implements IStorage {
   async getProjectsByOrganization(organizationId: string): Promise<Project[]> {
     return db.select().from(projects)
       .where(eq(projects.organizationId, organizationId))
+      .orderBy(projects.name);
+  }
+
+  async getProjectsByIds(ids: string[]): Promise<Project[]> {
+    if (ids.length === 0) return [];
+    return db.select().from(projects).where(inArray(projects.id, ids));
+  }
+
+  async getProjectsByOrganizations(organizationIds: string[]): Promise<Project[]> {
+    if (organizationIds.length === 0) return [];
+    return db.select().from(projects)
+      .where(inArray(projects.organizationId, organizationIds))
       .orderBy(projects.name);
   }
 
@@ -724,6 +749,59 @@ export class DbStorage implements IStorage {
         eq(spaces.isTemplate, false)
       )
     ).orderBy(desc(spaces.createdAt));
+  }
+
+  async getSpacesByOrganizations(organizationIds: string[]): Promise<Space[]> {
+    if (organizationIds.length === 0) return [];
+    return db.select().from(spaces).where(
+      and(
+        inArray(spaces.organizationId, organizationIds),
+        eq(spaces.isTemplate, false)
+      )
+    ).orderBy(desc(spaces.createdAt));
+  }
+
+  async getSpacesByIds(ids: string[]): Promise<Space[]> {
+    if (ids.length === 0) return [];
+    return db.select().from(spaces).where(inArray(spaces.id, ids)).orderBy(desc(spaces.createdAt));
+  }
+
+  async getSpacesByProjects(projectIds: string[]): Promise<Space[]> {
+    if (projectIds.length === 0) return [];
+    return db.select().from(spaces).where(
+      and(
+        inArray(spaces.projectId, projectIds),
+        eq(spaces.isTemplate, false)
+      )
+    ).orderBy(desc(spaces.createdAt));
+  }
+
+  async getNoteCountsBySpaces(spaceIds: string[]): Promise<Map<string, number>> {
+    const result = new Map<string, number>();
+    if (spaceIds.length === 0) return result;
+    const rows = await db
+      .select({ spaceId: notes.spaceId, count: sql<number>`count(*)::int` })
+      .from(notes)
+      .where(inArray(notes.spaceId, spaceIds))
+      .groupBy(notes.spaceId);
+    for (const row of rows) {
+      result.set(row.spaceId, Number(row.count) || 0);
+    }
+    return result;
+  }
+
+  async getParticipantCountsBySpaces(spaceIds: string[]): Promise<Map<string, number>> {
+    const result = new Map<string, number>();
+    if (spaceIds.length === 0) return result;
+    const rows = await db
+      .select({ spaceId: participants.spaceId, count: sql<number>`count(*)::int` })
+      .from(participants)
+      .where(inArray(participants.spaceId, spaceIds))
+      .groupBy(participants.spaceId);
+    for (const row of rows) {
+      result.set(row.spaceId, Number(row.count) || 0);
+    }
+    return result;
   }
 
   async createSpace(space: InsertSpace): Promise<Space> {

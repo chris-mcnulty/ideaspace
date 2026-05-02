@@ -1377,12 +1377,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         organizations = userOrgs.map(uo => uo.organization).filter(Boolean) as Organization[];
       }
       
-      const allProjects: Project[] = [];
-      for (const org of organizations) {
-        const orgProjects = await storage.getProjectsByOrganization(org.id);
-        allProjects.push(...orgProjects);
-      }
-      
+      const allProjects = await storage.getProjectsByOrganizations(
+        organizations.map(o => o.id)
+      );
+
       res.json(allProjects);
     } catch (error) {
       console.error("Failed to fetch projects:", error);
@@ -1594,17 +1592,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Facilitators see orgs where they have workspace assignments
       else if (user.role === "facilitator") {
         const assignments = await storage.getSpaceFacilitatorsByUser(user.id);
-        const orgIds = new Set<string>();
-        for (const assignment of assignments) {
-          const space = await storage.getSpace(assignment.spaceId);
-          if (space?.organizationId) {
-            orgIds.add(space.organizationId);
-          }
-        }
-        for (const orgId of orgIds) {
-          const org = await storage.getOrganization(orgId);
-          if (org) organizations.push(org);
-        }
+        const assignedSpaceIds = assignments.map((a: any) => a.spaceId);
+        const assignedSpaces = await storage.getSpacesByIds(assignedSpaceIds);
+        const orgIds = Array.from(
+          new Set(assignedSpaces.map(s => s.organizationId).filter(Boolean) as string[])
+        );
+        organizations = await storage.getOrganizationsByIds(orgIds);
       }
       // Regular users see their primary organization
       else if (user.organizationId) {
@@ -1612,18 +1605,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (org) organizations = [org];
       }
 
-      // Enrich with project counts
-      const enriched = await Promise.all(
-        organizations.map(async (org) => {
-          const projects = await storage.getProjectsByOrganization(org.id);
-          const spaces = await storage.getSpacesByOrganization(org.id);
-          return {
-            ...org,
-            projectCount: projects.length,
-            workspaceCount: spaces.length,
-          };
-        })
-      );
+      // Enrich with project counts (batched to avoid N+1)
+      const orgIdList = organizations.map(o => o.id);
+      const [allProjects, allSpaces] = await Promise.all([
+        storage.getProjectsByOrganizations(orgIdList),
+        storage.getSpacesByOrganizations(orgIdList),
+      ]);
+      const projectCounts = new Map<string, number>();
+      const spaceCounts = new Map<string, number>();
+      for (const p of allProjects) {
+        projectCounts.set(p.organizationId, (projectCounts.get(p.organizationId) || 0) + 1);
+      }
+      for (const s of allSpaces) {
+        if (s.organizationId) {
+          spaceCounts.set(s.organizationId, (spaceCounts.get(s.organizationId) || 0) + 1);
+        }
+      }
+      const enriched = organizations.map(org => ({
+        ...org,
+        projectCount: projectCounts.get(org.id) || 0,
+        workspaceCount: spaceCounts.get(org.id) || 0,
+      }));
 
       res.json(enriched);
     } catch (error) {
@@ -1646,11 +1648,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         // Global admin gets all
         const allOrgs = await storage.getAllOrganizations();
-        const allProjects = [];
-        for (const org of allOrgs) {
-          const orgProjects = await storage.getProjectsByOrganization(org.id);
-          allProjects.push(...orgProjects);
-        }
+        const allProjects = await storage.getProjectsByOrganizations(
+          allOrgs.map(o => o.id)
+        );
         return res.json(allProjects);
       }
       
@@ -1676,38 +1676,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (orgId) {
           projects = await storage.getProjectsByOrganization(orgId);
         } else if (user.role === "global_admin") {
-          // Global admin gets all
+          // Global admin gets all (batched)
           const allOrgs = await storage.getAllOrganizations();
-          for (const org of allOrgs) {
-            const orgProjects = await storage.getProjectsByOrganization(org.id);
-            projects.push(...orgProjects);
-          }
+          projects = await storage.getProjectsByOrganizations(allOrgs.map(o => o.id));
         }
       } else {
         // Regular users see only projects they're members of
         const memberships = await storage.getProjectMembersByUser(user.id);
         projects = memberships.map(m => m.project);
       }
-      
-      // Enrich with organization and workspace details
-      const enriched = await Promise.all(
-        projects.map(async (project) => {
-          const org = await storage.getOrganization(project.organizationId);
-          const spaces = await storage.getSpacesByProject(project.id);
-          return {
-            ...project,
-            organization: org ? { id: org.id, name: org.name, slug: org.slug } : null,
-            workspaceCount: spaces.length,
-            workspaces: spaces.map(s => ({
-              id: s.id,
-              name: s.name,
-              code: s.code,
-              status: s.status,
-            })),
-          };
-        })
-      );
-      
+
+      // Batch fetch related orgs and spaces to avoid N+1
+      const projectIds = projects.map(p => p.id);
+      const orgIds = Array.from(new Set(projects.map(p => p.organizationId).filter(Boolean) as string[]));
+      const [orgs, allSpaces] = await Promise.all([
+        storage.getOrganizationsByIds(orgIds),
+        storage.getSpacesByProjects(projectIds),
+      ]);
+      const orgMap = new Map(orgs.map(o => [o.id, o]));
+      const spacesByProject = new Map<string, typeof allSpaces>();
+      for (const s of allSpaces) {
+        if (!s.projectId) continue;
+        const list = spacesByProject.get(s.projectId);
+        if (list) list.push(s);
+        else spacesByProject.set(s.projectId, [s]);
+      }
+
+      const enriched = projects.map((project) => {
+        const org = orgMap.get(project.organizationId);
+        const projSpaces = spacesByProject.get(project.id) || [];
+        return {
+          ...project,
+          organization: org ? { id: org.id, name: org.name, slug: org.slug } : null,
+          workspaceCount: projSpaces.length,
+          workspaces: projSpaces.map(s => ({
+            id: s.id,
+            name: s.name,
+            code: s.code,
+            status: s.status,
+          })),
+        };
+      });
+
       res.json(enriched);
     } catch (error) {
       console.error("Failed to fetch detailed user projects:", error);
@@ -1728,24 +1738,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/spaces/:id", async (req, res) => {
     try {
       const identifier = req.params.id;
-      console.log(`[DEBUG] GET /api/spaces/:id - identifier: ${identifier}`);
       // Check if identifier looks like a workspace code (8 digits with or without hyphen)
       // vs a UUID (36 chars with hyphens) or serial integer
       let space;
       const isWorkspaceCode = /^\d{8}$/.test(identifier) || /^\d{4}-\d{4}$/.test(identifier);
-      console.log(`[DEBUG] isWorkspaceCode: ${isWorkspaceCode}`);
-      
+
       if (isWorkspaceCode) {
-        // Lookup by code (e.g., "12345678" or "1234-5678")
-        console.log(`[DEBUG] Looking up by code`);
         space = await storage.getSpaceByCode(identifier);
       } else {
-        // Lookup by ID (UUID or serial integer)
-        console.log(`[DEBUG] Looking up by ID`);
         space = await storage.getSpace(identifier);
       }
-      
-      console.log(`[DEBUG] Space found:`, space ? 'yes' : 'no');
+
       if (!space) {
         return res.status(404).json({ error: "Space not found" });
       }
@@ -1773,39 +1776,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Facilitators can only see workspaces they're assigned to
       else if (currentUser.role === "facilitator") {
         const facilitatorAssignments = await storage.getSpaceFacilitatorsByUser(currentUser.id);
-        const spaceIds = facilitatorAssignments.map((a: any) => a.spaceId);
-        const spaceResults = await Promise.all(
-          spaceIds.map((id: string) => storage.getSpace(id))
-        );
-        // Filter out any null results
-        spaces = spaceResults.filter((s: any) => s !== null);
+        const assignedSpaceIds = facilitatorAssignments.map((a: any) => a.spaceId);
+        spaces = await storage.getSpacesByIds(assignedSpaceIds);
       }
       // Regular users don't have access to any workspaces as facilitators
       else {
         spaces = [];
       }
 
-      // Enrich each workspace with stats and project info
-      const enrichedSpaces = await Promise.all(
-        spaces.map(async (space: any) => {
-          const [participants, notes, org, project] = await Promise.all([
-            storage.getParticipantsBySpace(space.id),
-            storage.getNotesBySpace(space.id),
-            storage.getOrganization(space.organizationId),
-            space.projectId ? storage.getProject(space.projectId) : null,
-          ]);
+      // Enrich each workspace with stats and project info using batched queries
+      const spaceIds = spaces.map((s: any) => s.id);
+      const orgIds = Array.from(new Set(spaces.map((s: any) => s.organizationId).filter(Boolean))) as string[];
+      const projectIds = Array.from(new Set(spaces.map((s: any) => s.projectId).filter(Boolean))) as string[];
 
-          return {
-            ...space,
-            organization: org,
-            project: project || null,
-            stats: {
-              participantCount: participants.length,
-              noteCount: notes.length,
-            },
-          };
-        })
-      );
+      const [participantCounts, noteCounts, orgs, projectsList] = await Promise.all([
+        storage.getParticipantCountsBySpaces(spaceIds),
+        storage.getNoteCountsBySpaces(spaceIds),
+        storage.getOrganizationsByIds(orgIds),
+        storage.getProjectsByIds(projectIds),
+      ]);
+
+      const orgMap = new Map(orgs.map(o => [o.id, o]));
+      const projectMap = new Map(projectsList.map(p => [p.id, p]));
+
+      const enrichedSpaces = spaces.map((space: any) => ({
+        ...space,
+        organization: orgMap.get(space.organizationId) || null,
+        project: space.projectId ? projectMap.get(space.projectId) || null : null,
+        stats: {
+          participantCount: participantCounts.get(space.id) || 0,
+          noteCount: noteCounts.get(space.id) || 0,
+        },
+      }));
 
       res.json(enrichedSpaces);
     } catch (error) {
@@ -2104,12 +2106,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Protected: Require company admin or above to delete spaces
   app.delete("/api/spaces/:id", requireCompanyAdmin, async (req, res) => {
     try {
-      console.log(`[deleteSpace] Attempting to delete space: ${req.params.id}`);
       const deleted = await storage.deleteSpace(req.params.id);
       if (!deleted) {
         return res.status(404).json({ error: "Space not found" });
       }
-      console.log(`[deleteSpace] Successfully deleted space: ${req.params.id}`);
       res.status(204).send();
     } catch (error: any) {
       console.error(`[deleteSpace] Error deleting space ${req.params.id}:`, error.message, error.code, error.detail);
