@@ -2960,9 +2960,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const orgKey = (s: string) => s.toLowerCase();
       const bySlug = new Map(allOrgs.map((o) => [orgKey(o.slug), o]));
       const byName = new Map(allOrgs.map((o) => [orgKey(o.name), o]));
+      // Within-CSV duplicate-email detection: catch repeats before they hit
+      // the unique constraint on users.email at confirm-time.
+      const seenEmail = new Map<string, number>();
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i] as UserCsvRow;
         const sourceRow = rowOf(i);
+        const emailKey = r.email.toLowerCase();
+        const firstAt = seenEmail.get(emailKey);
+        if (firstAt !== undefined) {
+          errors.push({ rowIndex: i, row: sourceRow, field: "email", message: `Duplicate email in CSV (first appears at row ${firstAt}): ${r.email}` });
+          continue;
+        }
+        seenEmail.set(emailKey, sourceRow);
         let orgId: string | null = null;
         if (r.organization) {
           const found = bySlug.get(orgKey(r.organization)) ?? byName.get(orgKey(r.organization));
@@ -3210,12 +3220,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bySlug = new Map(allOrgs.map((o) => [o.slug.toLowerCase(), o]));
       const byName = new Map(allOrgs.map((o) => [o.name.toLowerCase(), o]));
 
-      type ResolvedRow = (typeof body.rows)[number] & { organizationId: string | null };
+      type ResolvedRow = (typeof body.rows)[number] & { organizationId: string | null; sourceRow: number };
       const resolvedRows: ResolvedRow[] = [];
       const failures: { row: number; message: string }[] = [];
 
+      // Use the original CSV row numbers from the preview when the client
+      // sends them; otherwise fall back to a 1-based offset. This keeps
+      // confirm-time errors aligned with the user's CSV.
+      const clientSourceRows = Array.isArray((req.body as { sourceRows?: unknown }).sourceRows)
+        ? ((req.body as { sourceRows?: unknown[] }).sourceRows as unknown[]).map((v) => Number(v))
+        : null;
+
+      // Defensive: catch within-payload duplicate emails so a uniqueness
+      // violation never reaches the transaction as a generic 500.
+      const seenEmail = new Map<string, number>();
+
       body.rows.forEach((row, idx) => {
-        const sourceRow = idx + 2; // header + 1-based
+        const sourceRow = clientSourceRows && Number.isFinite(clientSourceRows[idx])
+          ? clientSourceRows[idx]
+          : idx + 2;
+        const emailKey = row.email.toLowerCase();
+        const firstAt = seenEmail.get(emailKey);
+        if (firstAt !== undefined) {
+          failures.push({ row: sourceRow, message: `Duplicate email in payload (first appears at row ${firstAt}): ${row.email}` });
+          return;
+        }
+        seenEmail.set(emailKey, sourceRow);
         let organizationId: string | null = null;
         if (row.organization) {
           const key = row.organization.toLowerCase();
@@ -3240,7 +3270,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return;
           }
         }
-        resolvedRows.push({ ...row, organizationId });
+        resolvedRows.push({ ...row, organizationId, sourceRow });
       });
 
       if (failures.length > 0) {
@@ -3251,7 +3281,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const dupes: { row: number; email: string }[] = [];
       for (let i = 0; i < resolvedRows.length; i++) {
         const existing = await storage.getUserByEmail(resolvedRows[i].email);
-        if (existing) dupes.push({ row: i + 2, email: resolvedRows[i].email });
+        if (existing) dupes.push({ row: resolvedRows[i].sourceRow, email: resolvedRows[i].email });
       }
       if (dupes.length > 0) {
         return res.status(409).json({ error: "Some emails are already registered", duplicates: dupes });

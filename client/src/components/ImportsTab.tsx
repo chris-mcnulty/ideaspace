@@ -134,7 +134,10 @@ export function ImportsTab() {
         type === "templates" ? "/api/admin/imports/templates/confirm"
           : type === "users" ? "/api/admin/imports/users/confirm"
           : "/api/admin/imports/ideas/confirm";
-      const body: Record<string, unknown> = { rows: serverPreview.validRows };
+      const body: Record<string, unknown> = {
+        rows: serverPreview.validRows,
+        sourceRows: serverPreview.sourceRows,
+      };
       if (type === "users") body.sendInvites = sendInvites;
       const res = await apiRequest("POST", url, body);
       return (await res.json()) as ConfirmResult;
