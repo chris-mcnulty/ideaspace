@@ -9,7 +9,7 @@ import oauthRoutes from "./routes/auth-oauth";
 import entraRoutes from "./routes/auth-entra";
 import { db } from "./db";
 import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, type Space, type InsertSpace, organizations, users, companyAdmins as companyAdminsTable, knowledgeBaseDocuments, workspaceTemplates, workspaceTemplateNotes, aiUsageLog, insertIdeaSchema, insertWorkspaceModuleSchema, insertWorkspaceModuleRunSchema, insertPriorityMatrixSchema, insertPriorityMatrixPositionSchema, insertStaircaseModuleSchema, insertStaircasePositionSchema, projectMembers, categories, notes, participants, projects, spaces } from "@shared/schema";
-import { CSV_IMPORT_TYPES, csvConfirmTemplatesBodySchema, csvConfirmUsersBodySchema, csvConfirmIdeasBodySchema, type CsvImportType } from "@shared/csvImport";
+import { CSV_IMPORT_TYPES, csvConfirmTemplatesBodySchema, csvConfirmUsersBodySchema, csvConfirmIdeasBodySchema, type CsvImportType, type TemplateCsvRow, type UserCsvRow, type IdeaCsvRow } from "@shared/csvImport";
 import { buildCsvPreview, buildErrorReportCsv } from "./services/csvImport";
 import { uploadImage, validateImageFile, cleanupTempFile } from "./middleware/uploadMiddleware";
 import { processUploadedImage } from "./utils/contentUtils";
@@ -2943,14 +2943,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Unified CSV Import (Admin) — templates, users, ideas
   // ============================================================
   type DbValidationError = { rowIndex: number; row: number; field?: string; message: string };
+  type ImportRow = TemplateCsvRow | UserCsvRow | IdeaCsvRow;
 
   async function validateImportAgainstDb(
     type: CsvImportType,
-    rows: any[],
+    rows: ImportRow[],
+    sourceRows: number[],
     user: User,
   ): Promise<DbValidationError[]> {
     const errors: DbValidationError[] = [];
     if (rows.length === 0) return errors;
+    const rowOf = (i: number) => sourceRows[i] ?? (i + 2);
 
     if (type === "users") {
       const allOrgs = await storage.getAllOrganizations();
@@ -2958,8 +2961,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bySlug = new Map(allOrgs.map((o) => [orgKey(o.slug), o]));
       const byName = new Map(allOrgs.map((o) => [orgKey(o.name), o]));
       for (let i = 0; i < rows.length; i++) {
-        const r = rows[i];
-        const sourceRow = i + 2;
+        const r = rows[i] as UserCsvRow;
+        const sourceRow = rowOf(i);
         let orgId: string | null = null;
         if (r.organization) {
           const found = bySlug.get(orgKey(r.organization)) ?? byName.get(orgKey(r.organization));
@@ -2991,8 +2994,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } else if (type === "ideas") {
       const codeCache = new Map<string, Space | undefined>();
       for (let i = 0; i < rows.length; i++) {
-        const r = rows[i];
-        const sourceRow = i + 2;
+        const r = rows[i] as IdeaCsvRow;
+        const sourceRow = rowOf(i);
         let space = codeCache.get(r.workspaceCode);
         if (space === undefined) {
           space = await storage.getSpaceByCode(r.workspaceCode);
@@ -3007,8 +3010,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
     } else if (type === "templates") {
-      // Warn on duplicate template names within an organization scope.
-      const targetOrgId = user.role === "company_admin" ? user.organizationId : user.organizationId;
+      const targetOrgId = user.organizationId;
       const existing = await storage.getAllTemplates();
       const existingNames = new Set(
         existing
@@ -3016,9 +3018,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .map((s) => s.name.toLowerCase()),
       );
       for (let i = 0; i < rows.length; i++) {
-        const r = rows[i];
+        const r = rows[i] as TemplateCsvRow;
         if (existingNames.has(r.name.toLowerCase())) {
-          errors.push({ rowIndex: i, row: i + 2, field: "name", message: `Template name already exists: ${r.name}` });
+          errors.push({ rowIndex: i, row: rowOf(i), field: "name", message: `Template name already exists: ${r.name}` });
         }
       }
     }
@@ -3038,21 +3040,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const defaultWorkspaceCode = typeof req.body?.defaultWorkspaceCode === "string" && req.body.defaultWorkspaceCode.trim()
         ? req.body.defaultWorkspaceCode.trim()
         : undefined;
-      const preview = buildCsvPreview(type, csvText, { defaultWorkspaceCode });
+      const preview = buildCsvPreview<ImportRow>(type, csvText, { defaultWorkspaceCode });
 
       // Augment with DB-aware checks so the preview surfaces referential and
       // tenant-authorization failures before the user clicks Confirm.
       const currentUser = req.user as User;
-      const dbErrors = await validateImportAgainstDb(type, preview.validRows as any[], currentUser);
+      const dbErrors = await validateImportAgainstDb(type, preview.validRows, preview.sourceRows, currentUser);
       if (dbErrors.length > 0) {
         const validIdsToDrop = new Set(dbErrors.map((e) => e.rowIndex));
-        const filtered: any[] = [];
+        const filteredRows: ImportRow[] = [];
+        const filteredSourceRows: number[] = [];
         preview.validRows.forEach((r, i) => {
-          if (!validIdsToDrop.has(i)) filtered.push(r);
+          if (!validIdsToDrop.has(i)) {
+            filteredRows.push(r);
+            filteredSourceRows.push(preview.sourceRows[i]);
+          }
         });
-        preview.validRows = filtered;
+        preview.validRows = filteredRows;
+        preview.sourceRows = filteredSourceRows;
         preview.errors.push(...dbErrors.map((e) => ({ row: e.row, field: e.field, message: e.message })));
-        preview.invalidCount = preview.errors.length;
+        // Recompute invalidCount as distinct invalid rows, not total issue count
+        preview.invalidCount = new Set(preview.errors.map((e) => e.row)).size;
       }
 
       const wantsCsv = String(req.query?.format ?? "") === "errors-csv";
@@ -3102,6 +3110,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const [collision] = await tx.select().from(spaces).where(eq(spaces.code, code)).limit(1);
           if (collision) code = await generateWorkspaceCode();
 
+          // Imported templates use explicit defaults for all configuration
+          // fields the cloneWorkspaceFromTemplate path reads, so cloned
+          // workspaces are fully functional. The CSV schema deliberately
+          // captures only name/description/ideas/categories per the task
+          // spec; remaining fields fall back to safe shared defaults that
+          // mirror the schema-level defaults in `spaces`.
           const spaceValues: InsertSpace = {
             organizationId: targetOrgId,
             code,
@@ -3112,6 +3126,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             isTemplate: true,
             templateScope,
             createdBy: currentUser.id,
+            sessionMode: "live",
+            pairwiseScope: "all",
+            marketplaceCoinBudget: 100,
+            guestAllowed: false,
           };
           const [tplSpace] = await tx.insert(spaces).values(spaceValues).returning();
 

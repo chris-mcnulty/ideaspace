@@ -64,6 +64,9 @@ export interface CsvPreviewResponse<TRow = unknown> {
   type: CsvImportType;
   totalRows: number;
   validRows: TRow[];
+  /** Original 1-based CSV line numbers for each entry in `validRows`. */
+  sourceRows: number[];
+  /** Count of distinct invalid CSV rows (NOT the total number of issues). */
   invalidCount: number;
   errors: CsvPreviewError[];
 }
@@ -175,7 +178,7 @@ export function buildCsvPreview<T>(
 
   const rows = splitCsvRows(csvText.replace(/^\uFEFF/, ""));
   if (rows.length === 0) {
-    return { type, totalRows: 0, validRows: [], invalidCount: 1, errors: [{ row: 1, message: "CSV is empty" }] };
+    return { type, totalRows: 0, validRows: [], sourceRows: [], invalidCount: 1, errors: [{ row: 1, message: "CSV is empty" }] };
   }
 
   const rawHeaders = parseCsvLine(rows[0]).map((h) => h.trim());
@@ -205,6 +208,9 @@ export function buildCsvPreview<T>(
   }
 
   const validRows: T[] = [];
+  const sourceRows: number[] = [];
+  const invalidRowSet = new Set<number>();
+  if (errors.length > 0) invalidRowSet.add(1);
 
   for (let i = 1; i < rows.length; i++) {
     const sourceRow = i + 1;
@@ -235,7 +241,9 @@ export function buildCsvPreview<T>(
     const parsed = schema.safeParse(candidate);
     if (parsed.success) {
       validRows.push(parsed.data as T);
+      sourceRows.push(sourceRow);
     } else {
+      invalidRowSet.add(sourceRow);
       for (const issue of parsed.error.issues) {
         errors.push({
           row: sourceRow,
@@ -250,7 +258,8 @@ export function buildCsvPreview<T>(
     type,
     totalRows: Math.max(0, rows.length - 1),
     validRows,
-    invalidCount: errors.length,
+    sourceRows,
+    invalidCount: invalidRowSet.size,
     errors,
   };
 }
