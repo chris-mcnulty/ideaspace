@@ -25,6 +25,11 @@ interface ContributorStat {
   votes: number;
 }
 
+interface ActivityBucket {
+  t: number;
+  counts: Record<string, number>;
+}
+
 interface PulseSnapshot {
   participants: { joined: number; online: number };
   totals: { ideas: number; votes: number };
@@ -33,6 +38,7 @@ interface PulseSnapshot {
   contributorStats: Record<string, ContributorStat>;
   participantNames: Record<string, string>;
   recentNoteTimestamps: number[];
+  activitySeries: ActivityBucket[];
   generatedAt: string;
 }
 
@@ -44,6 +50,7 @@ interface PulseView {
   contributorStats: Record<string, ContributorStat>;
   participantNames: Record<string, string>;
   recentNoteTimestamps: number[];
+  activitySeries: ActivityBucket[];
 }
 
 function snapshotToView(s: PulseSnapshot): PulseView {
@@ -57,6 +64,7 @@ function snapshotToView(s: PulseSnapshot): PulseView {
     contributorStats: { ...s.contributorStats },
     participantNames: { ...s.participantNames },
     recentNoteTimestamps: s.recentNoteTimestamps,
+    activitySeries: (s.activitySeries ?? []).map(b => ({ t: b.t, counts: { ...b.counts } })),
   };
 }
 
@@ -160,6 +168,140 @@ function VelocitySparkline({ timestamps }: { timestamps: number[] }) {
   );
 }
 
+const HEATMAP_MODULE_ORDER = [
+  "ideation",
+  "pairwise-voting",
+  "stack-ranking",
+  "marketplace",
+  "survey",
+  "priority-matrix",
+  "staircase",
+] as const;
+
+const HEATMAP_MODULE_HUE: Record<string, number> = {
+  ideation: 217,
+  "pairwise-voting": 280,
+  "stack-ranking": 25,
+  marketplace: 45,
+  survey: 165,
+  "priority-matrix": 350,
+  staircase: 130,
+};
+
+function ActivityHeatmap({
+  series,
+  enabledModules,
+  now,
+}: {
+  series: ActivityBucket[];
+  enabledModules: string[];
+  now: number;
+}) {
+  const { rows, minutes, max } = useMemo(() => {
+    if (series.length === 0) {
+      return { rows: [] as string[], minutes: [] as number[], max: 0 };
+    }
+    // Show modules that are enabled OR have any historical activity, in
+    // canonical order. This keeps the row layout stable when a facilitator
+    // toggles a module off mid-session.
+    const seen = new Set<string>();
+    for (const b of series) for (const k of Object.keys(b.counts)) seen.add(k);
+    for (const k of enabledModules) seen.add(k);
+    const orderedRows = HEATMAP_MODULE_ORDER.filter(k => seen.has(k));
+    // Build a continuous minute axis from the first bucket through the
+    // current minute so quiet stretches show up as gaps.
+    const startMinute = Math.floor(series[0].t / 60000) * 60000;
+    const endMinute = Math.max(
+      Math.floor(now / 60000) * 60000,
+      series[series.length - 1].t,
+    );
+    const minuteAxis: number[] = [];
+    for (let t = startMinute; t <= endMinute; t += 60000) minuteAxis.push(t);
+    let maxCount = 0;
+    for (const b of series) {
+      for (const k of orderedRows) {
+        const c = b.counts[k] ?? 0;
+        if (c > maxCount) maxCount = c;
+      }
+    }
+    return { rows: orderedRows, minutes: minuteAxis, max: maxCount };
+  }, [series, enabledModules, now]);
+
+  if (series.length === 0 || rows.length === 0 || max === 0) {
+    return (
+      <div
+        className="flex h-24 items-center justify-center rounded-md border border-dashed text-xs text-muted-foreground"
+        data-testid="text-heatmap-empty"
+      >
+        No participation activity recorded yet for this session.
+      </div>
+    );
+  }
+
+  const bucketMap = new Map<number, Record<string, number>>();
+  for (const b of series) bucketMap.set(b.t, b.counts);
+  const startLabel = new Date(minutes[0]).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const endLabel = new Date(minutes[minutes.length - 1]).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  return (
+    <div className="space-y-2" data-testid="activity-heatmap">
+      <div className="overflow-x-auto">
+        <div className="space-y-1 min-w-fit">
+          {rows.map(moduleKey => {
+            const meta = MODULE_LABELS[moduleKey] || { label: moduleKey, icon: Activity };
+            const Icon = meta.icon;
+            const hue = HEATMAP_MODULE_HUE[moduleKey] ?? 217;
+            return (
+              <div
+                key={moduleKey}
+                className="flex items-center gap-2"
+                data-testid={`heatmap-row-${moduleKey}`}
+              >
+                <div className="flex w-36 shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                  <Icon className="h-3.5 w-3.5" />
+                  <span className="truncate">{meta.label}</span>
+                </div>
+                <div className="flex flex-1 gap-px">
+                  {minutes.map(m => {
+                    const c = bucketMap.get(m)?.[moduleKey] ?? 0;
+                    const intensity = c === 0 ? 0 : 0.18 + 0.82 * (c / max);
+                    const bg =
+                      c === 0
+                        ? undefined
+                        : `hsl(${hue} 80% 50% / ${intensity.toFixed(3)})`;
+                    return (
+                      <div
+                        key={m}
+                        className={`h-4 w-1.5 rounded-sm ${c === 0 ? "bg-muted/40" : ""}`}
+                        style={bg ? { backgroundColor: bg } : undefined}
+                        title={`${meta.label} • ${new Date(m).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} • ${c} ${c === 1 ? "event" : "events"}`}
+                        data-testid={`heatmap-cell-${moduleKey}-${m}`}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+        <span data-testid="text-heatmap-start">{startLabel}</span>
+        <span>
+          {minutes.length} {minutes.length === 1 ? "minute" : "minutes"} • peak {max}/min
+        </span>
+        <span data-testid="text-heatmap-end">{endLabel}</span>
+      </div>
+    </div>
+  );
+}
+
 export interface PulseLiveEvent {
   type: string;
   data: unknown;
@@ -197,6 +339,20 @@ const EVENT_MODULE_MAP: Record<string, string> = {
   staircase_position_updated: "staircase",
 };
 
+function bumpActivitySeries(
+  series: ActivityBucket[],
+  moduleKey: string,
+  now = Date.now(),
+): ActivityBucket[] {
+  const minute = Math.floor(now / 60000) * 60000;
+  const last = series.length > 0 ? series[series.length - 1] : null;
+  if (last && last.t === minute) {
+    const counts = { ...last.counts, [moduleKey]: (last.counts[moduleKey] ?? 0) + 1 };
+    return [...series.slice(0, -1), { t: minute, counts }];
+  }
+  return [...series, { t: minute, counts: { [moduleKey]: 1 } }];
+}
+
 function applyDelta(prev: PulseView, ev: PulseLiveEvent): PulseView {
   const data = (ev.data && typeof ev.data === "object" ? ev.data : {}) as Record<string, unknown>;
   const participantId = typeof data.participantId === "string" ? data.participantId : null;
@@ -217,6 +373,7 @@ function applyDelta(prev: PulseView, ev: PulseLiveEvent): PulseView {
       recentNoteTimestamps: [...prev.recentNoteTimestamps, Date.now()],
       engagedByModule: nextEngaged,
       contributorStats: nextStats,
+      activitySeries: bumpActivitySeries(prev.activitySeries, "ideation"),
     };
   }
   // note_deleted is intentionally handled via REFETCH_EVENTS instead of a
@@ -237,18 +394,23 @@ function applyDelta(prev: PulseView, ev: PulseLiveEvent): PulseView {
       totals: { ...prev.totals, votes: prev.totals.votes + 1 },
       engagedByModule: nextEngaged,
       contributorStats: nextStats,
+      activitySeries: bumpActivitySeries(prev.activitySeries, "pairwise-voting"),
     };
   }
 
   const moduleKey = EVENT_MODULE_MAP[ev.type];
-  if (moduleKey && participantId) {
+  if (moduleKey) {
+    const nextActivity = bumpActivitySeries(prev.activitySeries, moduleKey);
     const existing = prev.engagedByModule[moduleKey];
-    if (existing && existing.has(participantId)) return prev;
+    if (!participantId || (existing && existing.has(participantId))) {
+      return { ...prev, activitySeries: nextActivity };
+    }
     const updated = new Set(existing || []);
     updated.add(participantId);
     return {
       ...prev,
       engagedByModule: { ...prev.engagedByModule, [moduleKey]: updated },
+      activitySeries: nextActivity,
     };
   }
 
@@ -376,7 +538,7 @@ export default function PulsePanel({ spaceId, liveEvent }: PulsePanelProps) {
 
   if (!view) return null;
 
-  const { participants, totals, engagedByModule, enabledModules, recentNoteTimestamps } = view;
+  const { participants, totals, engagedByModule, enabledModules, recentNoteTimestamps, activitySeries } = view;
   const total = participants.joined;
   const sizeOf = (k: string) => engagedByModule[k]?.size ?? 0;
   const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
@@ -447,6 +609,26 @@ export default function PulsePanel({ spaceId, liveEvent }: PulsePanelProps) {
           testId="tile-staircase"
         />
       </div>
+
+      <Card data-testid="card-activity-heatmap">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Activity className="h-4 w-4" />
+            Participation heatmap
+          </CardTitle>
+          <CardDescription>
+            Activity per minute across all modules — color intensity reflects how many events
+            (notes, votes, rankings, allocations, survey responses, matrix &amp; staircase placements) happened in that minute.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ActivityHeatmap
+            series={activitySeries}
+            enabledModules={enabledModules}
+            now={Date.now()}
+          />
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card data-testid="card-velocity">

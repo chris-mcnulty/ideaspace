@@ -59,7 +59,29 @@ export async function ensureClientErrorsTable(): Promise<void> {
   `);
 }
 
+/**
+ * Ensure the pulse_activity_events append-only log exists.
+ * Idempotent; safe to run on every startup. Backs the per-minute
+ * participation heatmap on the Pulse tab.
+ */
+export async function ensurePulseActivityEventsTable(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS pulse_activity_events (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      space_id varchar NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+      module_type text NOT NULL,
+      participant_id varchar,
+      occurred_at timestamp NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_pulse_events_space_time
+    ON pulse_activity_events(space_id, occurred_at);
+  `);
+}
+
 export async function runStartupMigrations(): Promise<void> {
   await ensureNotificationsTable();
   await ensureClientErrorsTable();
+  await ensurePulseActivityEventsTable();
 }

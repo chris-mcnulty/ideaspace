@@ -3529,6 +3529,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const PER_NOTE_BROADCAST_LIMIT = 50;
       for (const bucket of broadcastBuckets) {
         if (bucket.notes.length === 0) continue;
+        for (const note of bucket.notes) {
+          void storage.recordPulseActivity(bucket.spaceId, "ideation", note.participantId);
+        }
         if (bucket.notes.length <= PER_NOTE_BROADCAST_LIMIT) {
           for (const note of bucket.notes) {
             broadcastToSpace(bucket.spaceId, { type: "note_created", data: note });
@@ -3850,7 +3853,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const note = await storage.createNote(data);
-      
+      void storage.recordPulseActivity(note.spaceId, "ideation", note.participantId);
+
       // Broadcast to WebSocket clients in this workspace only
       broadcastToSpace(note.spaceId, { type: "note_created", data: note });
       
@@ -4066,6 +4070,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           content: trimmedContent,
           participantId: participant.id,
         });
+        void storage.recordPulseActivity(spaceId, "ideation", participant.id);
         createdNotes.push(note);
       }
       
@@ -4520,6 +4525,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isManualOverride: !!parsed.manualCategoryId,
         aiGenerated: true,
       });
+      void storage.recordPulseActivity(spaceId, "ideation", participant.id);
 
       broadcastToSpace(spaceId, { type: "note_created", data: note });
 
@@ -4632,6 +4638,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .filter(t => Number.isFinite(t) && t >= cutoff)
         .sort((a, b) => a - b);
 
+      // Per-minute activity heatmap across the full session, sourced from the
+      // append-only `pulse_activity_events` log. We read from the event log
+      // (rather than the current-state tables) so that upsert-style modules
+      // — rankings, marketplace, survey, matrix, staircase — preserve every
+      // historical engagement instead of collapsing repeated activity into a
+      // single createdAt/updatedAt timestamp.
+      const activitySeries = await storage.getPulseActivityBuckets(spaceId);
+
       res.json({
         participants: { joined, online },
         totals: {
@@ -4643,6 +4657,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         contributorStats,
         participantNames,
         recentNoteTimestamps,
+        activitySeries,
         generatedAt: new Date().toISOString(),
       });
     } catch (error) {
@@ -4831,6 +4846,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         visibleInRanking: true,
         visibleInMarketplace: true,
       });
+      void storage.recordPulseActivity(idea.spaceId, "ideation", facilitatorParticipant.id);
       
       // Update the idea to mark as pushed
       await storage.updateIdea(ideaId, { showOnIdeationBoard: true });
@@ -4904,6 +4920,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           visibleInRanking: true,
           visibleInMarketplace: true,
         });
+        void storage.recordPulseActivity(idea.spaceId, "ideation", facilitatorParticipant.id);
         
         // Update the idea to mark as pushed
         await storage.updateIdea(ideaId, { showOnIdeationBoard: true });
@@ -5424,7 +5441,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const position = await storage.upsertPriorityMatrixPosition(positionData);
-      
+      void storage.recordPulseActivity(spaceId, "priority-matrix", position.participantId ?? null);
+
       // Broadcast position update for real-time collaboration
       broadcastToSpace(spaceId, { 
         type: "matrix_position_updated", 
@@ -5468,6 +5486,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (position.matrixId) {
         const matrix = await storage.getPriorityMatrix(position.matrixId);
         if (matrix) {
+          void storage.recordPulseActivity(matrix.spaceId, "priority-matrix", position.participantId ?? null);
           broadcastToSpace(matrix.spaceId, { 
             type: "matrix_position_updated", 
             data: position 
@@ -5630,7 +5649,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const position = await storage.upsertStaircasePosition(positionData);
-      
+      void storage.recordPulseActivity(spaceId, "staircase", position.participantId ?? null);
+
       // Broadcast position update for real-time collaboration
       broadcastToSpace(spaceId, { 
         type: "staircase_position_updated", 
@@ -5725,6 +5745,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const data = insertVoteSchema.parse(req.body);
       const vote = await storage.createVote(data);
       
+      void storage.recordPulseActivity(vote.spaceId, "pairwise-voting", vote.participantId);
+
       // Broadcast vote update to clients in this workspace only
       broadcastToSpace(vote.spaceId, {
         type: "vote_recorded",
@@ -5858,6 +5880,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         )
       );
       
+      void storage.recordPulseActivity(spaceId, "stack-ranking", participantId);
+
       // Broadcast ranking update to clients in this workspace only
       broadcastToSpace(spaceId, {
         type: "ranking_submitted",
@@ -5995,6 +6019,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           )
       );
       
+      void storage.recordPulseActivity(spaceId, "marketplace", participantId);
+
       // Broadcast allocation update to clients in this workspace only
       broadcastToSpace(spaceId, {
         type: "marketplace_allocation_submitted",
@@ -6316,6 +6342,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      void storage.recordPulseActivity(spaceId, "survey", participantId);
+
       // Broadcast to WebSocket clients in this workspace only
       broadcastToSpace(spaceId, {
         type: "survey_response_submitted",
@@ -6768,6 +6796,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             manualCategoryId: categoryId,
             isManualOverride: categoryId !== null,
           });
+          void storage.recordPulseActivity(spaceId, "ideation", importParticipant.id);
 
           importedCount++;
         } catch (error) {

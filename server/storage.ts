@@ -116,6 +116,7 @@ import {
   staircasePositions,
   notifications,
   clientErrors,
+  pulseActivityEvents,
 } from "@shared/schema";
 import { eq, and, desc, or, isNull, gte, lte, sql, inArray } from "drizzle-orm";
 
@@ -256,6 +257,11 @@ export interface IStorage {
   deleteParticipant(id: string): Promise<boolean>;
   findOrphanedParticipantsByEmail(email: string): Promise<Participant[]>;
   linkParticipantToUser(participantId: string, userId: string): Promise<Participant | undefined>;
+
+  // Pulse heatmap activity log (append-only event source for the
+  // per-minute participation heatmap on the Pulse tab).
+  recordPulseActivity(spaceId: string, moduleType: string, participantId?: string | null, occurredAt?: Date): Promise<void>;
+  getPulseActivityBuckets(spaceId: string): Promise<Array<{ t: number; counts: Record<string, number> }>>;
 
   // Notes
   getNote(id: string): Promise<Note | undefined>;
@@ -1236,6 +1242,69 @@ export class DbStorage implements IStorage {
       .where(eq(participants.id, participantId))
       .returning();
     return updated;
+  }
+
+  // Pulse heatmap activity log
+  async recordPulseActivity(
+    spaceId: string,
+    moduleType: string,
+    participantId?: string | null,
+    occurredAt?: Date,
+  ): Promise<void> {
+    try {
+      await db.insert(pulseActivityEvents).values({
+        spaceId,
+        moduleType,
+        participantId: participantId ?? null,
+        ...(occurredAt ? { occurredAt } : {}),
+      });
+    } catch (error) {
+      // Pulse logging is best-effort: never let a missing/dropped row fail
+      // the underlying participant action.
+      console.warn("[pulse] failed to record activity:", error);
+    }
+  }
+
+  async getPulseActivityBuckets(
+    spaceId: string,
+  ): Promise<Array<{ t: number; counts: Record<string, number> }>> {
+    // Aggregate in SQL: bucket occurredAt to the minute and count per
+    // (minute, moduleType). This keeps payloads bounded even for sessions
+    // with thousands of events. If the table is temporarily absent (e.g.
+    // mid-rollout before startup migrations have run), we fail soft with
+    // an empty series so the rest of the Pulse tab keeps working.
+    let rows: Array<{ bucket: Date; moduleType: string; count: number }> = [];
+    try {
+      rows = await db
+        .select({
+          bucket: sql<Date>`date_trunc('minute', ${pulseActivityEvents.occurredAt})`.as("bucket"),
+          moduleType: pulseActivityEvents.moduleType,
+          count: sql<number>`count(*)::int`.as("count"),
+        })
+        .from(pulseActivityEvents)
+        .where(eq(pulseActivityEvents.spaceId, spaceId))
+        .groupBy(
+          sql`date_trunc('minute', ${pulseActivityEvents.occurredAt})`,
+          pulseActivityEvents.moduleType,
+        );
+    } catch (error) {
+      console.warn("[pulse] getPulseActivityBuckets failed, returning empty:", error);
+      return [];
+    }
+    const buckets = new Map<number, Record<string, number>>();
+    for (const r of rows) {
+      const t = r.bucket instanceof Date ? r.bucket.getTime() : new Date(String(r.bucket)).getTime();
+      if (!Number.isFinite(t)) continue;
+      let entry = buckets.get(t);
+      if (!entry) {
+        entry = {};
+        buckets.set(t, entry);
+      }
+      entry[r.moduleType] = Number(r.count) || 0;
+    }
+    return Array.from(buckets.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([t, counts]) => ({ t, counts }));
   }
 
   // Notes

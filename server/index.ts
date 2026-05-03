@@ -6,7 +6,7 @@ import { setupAuth } from "./auth";
 import { ensureUploadDirs } from "./middleware/uploadMiddleware";
 import { pool } from "./db";
 import { sessionMiddleware } from "./session";
-import { ensureNotificationsTable, ensureClientErrorsTable } from "./migrations";
+import { runStartupMigrations } from "./migrations";
 
 const app = express();
 
@@ -70,8 +70,7 @@ app.use((req, res, next) => {
   
   // Run startup DB migrations (idempotent) before serving traffic
   try {
-    await ensureNotificationsTable();
-    await ensureClientErrorsTable();
+    await runStartupMigrations();
   } catch (error) {
     console.error("Failed to run startup migrations:", error);
   }

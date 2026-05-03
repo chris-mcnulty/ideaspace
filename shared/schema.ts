@@ -679,6 +679,23 @@ export const staircasePositions = pgTable("staircase_positions", {
   uniqueStaircaseNote: unique().on(table.staircaseId, table.noteId, table.moduleRunId),
 }));
 
+// Append-only event log for the Pulse heatmap. One row per participation
+// event (note created, vote recorded, ranking submitted, marketplace
+// allocation submitted, survey response submitted, matrix position updated,
+// staircase position updated). The pulse endpoint aggregates these per
+// minute to render a per-minute participation heatmap across the full
+// session — using mutable upsert tables (rankings/matrix/staircase) for
+// this would collapse repeated activity into a single timestamp.
+export const pulseActivityEvents = pgTable("pulse_activity_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  spaceId: varchar("space_id").notNull().references(() => spaces.id, { onDelete: "cascade" }),
+  moduleType: text("module_type").notNull(),
+  participantId: varchar("participant_id"),
+  occurredAt: timestamp("occurred_at").defaultNow().notNull(),
+}, (table) => ({
+  spaceTimeIdx: index("idx_pulse_events_space_time").on(table.spaceId, table.occurredAt),
+}));
+
 // In-app notifications - persistent, per-user notification feed
 export const clientErrors = pgTable("client_errors", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
