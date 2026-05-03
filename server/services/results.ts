@@ -640,12 +640,17 @@ export async function generatePersonalizedResults(
   });
   noteImpact.sort((a: any, b: any) => b.winRate - a.winRate);
 
+  // Recompute the workspace's *current* cohort inputs hash so the
+  // personalized cache invalidates whenever any underlying cohort input
+  // changes (new ideas, votes, KB docs, etc.) — not only when the
+  // persisted cohort row was regenerated.
+  const currentCohortInputsHash = (await getCurrentCohortInputsHash(spaceId)) ?? '';
   const personalHash = computePersonalizedInputsHash({
     spaceId,
     participantId,
     participantDisplayName: participant.displayName ?? null,
     cohortResultId: cohortResultId || null,
-    cohortInputsHash: cohortResult?.inputsHash || cohortResultId || '',
+    cohortInputsHash: currentCohortInputsHash,
     cohortSummary: cohortResult?.summary ?? null,
     participantNotes: participantNotes.map((n: any) => ({ id: n.id, content: n.content, manualCategoryId: n.manualCategoryId ?? null })),
     participantVotes: participantVotes.map((v: any) => ({ winnerNoteId: v.winnerNoteId, loserNoteId: v.loserNoteId })),
@@ -848,6 +853,10 @@ export async function generateAllPersonalizedResults(
 
   const results: PersonalizedResult[] = [];
 
+  // Compute the current cohort inputs hash once for this batch so every
+  // participant's personalized hash captures the workspace's live state.
+  const currentCohortInputsHash = (await getCurrentCohortInputsHash(spaceId)) ?? '';
+
   for (const participant of allParticipants) {
     try {
       const result = await generatePersonalizedResultsFromCache({
@@ -855,6 +864,7 @@ export async function generateAllPersonalizedResults(
         cohortResultId,
         participant,
         cohortResult,
+        currentCohortInputsHash,
         participantNotes: notesByParticipant.get(participant.id) ?? [],
         participantVotes: votesByParticipant.get(participant.id) ?? [],
         participantRankings: rankingsByParticipant.get(participant.id) ?? [],
@@ -889,6 +899,7 @@ async function generatePersonalizedResultsFromCache(params: {
   cohortResultId: string;
   participant: ParticipantRow;
   cohortResult: CohortResult | null;
+  currentCohortInputsHash: string;
   participantNotes: NoteRow[];
   participantVotes: VoteRow[];
   participantRankings: RankingRow[];
@@ -898,7 +909,7 @@ async function generatePersonalizedResultsFromCache(params: {
   categoryNameById: Map<string, string>;
 }): Promise<PersonalizedResult> {
   const {
-    spaceId, cohortResultId, participant, cohortResult,
+    spaceId, cohortResultId, participant, cohortResult, currentCohortInputsHash,
     participantNotes, participantVotes, participantRankings, participantAllocations,
     winsByNote, comparisonsByNote, categoryNameById,
   } = params;
@@ -924,7 +935,7 @@ async function generatePersonalizedResultsFromCache(params: {
     participantId: participant.id,
     participantDisplayName: participant.displayName ?? null,
     cohortResultId: cohortResultId || null,
-    cohortInputsHash: cohortResult?.inputsHash || cohortResultId || '',
+    cohortInputsHash: currentCohortInputsHash,
     cohortSummary: cohortResult?.summary ?? null,
     participantNotes: participantNotes.map((n) => ({ id: n.id, content: n.content, manualCategoryId: n.manualCategoryId ?? null })),
     participantVotes: participantVotes.map((v) => ({ winnerNoteId: v.winnerNoteId, loserNoteId: v.loserNoteId })),
@@ -1161,6 +1172,11 @@ export async function getCurrentPersonalizedInputsHash(
     .orderBy(sql`${cohortResults.createdAt} DESC`)
     .limit(1);
 
+  // Use the workspace's *current* cohort inputs hash, not the persisted
+  // row's, so the personalized hash invalidates when any cohort input
+  // changes — even before the cohort result is regenerated.
+  const currentCohortInputsHash = (await getCurrentCohortInputsHash(spaceId)) ?? '';
+
   const [pNotes, pVotes, pRankings, pAllocs, allVotes] = await Promise.all([
     db.select().from(notes).where(and(eq(notes.spaceId, spaceId), eq(notes.participantId, participantId))),
     db.select().from(votes).where(and(eq(votes.spaceId, spaceId), eq(votes.participantId, participantId))),
@@ -1187,7 +1203,7 @@ export async function getCurrentPersonalizedInputsHash(
     participantId,
     participantDisplayName: participant.displayName ?? null,
     cohortResultId: latestCohort?.id ?? null,
-    cohortInputsHash: latestCohort?.inputsHash ?? '',
+    cohortInputsHash: currentCohortInputsHash,
     cohortSummary: latestCohort?.summary ?? null,
     participantNotes: pNotes.map((n) => ({ id: n.id, content: n.content, manualCategoryId: n.manualCategoryId ?? null })),
     participantVotes: pVotes.map((v) => ({ winnerNoteId: v.winnerNoteId, loserNoteId: v.loserNoteId })),

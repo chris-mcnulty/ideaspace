@@ -6252,11 +6252,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const cohortResults = await storage.getCohortResultsBySpace(spaceId);
 
       // Validate persisted hash against current workspace state so callers
-      // never see stale rows after notes/votes/KB docs change.
+      // never see stale rows after notes/votes/KB docs change. Legacy rows
+      // with a null inputsHash are also treated as stale (forcing
+      // regeneration) so we never serve pre-FTS-cache results unchecked.
       if (cohortResults.length > 0) {
         const stored = cohortResults[0];
         const currentHash = await getCurrentCohortInputsHash(spaceId);
-        if (currentHash && stored.inputsHash && currentHash !== stored.inputsHash) {
+        if (currentHash && (!stored.inputsHash || currentHash !== stored.inputsHash)) {
           return res.status(404).json({ error: "Cohort results are stale; regenerate to refresh.", stale: true });
         }
         return res.json(stored);
@@ -6282,7 +6284,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (cohortResults.length > 0) {
         const result = cohortResults[0];
         const currentHash = await getCurrentCohortInputsHash(spaceId);
-        if (currentHash && result.inputsHash && currentHash !== result.inputsHash) {
+        if (currentHash && (!result.inputsHash || currentHash !== result.inputsHash)) {
           return res.status(404).json({ error: "Results are stale; please check back shortly.", stale: true });
         }
         const metadata = result.metadata as { totalNotes?: number; totalVotes?: number } | null;
@@ -6357,7 +6359,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (workspaceResults.length > 0) {
         const stored = workspaceResults[0];
         const currentHash = await getCurrentPersonalizedInputsHash(spaceId, sessionParticipantId);
-        if (currentHash && stored.inputsHash && currentHash !== stored.inputsHash) {
+        if (currentHash && (!stored.inputsHash || currentHash !== stored.inputsHash)) {
           return res.status(404).json({ error: "Personalized results are stale; regenerate to refresh.", stale: true });
         }
         return res.json(stored);
