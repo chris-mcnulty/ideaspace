@@ -80,8 +80,143 @@ export async function ensurePulseActivityEventsTable(): Promise<void> {
   `);
 }
 
+/**
+ * Ensure participants has a partial unique index on (space_id, user_id)
+ * WHERE user_id IS NOT NULL, deduplicating any pre-existing duplicate
+ * rows so the index can be created. Idempotent and safe to run on every
+ * startup.
+ *
+ * Why: facilitator-only flows (bulk-import notes, accept AI suggestion,
+ * accept invite link) used a get-then-create pattern. Without a uniqueness
+ * constraint, rapid concurrent calls could create duplicate facilitator
+ * participant rows for the same (space, user), polluting analytics that
+ * count unique participants.
+ *
+ * Dedup strategy: for each (space_id, user_id) group with user_id NOT
+ * NULL, keep the oldest row (joined_at ASC, id ASC as tiebreaker), repoint
+ * every participant FK in dependent tables to that keeper, then delete
+ * the loser rows. None of the dependent tables have UNIQUE constraints on
+ * the participant_id columns, so plain UPDATEs are safe.
+ */
+export async function ensureParticipantsSpaceUserUniqueIndex(): Promise<void> {
+  // Step 1: dedupe. Build a mapping of loser_id -> keeper_id for every
+  // duplicate group, then repoint FKs and delete losers. Done in a single
+  // transaction so a partial failure can't leave the data in a bad state.
+  await pool.query(`
+    DO $$
+    DECLARE
+      mapping_count integer;
+    BEGIN
+      CREATE TEMP TABLE _participant_dedupe_map ON COMMIT DROP AS
+      WITH ranked AS (
+        SELECT
+          id,
+          space_id,
+          user_id,
+          ROW_NUMBER() OVER (
+            PARTITION BY space_id, user_id
+            ORDER BY joined_at ASC, id ASC
+          ) AS rn,
+          FIRST_VALUE(id) OVER (
+            PARTITION BY space_id, user_id
+            ORDER BY joined_at ASC, id ASC
+          ) AS keeper_id
+        FROM participants
+        WHERE user_id IS NOT NULL
+      )
+      SELECT id AS loser_id, keeper_id
+      FROM ranked
+      WHERE rn > 1;
+
+      SELECT COUNT(*) INTO mapping_count FROM _participant_dedupe_map;
+      IF mapping_count = 0 THEN
+        RETURN;
+      END IF;
+
+      -- Repoint every participant FK column to the keeper. Listed
+      -- explicitly so a future schema change here is a deliberate edit.
+      UPDATE idea_contributions ic
+        SET participant_id = m.keeper_id
+        FROM _participant_dedupe_map m
+        WHERE ic.participant_id = m.loser_id;
+
+      UPDATE ideas i
+        SET created_by_participant_id = m.keeper_id
+        FROM _participant_dedupe_map m
+        WHERE i.created_by_participant_id = m.loser_id;
+
+      UPDATE marketplace_allocations ma
+        SET participant_id = m.keeper_id
+        FROM _participant_dedupe_map m
+        WHERE ma.participant_id = m.loser_id;
+
+      UPDATE notes n
+        SET participant_id = m.keeper_id
+        FROM _participant_dedupe_map m
+        WHERE n.participant_id = m.loser_id;
+
+      UPDATE personalized_results pr
+        SET participant_id = m.keeper_id
+        FROM _participant_dedupe_map m
+        WHERE pr.participant_id = m.loser_id;
+
+      UPDATE priority_matrix_positions pmp
+        SET participant_id = m.keeper_id
+        FROM _participant_dedupe_map m
+        WHERE pmp.participant_id = m.loser_id;
+
+      UPDATE priority_matrix_positions pmp
+        SET locked_by = m.keeper_id
+        FROM _participant_dedupe_map m
+        WHERE pmp.locked_by = m.loser_id;
+
+      UPDATE rankings r
+        SET participant_id = m.keeper_id
+        FROM _participant_dedupe_map m
+        WHERE r.participant_id = m.loser_id;
+
+      UPDATE staircase_positions sp
+        SET participant_id = m.keeper_id
+        FROM _participant_dedupe_map m
+        WHERE sp.participant_id = m.loser_id;
+
+      UPDATE staircase_positions sp
+        SET locked_by = m.keeper_id
+        FROM _participant_dedupe_map m
+        WHERE sp.locked_by = m.loser_id;
+
+      UPDATE survey_responses sr
+        SET participant_id = m.keeper_id
+        FROM _participant_dedupe_map m
+        WHERE sr.participant_id = m.loser_id;
+
+      UPDATE votes v
+        SET participant_id = m.keeper_id
+        FROM _participant_dedupe_map m
+        WHERE v.participant_id = m.loser_id;
+
+      DELETE FROM participants p
+        USING _participant_dedupe_map m
+        WHERE p.id = m.loser_id;
+
+      RAISE NOTICE 'Deduplicated % participant row(s) before adding unique index', mapping_count;
+    END
+    $$;
+  `);
+
+  // Step 2: create the partial unique index. CONCURRENTLY would be safer
+  // for large tables but cannot run inside a transaction or DO block; the
+  // table is small enough that a brief lock is acceptable.
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS participants_space_user_unique
+    ON participants (space_id, user_id)
+    WHERE user_id IS NOT NULL;
+  `);
+}
+
 export async function runStartupMigrations(): Promise<void> {
   await ensureNotificationsTable();
   await ensureClientErrorsTable();
   await ensurePulseActivityEventsTable();
+  await ensureParticipantsSpaceUserUniqueIndex();
 }

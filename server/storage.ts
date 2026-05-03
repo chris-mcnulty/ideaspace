@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db, pool } from "./db";
 import {
   type Organization,
   type InsertOrganization,
@@ -253,6 +253,7 @@ export interface IStorage {
   getParticipantBySpaceAndEmail(spaceId: string, email: string): Promise<Participant | undefined>;
   getParticipantBySpaceAndUserId(spaceId: string, userId: string): Promise<Participant | undefined>;
   createParticipant(participant: InsertParticipant): Promise<Participant>;
+  getOrCreateParticipantByUserId(spaceId: string, userId: string, defaults: Omit<InsertParticipant, "spaceId" | "userId">): Promise<Participant>;
   updateParticipant(id: string, participant: Partial<InsertParticipant>): Promise<Participant | undefined>;
   deleteParticipant(id: string): Promise<boolean>;
   findOrphanedParticipantsByEmail(email: string): Promise<Participant[]>;
@@ -1230,6 +1231,26 @@ export class DbStorage implements IStorage {
     return created;
   }
 
+  async getOrCreateParticipantByUserId(
+    spaceId: string,
+    userId: string,
+    defaults: Omit<InsertParticipant, "spaceId" | "userId">
+  ): Promise<Participant> {
+    const existing = await this.getParticipantBySpaceAndUserId(spaceId, userId);
+    if (existing) return existing;
+    try {
+      return await this.createParticipant({ ...defaults, spaceId, userId } as InsertParticipant);
+    } catch (err: any) {
+      // Handle unique-violation race (Postgres error code 23505) — another
+      // concurrent request created the row first. Re-fetch the winner.
+      if (err?.code === "23505") {
+        const winner = await this.getParticipantBySpaceAndUserId(spaceId, userId);
+        if (winner) return winner;
+      }
+      throw err;
+    }
+  }
+
   async updateParticipant(id: string, participant: Partial<InsertParticipant>): Promise<Participant | undefined> {
     const normalizedParticipant = participant.email !== undefined
       ? { ...participant, email: normalizeEmail(participant.email) }
@@ -1256,11 +1277,70 @@ export class DbStorage implements IStorage {
   }
 
   async linkParticipantToUser(participantId: string, userId: string): Promise<Participant | undefined> {
-    const [updated] = await db.update(participants)
-      .set({ userId, isGuest: false })
-      .where(eq(participants.id, participantId))
-      .returning();
-    return updated;
+    // The partial unique index on participants(space_id, user_id) WHERE
+    // user_id IS NOT NULL means linking can fail if another participant
+    // row in the same space already references this user (e.g. a
+    // facilitator participant was auto-created earlier). In that case,
+    // merge the orphan row into the pre-existing one: repoint FKs and
+    // delete the orphan, returning the surviving participant. We do this
+    // in a transaction so a partial failure can't leave dangling refs.
+    const [orphan] = await db.select().from(participants).where(eq(participants.id, participantId)).limit(1);
+    if (!orphan) return undefined;
+
+    const [existing] = await db.select().from(participants).where(
+      and(
+        eq(participants.spaceId, orphan.spaceId),
+        eq(participants.userId, userId),
+      )
+    ).limit(1);
+
+    if (existing && existing.id !== participantId) {
+      // Merge: repoint every FK from orphan to existing, then delete orphan.
+      // Use a single client transaction so a partial failure can't leave
+      // dangling references.
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const loser = participantId;
+        const keeper = existing.id;
+        await client.query("UPDATE idea_contributions SET participant_id = $1 WHERE participant_id = $2", [keeper, loser]);
+        await client.query("UPDATE ideas SET created_by_participant_id = $1 WHERE created_by_participant_id = $2", [keeper, loser]);
+        await client.query("UPDATE marketplace_allocations SET participant_id = $1 WHERE participant_id = $2", [keeper, loser]);
+        await client.query("UPDATE notes SET participant_id = $1 WHERE participant_id = $2", [keeper, loser]);
+        await client.query("UPDATE personalized_results SET participant_id = $1 WHERE participant_id = $2", [keeper, loser]);
+        await client.query("UPDATE priority_matrix_positions SET participant_id = $1 WHERE participant_id = $2", [keeper, loser]);
+        await client.query("UPDATE priority_matrix_positions SET locked_by = $1 WHERE locked_by = $2", [keeper, loser]);
+        await client.query("UPDATE rankings SET participant_id = $1 WHERE participant_id = $2", [keeper, loser]);
+        await client.query("UPDATE staircase_positions SET participant_id = $1 WHERE participant_id = $2", [keeper, loser]);
+        await client.query("UPDATE staircase_positions SET locked_by = $1 WHERE locked_by = $2", [keeper, loser]);
+        await client.query("UPDATE survey_responses SET participant_id = $1 WHERE participant_id = $2", [keeper, loser]);
+        await client.query("UPDATE votes SET participant_id = $1 WHERE participant_id = $2", [keeper, loser]);
+        await client.query("DELETE FROM participants WHERE id = $1", [loser]);
+        await client.query("COMMIT");
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      } finally {
+        client.release();
+      }
+      return existing;
+    }
+
+    try {
+      const [updated] = await db.update(participants)
+        .set({ userId, isGuest: false })
+        .where(eq(participants.id, participantId))
+        .returning();
+      return updated;
+    } catch (err: any) {
+      // Narrow race: another request created the (space, user) participant
+      // between our pre-check and this UPDATE, so the partial unique index
+      // rejects the link. Recurse once to take the merge path.
+      if (err?.code === "23505") {
+        return this.linkParticipantToUser(participantId, userId);
+      }
+      throw err;
+    }
   }
 
   // Pulse heatmap activity log

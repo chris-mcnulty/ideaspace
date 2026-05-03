@@ -2404,18 +2404,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.linkParticipantToUser(participantByEmail.id, existingUser.id);
           }
         } else if (existingUser) {
-          // Check if participant exists by userId
-          const participantByUserId = await storage.getParticipantBySpaceAndUserId(request.spaceId, existingUser.id);
-          if (!participantByUserId) {
-            // Create participant linked to existing user (email normalized by storage)
-            await storage.createParticipant({
-              spaceId: request.spaceId,
-              displayName: request.displayName,
-              email: request.email,
-              userId: existingUser.id,
-              isGuest: false,
-            });
-          }
+          // Get or create participant linked to existing user. Uses partial unique
+          // index on (space_id, user_id) to safely handle concurrent invites.
+          await storage.getOrCreateParticipantByUserId(request.spaceId, existingUser.id, {
+            displayName: request.displayName,
+            email: request.email,
+            isGuest: false,
+          });
         } else {
           // No existing user - create guest participant and send invitation
           await storage.createParticipant({
@@ -4115,16 +4110,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "User not authenticated" });
       }
       
-      // Get or create participant record for this facilitator in this workspace
-      let participant = await storage.getParticipantBySpaceAndUserId(spaceId, userId);
-      if (!participant) {
-        participant = await storage.createParticipant({
-          spaceId,
-          odtaId: `facilitator-${userId}`,
-          displayName: (req.user as any)?.displayName || (req.user as any)?.email || 'Facilitator',
-          userId,
-        });
-      }
+      // Get or create participant record for this facilitator in this workspace.
+      // Uses partial unique index on (space_id, user_id) WHERE user_id IS NOT NULL
+      // to prevent duplicate rows from concurrent requests.
+      const participant = await storage.getOrCreateParticipantByUserId(spaceId, userId, {
+        displayName: (req.user as any)?.displayName || (req.user as any)?.email || 'Facilitator',
+      });
       
       const createdNotes = [];
       for (const content of noteContents) {
@@ -4567,14 +4558,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Reuse the facilitator's participant record (matches bulk-import
       // pattern) so accepted suggestions are attributed to the facilitator.
-      let participant = await storage.getParticipantBySpaceAndUserId(spaceId, user.id);
-      if (!participant) {
-        participant = await storage.createParticipant({
-          spaceId,
-          displayName: user.displayName || user.email || 'Facilitator',
-          userId: user.id,
-        });
-      }
+      // Uses partial unique index on (space_id, user_id) WHERE user_id IS NOT NULL
+      // to prevent duplicate rows from concurrent accept-suggestion clicks.
+      const participant = await storage.getOrCreateParticipantByUserId(spaceId, user.id, {
+        displayName: user.displayName || user.email || 'Facilitator',
+      });
 
       const note = await storage.createNote({
         spaceId,

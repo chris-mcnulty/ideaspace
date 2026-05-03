@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, boolean, integer, jsonb, real, unique, index, customType } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, boolean, integer, jsonb, real, unique, uniqueIndex, index, customType } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -202,6 +202,9 @@ export const participants = pgTable("participants", {
 }, (table) => ({
   spaceIdx: index("idx_participants_space").on(table.spaceId),
   userIdx: index("idx_participants_user").on(table.userId),
+  spaceUserUnique: uniqueIndex("participants_space_user_unique")
+    .on(table.spaceId, table.userId)
+    .where(sql`${table.userId} IS NOT NULL`),
 }));
 
 export const categories = pgTable("categories", {
