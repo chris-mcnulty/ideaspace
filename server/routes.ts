@@ -3027,9 +3027,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .filter((s) => targetOrgId ? s.organizationId === targetOrgId : s.templateScope === "system")
           .map((s) => s.name.toLowerCase()),
       );
+      // Within-CSV duplicate-name detection so a unique-name collision is
+      // surfaced at preview time instead of failing mid-transaction.
+      const seenName = new Map<string, number>();
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i] as TemplateCsvRow;
-        if (existingNames.has(r.name.toLowerCase())) {
+        const key = r.name.toLowerCase();
+        const firstAt = seenName.get(key);
+        if (firstAt !== undefined) {
+          errors.push({ rowIndex: i, row: rowOf(i), field: "name", message: `Duplicate template name in CSV (first appears at row ${firstAt}): ${r.name}` });
+          continue;
+        }
+        seenName.set(key, rowOf(i));
+        if (existingNames.has(key)) {
           errors.push({ rowIndex: i, row: rowOf(i), field: "name", message: `Template name already exists: ${r.name}` });
         }
       }
