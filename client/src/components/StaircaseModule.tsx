@@ -575,20 +575,28 @@ export default function StaircaseModule({
                       onPointerDown={(e) => handleDragStart(e, note, position)}
                       onKeyDown={(e) => {
                         if (isReadOnly) return;
-                        if (e.key === 'ArrowUp') {
+                        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
                           e.preventDefault();
-                          handleStepChange(note, position, 1);
-                          announce(`${displayText.slice(0, 60)} moved up.`, 'polite');
-                        } else if (e.key === 'ArrowDown') {
-                          e.preventDefault();
-                          handleStepChange(note, position, -1);
-                          announce(`${displayText.slice(0, 60)} moved down.`, 'polite');
+                          const direction: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+                          const nextStep = Math.max(0, Math.min(stepCount - 1, stepIndex + direction));
+                          if (nextStep === stepIndex) {
+                            announce(
+                              `${displayText.slice(0, 60)} already on step ${stepIndex} of ${stepCount - 1}.`,
+                              'polite',
+                            );
+                            return;
+                          }
+                          handleStepChange(note, position, direction);
+                          announce(
+                            `${displayText.slice(0, 60)} moved to step ${nextStep} of ${stepCount - 1}.`,
+                            'polite',
+                          );
                         }
                       }}
                       tabIndex={isReadOnly ? -1 : 0}
                       role={isReadOnly ? undefined : 'button'}
                       aria-label={noteAriaLabel}
-                      className={`${isReadOnly ? '' : 'cursor-grab'} focus:outline-none`}
+                      className={`${isReadOnly ? '' : 'cursor-grab'} focus:outline-none focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 focus-visible:[outline-style:solid]`}
                       style={{ opacity: isDragging ? 0.7 : 1, touchAction: 'none' }}
                       data-testid={`staircase-note-${note.id}`}
                     >

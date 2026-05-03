@@ -353,9 +353,8 @@ export default function PriorityMatrix({
       localPositionsRef.current = next;
       return next;
     });
-    updatePositionMutation.mutate({ noteId, xCoord: x, yCoord: y });
     announce(
-      `${xAxisLabel} ${Math.round(x)} percent, ${yAxisLabel} ${Math.round(y)} percent.`,
+      `${xAxisLabel} ${Math.round(x)} percent, ${yAxisLabel} ${Math.round(y)} percent. Press Enter to save.`,
       'polite',
     );
   };
@@ -603,7 +602,7 @@ export default function PriorityMatrix({
 
       {!isReadOnly && notes.length > 0 && !tapMode && (
         <div className="text-sm text-muted-foreground text-center">
-          Drag and drop notes to position them on the matrix. Changes are saved automatically.
+          Drag and drop notes to position them, or focus a note and use the arrow keys to move it (Home/End for corners, Enter to save).
         </div>
       )}
 
