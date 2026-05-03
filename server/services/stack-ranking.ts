@@ -94,6 +94,68 @@ export function calculateBordaScores(
 }
 
 /**
+ * Same shape as calculateBordaScores but consumes pre-aggregated rows
+ * (one per note) produced by the SQL GROUP BY in storage. Avoids
+ * streaming every individual ranking row to Node when the workspace
+ * has many participants.
+ */
+export function calculateBordaScoresFromAggregates(
+  notes: Note[],
+  aggregates: Array<{ noteId: string; totalScore: number; totalRank: number; count: number }>,
+): BordaScore[] {
+  const aggByNote = new Map<string, { totalScore: number; totalRank: number; count: number }>();
+  for (const a of aggregates) aggByNote.set(a.noteId, a);
+
+  const results: BordaScore[] = notes.map((note) => {
+    const a = aggByNote.get(note.id);
+    const totalScore = a?.totalScore ?? 0;
+    const count = a?.count ?? 0;
+    const totalRank = a?.totalRank ?? 0;
+    return {
+      noteId: note.id,
+      note,
+      totalScore,
+      averageRank: count > 0 ? totalRank / count : 0,
+      participantCount: count,
+    };
+  });
+
+  results.sort((a, b) => {
+    if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
+    return a.averageRank - b.averageRank;
+  });
+
+  return results;
+}
+
+/**
+ * Compute ranking progress from per-participant counts (one row per
+ * participant) instead of every ranking row.
+ */
+export function calculateRankingProgressFromCounts(
+  participantIds: string[],
+  countsByParticipant: Array<{ participantId: string; count: number }>,
+  totalNotes: number,
+): RankingProgress {
+  let completedCount = 0;
+  for (const c of countsByParticipant) {
+    if (c.count === totalNotes) completedCount++;
+  }
+
+  const totalParticipants = participantIds.length;
+  const percentComplete = totalParticipants > 0
+    ? Math.round((completedCount / totalParticipants) * 100)
+    : 0;
+
+  return {
+    totalParticipants,
+    participantsCompleted: completedCount,
+    percentComplete,
+    isComplete: completedCount === totalParticipants && totalParticipants > 0,
+  };
+}
+
+/**
  * Validate that a participant's ranking is complete and valid
  */
 export function validateRanking(

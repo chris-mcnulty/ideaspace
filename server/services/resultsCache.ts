@@ -34,12 +34,16 @@ export interface CohortInputs {
   categories?: Array<{ id: string; name: string }>;
   // Per-participant data
   notes: Array<{ id: string; content: string; manualCategoryId: string | null }>;
-  votes: Array<{ winnerNoteId: string; loserNoteId: string }>;
-  rankings: Array<{ noteId: string; rank: number; participantId: string }>;
-  marketplaceAllocations: Array<{ noteId: string; participantId: string; coinsAllocated: number }>;
+  // Aggregates instead of raw rows: hash invalidation still triggers on any
+  // observable change in the cohort's voting/ranking/allocation/survey data
+  // (since the aggregates are deterministic functions of the rows), but the
+  // cohort-results pipeline avoids streaming every row to Node.
+  pairwiseTallies: Array<{ noteId: string; wins: number; comparisons: number }>;
+  rankingAggregates: Array<{ noteId: string; totalScore: number; totalRank: number; count: number }>;
+  marketplaceTallies: Array<{ noteId: string; totalCoins: number; participantCount: number }>;
   matrixPositions: Array<{ noteId: string; xCoord: number; yCoord: number }>;
   staircasePositions: Array<{ noteId: string; score: number }>;
-  surveyResponses: Array<{ noteId: string; questionId: string; participantId: string; score: number }>;
+  surveyAggregates: Array<{ noteId: string; questionId: string; sum: number; count: number }>;
   // KB grounding
   kbChunkIds: string[];
   kbContentHash?: string;
@@ -86,19 +90,13 @@ export function computeCohortInputsHash(inputs: CohortInputs): string {
     ),
     categories: [...(inputs.categories ?? [])].sort((a, b) => a.id.localeCompare(b.id)),
     notes: [...inputs.notes].sort((a, b) => a.id.localeCompare(b.id)),
-    votes: [...inputs.votes].sort((a, b) =>
-      (a.winnerNoteId + a.loserNoteId).localeCompare(b.winnerNoteId + b.loserNoteId),
-    ),
-    rankings: [...inputs.rankings].sort((a, b) =>
-      (a.participantId + a.noteId).localeCompare(b.participantId + b.noteId),
-    ),
-    marketplaceAllocations: [...inputs.marketplaceAllocations].sort((a, b) =>
-      (a.participantId + a.noteId).localeCompare(b.participantId + b.noteId),
-    ),
+    pairwiseTallies: [...inputs.pairwiseTallies].sort((a, b) => a.noteId.localeCompare(b.noteId)),
+    rankingAggregates: [...inputs.rankingAggregates].sort((a, b) => a.noteId.localeCompare(b.noteId)),
+    marketplaceTallies: [...inputs.marketplaceTallies].sort((a, b) => a.noteId.localeCompare(b.noteId)),
     matrixPositions: [...inputs.matrixPositions].sort((a, b) => a.noteId.localeCompare(b.noteId)),
     staircasePositions: [...inputs.staircasePositions].sort((a, b) => a.noteId.localeCompare(b.noteId)),
-    surveyResponses: [...inputs.surveyResponses].sort((a, b) =>
-      (a.participantId + a.questionId + a.noteId).localeCompare(b.participantId + b.questionId + b.noteId),
+    surveyAggregates: [...inputs.surveyAggregates].sort((a, b) =>
+      (a.noteId + a.questionId).localeCompare(b.noteId + b.questionId),
     ),
     kbChunkIds: [...inputs.kbChunkIds].sort(),
     kbContentHash: inputs.kbContentHash ?? null,

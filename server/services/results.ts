@@ -61,27 +61,27 @@ export async function generateCohortResults(
   spaceId: string,
   generatedBy: string
 ): Promise<CohortResult> {
-  // Fetch workspace details
-  const [space] = await db
-    .select()
-    .from(spaces)
-    .where(eq(spaces.id, spaceId))
-    .limit(1);
+  // We need notes-count first because the SQL Borda aggregation depends on
+  // it (rank is clamped to [1, totalNotes]). So fetch the workspace-scoped
+  // tables that are independent of that count first, in parallel.
+  type ModuleRow = { moduleType: string; enabled: boolean };
+  type CategoryRow = { id: string; name: string };
+  const [spaceRow, enabledModulesData, allNotes, allCategories] = await Promise.all([
+    db.select().from(spaces).where(eq(spaces.id, spaceId)).limit(1),
+    db.select().from(workspaceModules).where(and(
+      eq(workspaceModules.spaceId, spaceId),
+      eq(workspaceModules.enabled, true),
+    )) as Promise<ModuleRow[]>,
+    db.select().from(notes).where(eq(notes.spaceId, spaceId)),
+    db.select().from(categories).where(eq(categories.spaceId, spaceId)) as Promise<CategoryRow[]>,
+  ]);
+  const [space] = spaceRow;
 
   if (!space) {
     throw new Error("Workspace not found");
   }
 
-  // Fetch enabled modules from the workspace_modules table
-  const enabledModulesData = await db
-    .select()
-    .from(workspaceModules)
-    .where(and(
-      eq(workspaceModules.spaceId, spaceId),
-      eq(workspaceModules.enabled, true)
-    ));
-  
-  const enabledModuleTypes = enabledModulesData.map(m => m.moduleType);
+  const enabledModuleTypes = enabledModulesData.map((m) => m.moduleType);
   const hasPairwiseVoting = enabledModuleTypes.includes('pairwise-voting');
   const hasStackRanking = enabledModuleTypes.includes('stack-ranking');
   const hasMarketplace = enabledModuleTypes.includes('marketplace');
@@ -89,200 +89,173 @@ export async function generateCohortResults(
   const hasPriorityMatrix = enabledModuleTypes.includes('priority-matrix');
   const hasStaircase = enabledModuleTypes.includes('staircase');
 
-  // Fetch all notes for this workspace
-  const allNotes = await db
-    .select()
-    .from(notes)
-    .where(eq(notes.spaceId, spaceId));
-
   if (allNotes.length === 0) {
     throw new Error("No notes found for this workspace");
   }
 
-  // Fetch categories for this workspace to map category IDs to names
-  const allCategories = await db
-    .select()
-    .from(categories)
-    .where(eq(categories.spaceId, spaceId));
+  const noteCount = allNotes.length;
 
   const categoryMap = new Map<string, string>();
-  allCategories.forEach(cat => {
+  allCategories.forEach((cat) => {
     categoryMap.set(cat.id, cat.name);
   });
 
-  // Fetch voting data (pairwise)
-  const pairwiseVotes = await db
-    .select()
-    .from(votes)
-    .where(eq(votes.spaceId, spaceId));
+  // Now fetch all aggregate-shaped per-module data in parallel. Pushing
+  // SUM/COUNT into Postgres means the cohort-results pipeline is O(notes)
+  // payload regardless of cohort size, instead of streaming every vote /
+  // ranking / allocation / survey response back into Node.
+  type MatrixRow = {
+    id: string; xAxisLabel: string; yAxisLabel: string;
+  };
+  type StaircaseRow = {
+    id: string; minLabel: string; maxLabel: string; minScore: number; maxScore: number;
+  };
+  type SurveyQuestionRow = { id: string; questionText: string; sortOrder: number };
+  const [
+    pairwiseTallies,
+    rankingAggregates,
+    rankingParticipantCounts,
+    marketplaceTallies,
+    surveyAggregates,
+    matrixRow,
+    staircaseRow,
+    surveyQuestionsRows,
+  ] = await Promise.all([
+    storage.getPairwiseTalliesBySpace(spaceId),
+    storage.getRankingAggregatesBySpace(spaceId, noteCount),
+    // Distinct ranking-participant count for the analytics narrative —
+    // preserves the legacy "Total Rankings Submitted" semantics (one row
+    // per participant, not per ranking row).
+    storage.getRankingCountsByParticipant(spaceId),
+    storage.getMarketplaceTalliesBySpace(spaceId),
+    hasSurvey
+      ? storage.getSurveyAggregatesBySpace(spaceId)
+      : Promise.resolve({ perNote: [], perNoteQuestion: [] }),
+    hasPriorityMatrix
+      ? (db.select().from(priorityMatrices).where(eq(priorityMatrices.spaceId, spaceId)).limit(1) as Promise<MatrixRow[]>)
+      : Promise.resolve<MatrixRow[]>([]),
+    hasStaircase
+      ? (db.select().from(staircaseModules).where(eq(staircaseModules.spaceId, spaceId)).limit(1) as Promise<StaircaseRow[]>)
+      : Promise.resolve<StaircaseRow[]>([]),
+    hasSurvey
+      ? (db.select().from(surveyQuestions).where(eq(surveyQuestions.spaceId, spaceId)) as Promise<SurveyQuestionRow[]>)
+      : Promise.resolve<SurveyQuestionRow[]>([]),
+  ]);
 
-  // Calculate pairwise wins per note
+  // Aggregate-derived per-note score Maps. Pre-filter against the *current*
+  // note set so deleted notes don't contribute to combined-score maxes.
+  const currentNoteIds = new Set(allNotes.map((n) => n.id));
   const pairwiseWins = new Map<string, number>();
-  pairwiseVotes.forEach((vote: any) => {
-    pairwiseWins.set(vote.winnerNoteId, (pairwiseWins.get(vote.winnerNoteId) || 0) + 1);
-  });
-
-  // Fetch ranking data (Borda count)
-  const rankingData = await db
-    .select()
-    .from(rankings)
-    .where(eq(rankings.spaceId, spaceId));
-
-  // Calculate Borda scores
-  const noteCount = allNotes.length;
+  for (const t of pairwiseTallies) {
+    if (currentNoteIds.has(t.noteId)) pairwiseWins.set(t.noteId, t.wins);
+  }
   const bordaScores = new Map<string, number>();
-  rankingData.forEach((ranking: any) => {
-    // Clamp rank to valid range [1, noteCount] to handle legacy data with invalid ranks
-    const clampedRank = Math.max(1, Math.min(ranking.rank, noteCount));
-    const score = noteCount - clampedRank + 1;
-    bordaScores.set(ranking.noteId, (bordaScores.get(ranking.noteId) || 0) + score);
-  });
-
-  // Fetch marketplace data
-  const marketplaceData = await db
-    .select()
-    .from(marketplaceAllocations)
-    .where(eq(marketplaceAllocations.spaceId, spaceId));
-
-  // Calculate total coins per note
+  for (const a of rankingAggregates) {
+    if (currentNoteIds.has(a.noteId)) bordaScores.set(a.noteId, a.totalScore);
+  }
   const marketplaceCoins = new Map<string, number>();
-  marketplaceData.forEach((allocation: any) => {
-    marketplaceCoins.set(
-      allocation.noteId,
-      (marketplaceCoins.get(allocation.noteId) || 0) + allocation.coinsAllocated
-    );
-  });
+  for (const t of marketplaceTallies) {
+    if (currentNoteIds.has(t.noteId)) marketplaceCoins.set(t.noteId, t.totalCoins);
+  }
 
-  // Fetch Priority Matrix data
+  const matrix = matrixRow[0];
+  const staircase = staircaseRow[0];
+
+  // Priority Matrix + Staircase positions fan out in parallel once we know
+  // their parent module rows exist.
+  type MatrixPosRow = { noteId: string; xCoord: number; yCoord: number };
+  type StaircasePosRow = { noteId: string; score: number };
+  const [matrixPositions, stPositions] = await Promise.all([
+    matrix
+      ? (db.select().from(priorityMatrixPositions).where(eq(priorityMatrixPositions.matrixId, matrix.id)) as Promise<MatrixPosRow[]>)
+      : Promise.resolve<MatrixPosRow[]>([]),
+    staircase
+      ? (db.select().from(staircasePositions).where(eq(staircasePositions.staircaseId, staircase.id)) as Promise<StaircasePosRow[]>)
+      : Promise.resolve<StaircasePosRow[]>([]),
+  ]);
+
+  // Priority Matrix
   const matrixPositionsByNote = new Map<string, { x: number; y: number }>();
   let matrixXLabel = 'Impact';
   let matrixYLabel = 'Effort';
-  if (hasPriorityMatrix) {
-    const [matrix] = await db
-      .select()
-      .from(priorityMatrices)
-      .where(eq(priorityMatrices.spaceId, spaceId))
-      .limit(1);
-
-    if (matrix) {
-      matrixXLabel = matrix.xAxisLabel;
-      matrixYLabel = matrix.yAxisLabel;
-      const matrixPositions = await db
-        .select()
-        .from(priorityMatrixPositions)
-        .where(eq(priorityMatrixPositions.matrixId, matrix.id));
-
-      matrixPositions.forEach((pos: any) => {
-        matrixPositionsByNote.set(pos.noteId, {
-          x: Math.round(pos.xCoord * 100),
-          y: Math.round(pos.yCoord * 100),
-        });
+  if (matrix) {
+    matrixXLabel = matrix.xAxisLabel;
+    matrixYLabel = matrix.yAxisLabel;
+    matrixPositions.forEach((pos) => {
+      matrixPositionsByNote.set(pos.noteId, {
+        x: Math.round(pos.xCoord * 100),
+        y: Math.round(pos.yCoord * 100),
       });
-    }
+    });
   }
 
-  // Fetch Staircase data
+  // Staircase
   const staircaseScoresByNote = new Map<string, number>();
   let staircaseMinLabel = 'Lowest';
   let staircaseMaxLabel = 'Highest';
   let staircaseMinScore = 0;
   let staircaseMaxScore = 10;
-  if (hasStaircase) {
-    const [staircase] = await db
-      .select()
-      .from(staircaseModules)
-      .where(eq(staircaseModules.spaceId, spaceId))
-      .limit(1);
-
-    if (staircase) {
-      staircaseMinLabel = staircase.minLabel;
-      staircaseMaxLabel = staircase.maxLabel;
-      staircaseMinScore = staircase.minScore;
-      staircaseMaxScore = staircase.maxScore;
-      const stPositions = await db
-        .select()
-        .from(staircasePositions)
-        .where(eq(staircasePositions.staircaseId, staircase.id));
-
-      stPositions.forEach((pos: any) => {
-        staircaseScoresByNote.set(pos.noteId, pos.score);
-      });
-    }
+  if (staircase) {
+    staircaseMinLabel = staircase.minLabel;
+    staircaseMaxLabel = staircase.maxLabel;
+    staircaseMinScore = staircase.minScore;
+    staircaseMaxScore = staircase.maxScore;
+    stPositions.forEach((pos) => {
+      staircaseScoresByNote.set(pos.noteId, pos.score);
+    });
   }
 
-  // Fetch Survey data
+  // Survey: derive per-note + per-(note,question) averages from SQL aggregates.
+  // We MUST compute the per-note average from perNoteQuestion filtered by the
+  // current question set (same semantics as the legacy raw-row pipeline that
+  // dropped responses tied to deleted/invalid questions). Using the raw
+  // perNote aggregate would let stale-question responses leak into combined
+  // scores.
   const surveyAvgByNote = new Map<string, number>();
   const surveyQuestionsList: { id: string; questionText: string; sortOrder: number }[] = [];
   const surveyQuestionAverages = new Map<string, Map<string, number>>(); // questionId -> noteId -> avg
   if (hasSurvey) {
-    const questions = await db
-      .select()
-      .from(surveyQuestions)
-      .where(eq(surveyQuestions.spaceId, spaceId));
-
-    questions.forEach(q => surveyQuestionsList.push({ id: q.id, questionText: q.questionText, sortOrder: q.sortOrder }));
+    surveyQuestionsRows.forEach((q) =>
+      surveyQuestionsList.push({ id: q.id, questionText: q.questionText, sortOrder: q.sortOrder }),
+    );
     surveyQuestionsList.sort((a, b) => a.sortOrder - b.sortOrder);
 
-    const responses = await db
-      .select()
-      .from(surveyResponses)
-      .where(eq(surveyResponses.spaceId, spaceId));
-
-    // Filter to only current notes and current questions
-    const currentNoteIds = new Set(allNotes.map(n => n.id));
-    const currentQuestionIds = new Set(surveyQuestionsList.map(q => q.id));
-    const validResponses = responses.filter((r: any) => currentNoteIds.has(r.noteId) && currentQuestionIds.has(r.questionId));
-
-    // Calculate average score per note across all questions
-    const noteScoreSums = new Map<string, { total: number; count: number }>();
-    // Also calculate per-question averages per note
-    const questionNoteScores = new Map<string, Map<string, { total: number; count: number }>>();
-
-    validResponses.forEach((r: any) => {
-      const entry = noteScoreSums.get(r.noteId) || { total: 0, count: 0 };
-      entry.total += r.score;
-      entry.count += 1;
-      noteScoreSums.set(r.noteId, entry);
-
-      if (!questionNoteScores.has(r.questionId)) {
-        questionNoteScores.set(r.questionId, new Map());
+    const currentQuestionIds = new Set(surveyQuestionsList.map((q) => q.id));
+    const noteSurveyTotals = new Map<string, { sum: number; count: number }>();
+    for (const a of surveyAggregates.perNoteQuestion) {
+      if (a.count <= 0 || !currentNoteIds.has(a.noteId) || !currentQuestionIds.has(a.questionId)) continue;
+      let qMap = surveyQuestionAverages.get(a.questionId);
+      if (!qMap) {
+        qMap = new Map<string, number>();
+        surveyQuestionAverages.set(a.questionId, qMap);
       }
-      const qMap = questionNoteScores.get(r.questionId)!;
-      const qEntry = qMap.get(r.noteId) || { total: 0, count: 0 };
-      qEntry.total += r.score;
-      qEntry.count += 1;
-      qMap.set(r.noteId, qEntry);
-    });
-
-    noteScoreSums.forEach((val, noteId) => {
-      surveyAvgByNote.set(noteId, val.total / val.count);
-    });
-
-    questionNoteScores.forEach((noteMap, qId) => {
-      const avgMap = new Map<string, number>();
-      noteMap.forEach((val, noteId) => {
-        avgMap.set(noteId, val.total / val.count);
-      });
-      surveyQuestionAverages.set(qId, avgMap);
+      qMap.set(a.noteId, a.sum / a.count);
+      const tot = noteSurveyTotals.get(a.noteId) ?? { sum: 0, count: 0 };
+      tot.sum += a.sum;
+      tot.count += a.count;
+      noteSurveyTotals.set(a.noteId, tot);
+    }
+    noteSurveyTotals.forEach((tot, noteId) => {
+      if (tot.count > 0) surveyAvgByNote.set(noteId, tot.sum / tot.count);
     });
   }
 
   // Determine which scoring modules have data and build dynamic combined score
   const activeModules: { name: string; getScore: (noteId: string) => number; maxVal: number }[] = [];
 
-  if (hasPairwiseVoting && pairwiseVotes.length > 0) {
+  if (hasPairwiseVoting && pairwiseWins.size > 0) {
     const maxPairwise = Math.max(...Array.from(pairwiseWins.values()), 0);
     if (maxPairwise > 0) {
       activeModules.push({ name: 'pairwise', getScore: (id) => pairwiseWins.get(id) || 0, maxVal: maxPairwise });
     }
   }
-  if (hasStackRanking && rankingData.length > 0) {
+  if (hasStackRanking && bordaScores.size > 0) {
     const maxBorda = Math.max(...Array.from(bordaScores.values()), 0);
     if (maxBorda > 0) {
       activeModules.push({ name: 'borda', getScore: (id) => bordaScores.get(id) || 0, maxVal: maxBorda });
     }
   }
-  if (hasMarketplace && marketplaceData.length > 0) {
+  if (hasMarketplace && marketplaceCoins.size > 0) {
     const maxCoins = Math.max(...Array.from(marketplaceCoins.values()), 0);
     if (maxCoins > 0) {
       activeModules.push({ name: 'marketplace', getScore: (id) => marketplaceCoins.get(id) || 0, maxVal: maxCoins });
@@ -380,16 +353,17 @@ export async function generateCohortResults(
       text: q.questionText,
       order: q.sortOrder,
     })),
-    categories: allCategories.map((c: any) => ({ id: c.id, name: c.name })),
-    notes: allNotes.map((n: any) => ({ id: n.id, content: n.content, manualCategoryId: n.manualCategoryId ?? null })),
-    votes: pairwiseVotes.map((v: any) => ({ winnerNoteId: v.winnerNoteId, loserNoteId: v.loserNoteId })),
-    rankings: rankingData.map((r: any) => ({ noteId: r.noteId, rank: r.rank, participantId: r.participantId })),
-    marketplaceAllocations: marketplaceData.map((a: any) => ({ noteId: a.noteId, participantId: a.participantId, coinsAllocated: a.coinsAllocated })),
+    categories: allCategories.map((c) => ({ id: c.id, name: c.name })),
+    notes: allNotes.map((n) => ({ id: n.id, content: n.content, manualCategoryId: n.manualCategoryId ?? null })),
+    // Aggregate-based hash inputs: any change in raw rows that affects
+    // these tallies will change the hash and invalidate the cached result.
+    pairwiseTallies: pairwiseTallies.filter((t) => currentNoteIds.has(t.noteId)),
+    rankingAggregates: rankingAggregates.filter((a) => currentNoteIds.has(a.noteId)),
+    marketplaceTallies: marketplaceTallies.filter((t) => currentNoteIds.has(t.noteId)),
     matrixPositions: Array.from(matrixPositionsByNote.entries()).map(([noteId, p]) => ({ noteId, xCoord: p.x, yCoord: p.y })),
     staircasePositions: Array.from(staircaseScoresByNote.entries()).map(([noteId, score]) => ({ noteId, score })),
-    surveyResponses: hasSurvey
-      ? (await db.select().from(surveyResponses).where(eq(surveyResponses.spaceId, spaceId)))
-          .map((r: any) => ({ noteId: r.noteId, questionId: r.questionId, participantId: r.participantId, score: r.score }))
+    surveyAggregates: hasSurvey
+      ? surveyAggregates.perNoteQuestion.filter((a) => currentNoteIds.has(a.noteId))
       : [],
     kbChunkIds: kbChunks.map((c) => c.id),
     kbContentHash: hashKbChunkContents(kbChunks.map((c) => ({ id: c.id, content: c.content }))),
@@ -430,9 +404,9 @@ ENABLED MODULES: ${enabledModulesDescription || 'Ideation only'}
 (Only discuss the modules that were enabled. Do NOT mention or analyze modules that were not used.)
 
 Total Ideas: ${allNotes.length}
-${hasPairwiseVoting ? `Total Pairwise Votes: ${pairwiseVotes.length}` : ''}
-${hasStackRanking ? `Total Rankings Submitted: ${new Set(rankingData.map((r: any) => r.participantId)).size}` : ''}
-${hasMarketplace ? `Total Marketplace Allocations: ${marketplaceData.length}` : ''}
+${hasPairwiseVoting ? `Total Pairwise Votes: ${pairwiseTallies.reduce((s, t) => s + t.wins, 0)}` : ''}
+${hasStackRanking ? `Total Rankings Submitted: ${rankingParticipantCounts.length}` : ''}
+${hasMarketplace ? `Total Marketplace Allocations: ${marketplaceTallies.reduce((s, t) => s + t.participantCount, 0)}` : ''}
 ${hasPriorityMatrix ? `Priority Matrix Axes: X="${matrixXLabel}" (0=Low, 100=High), Y="${matrixYLabel}" (0=Low, 100=High)
 Notes positioned on matrix: ${matrixPositionsByNote.size}` : ''}
 ${hasStaircase ? `Staircase Scale: ${staircaseMinScore} (${staircaseMinLabel}) to ${staircaseMaxScore} (${staircaseMaxLabel})
@@ -562,9 +536,9 @@ Include ALL ideas in the topIdeas array, ranked by combined score (highest to lo
       inputsHash,
       metadata: {
         totalNotes: allNotes.length,
-        totalVotes: pairwiseVotes.length,
-        totalRankings: rankingData.length,
-        totalAllocations: marketplaceData.length,
+        totalVotes: pairwiseTallies.reduce((s, t) => s + t.wins, 0),
+        totalRankings: rankingAggregates.reduce((s, a) => s + a.count, 0),
+        totalAllocations: marketplaceTallies.reduce((s, t) => s + t.participantCount, 0),
         kbChunks: kbChunks.length,
         kbChunkIds: kbChunks.map((c) => c.id),
         generatedAt: new Date().toISOString(),
@@ -1069,53 +1043,85 @@ export async function getCurrentCohortInputsHash(spaceId: string): Promise<strin
   const [space] = await db.select().from(spaces).where(eq(spaces.id, spaceId)).limit(1);
   if (!space) return null;
 
-  const [enabled, allNotes, allCategories, pairwiseVotes, rankingData, marketplaceData] =
-    await Promise.all([
-      db.select().from(workspaceModules).where(and(eq(workspaceModules.spaceId, spaceId), eq(workspaceModules.enabled, true))),
-      db.select().from(notes).where(eq(notes.spaceId, spaceId)),
-      db.select().from(categories).where(eq(categories.spaceId, spaceId)),
-      db.select().from(votes).where(eq(votes.spaceId, spaceId)),
-      db.select().from(rankings).where(eq(rankings.spaceId, spaceId)),
-      db.select().from(marketplaceAllocations).where(eq(marketplaceAllocations.spaceId, spaceId)),
-    ]);
+  type ModuleRow = { moduleType: string; enabled: boolean };
+  type CategoryRow = { id: string; name: string };
+  const [enabled, allNotes, allCategories] = await Promise.all([
+    db.select().from(workspaceModules).where(and(eq(workspaceModules.spaceId, spaceId), eq(workspaceModules.enabled, true))) as Promise<ModuleRow[]>,
+    db.select().from(notes).where(eq(notes.spaceId, spaceId)),
+    db.select().from(categories).where(eq(categories.spaceId, spaceId)) as Promise<CategoryRow[]>,
+  ]);
   const enabledModuleTypes = enabled.map((m) => m.moduleType);
   const hasSurvey = enabledModuleTypes.includes('survey');
   const hasPriorityMatrix = enabledModuleTypes.includes('priority-matrix');
   const hasStaircase = enabledModuleTypes.includes('staircase');
+  const noteCount = allNotes.length;
+
+  // Aggregate-shaped fetches in parallel — same SQL GROUP BY pattern as
+  // generateCohortResults so the hash recompute is also O(notes) payload.
+  type MatrixRow = { id: string; xAxisLabel: string; yAxisLabel: string };
+  type StaircaseRow = { id: string; minLabel: string; maxLabel: string; minScore: number; maxScore: number };
+  type SurveyQuestionRow = { id: string; questionText: string; sortOrder: number };
+  const [
+    pairwiseTallies,
+    rankingAggregates,
+    marketplaceTallies,
+    surveyAggregates,
+    matrixRowH,
+    staircaseRowH,
+    surveyQRows,
+  ] = await Promise.all([
+    storage.getPairwiseTalliesBySpace(spaceId),
+    storage.getRankingAggregatesBySpace(spaceId, noteCount),
+    storage.getMarketplaceTalliesBySpace(spaceId),
+    hasSurvey
+      ? storage.getSurveyAggregatesBySpace(spaceId)
+      : Promise.resolve({ perNote: [], perNoteQuestion: [] }),
+    hasPriorityMatrix
+      ? (db.select().from(priorityMatrices).where(eq(priorityMatrices.spaceId, spaceId)).limit(1) as Promise<MatrixRow[]>)
+      : Promise.resolve<MatrixRow[]>([]),
+    hasStaircase
+      ? (db.select().from(staircaseModules).where(eq(staircaseModules.spaceId, spaceId)).limit(1) as Promise<StaircaseRow[]>)
+      : Promise.resolve<StaircaseRow[]>([]),
+    hasSurvey
+      ? (db.select().from(surveyQuestions).where(eq(surveyQuestions.spaceId, spaceId)) as Promise<SurveyQuestionRow[]>)
+      : Promise.resolve<SurveyQuestionRow[]>([]),
+  ]);
+  const matrixH = matrixRowH[0];
+  const staircaseH = staircaseRowH[0];
+  type MatrixPosRow = { noteId: string; xCoord: number; yCoord: number };
+  type StaircasePosRow = { noteId: string; score: number };
+  const [matrixPosH, staircasePosH] = await Promise.all([
+    matrixH
+      ? (db.select().from(priorityMatrixPositions).where(eq(priorityMatrixPositions.matrixId, matrixH.id)) as Promise<MatrixPosRow[]>)
+      : Promise.resolve<MatrixPosRow[]>([]),
+    staircaseH
+      ? (db.select().from(staircasePositions).where(eq(staircasePositions.staircaseId, staircaseH.id)) as Promise<StaircasePosRow[]>)
+      : Promise.resolve<StaircasePosRow[]>([]),
+  ]);
 
   const matrixPositionsByNote = new Map<string, { x: number; y: number }>();
   let matrixXLabel = 'Impact', matrixYLabel = 'Effort';
-  if (hasPriorityMatrix) {
-    const [matrix] = await db.select().from(priorityMatrices).where(eq(priorityMatrices.spaceId, spaceId)).limit(1);
-    if (matrix) {
-      matrixXLabel = matrix.xAxisLabel; matrixYLabel = matrix.yAxisLabel;
-      const pos = await db.select().from(priorityMatrixPositions).where(eq(priorityMatrixPositions.matrixId, matrix.id));
-      pos.forEach((p) => matrixPositionsByNote.set(p.noteId, { x: Math.round(p.xCoord * 100), y: Math.round(p.yCoord * 100) }));
-    }
+  if (matrixH) {
+    matrixXLabel = matrixH.xAxisLabel; matrixYLabel = matrixH.yAxisLabel;
+    matrixPosH.forEach((p) => matrixPositionsByNote.set(p.noteId, { x: Math.round(p.xCoord * 100), y: Math.round(p.yCoord * 100) }));
   }
 
   const staircaseScoresByNote = new Map<string, number>();
   let staircaseMinLabel = 'Lowest', staircaseMaxLabel = 'Highest';
   let staircaseMinScore = 0, staircaseMaxScore = 10;
-  if (hasStaircase) {
-    const [s] = await db.select().from(staircaseModules).where(eq(staircaseModules.spaceId, spaceId)).limit(1);
-    if (s) {
-      staircaseMinLabel = s.minLabel; staircaseMaxLabel = s.maxLabel;
-      staircaseMinScore = s.minScore; staircaseMaxScore = s.maxScore;
-      const pos = await db.select().from(staircasePositions).where(eq(staircasePositions.staircaseId, s.id));
-      pos.forEach((p) => staircaseScoresByNote.set(p.noteId, p.score));
-    }
+  if (staircaseH) {
+    staircaseMinLabel = staircaseH.minLabel; staircaseMaxLabel = staircaseH.maxLabel;
+    staircaseMinScore = staircaseH.minScore; staircaseMaxScore = staircaseH.maxScore;
+    staircasePosH.forEach((p) => staircaseScoresByNote.set(p.noteId, p.score));
   }
 
   let surveyQuestionsList: { id: string; questionText: string; sortOrder: number }[] = [];
-  let surveyResponseRows: Array<{ noteId: string; questionId: string; participantId: string; score: number }> = [];
   if (hasSurvey) {
-    const qs = await db.select().from(surveyQuestions).where(eq(surveyQuestions.spaceId, spaceId));
-    surveyQuestionsList = qs.map((q) => ({ id: q.id, questionText: q.questionText, sortOrder: q.sortOrder }));
+    surveyQuestionsList = surveyQRows.map((q) => ({ id: q.id, questionText: q.questionText, sortOrder: q.sortOrder }));
     surveyQuestionsList.sort((a, b) => a.sortOrder - b.sortOrder);
-    const rs = await db.select().from(surveyResponses).where(eq(surveyResponses.spaceId, spaceId));
-    surveyResponseRows = rs.map((r) => ({ noteId: r.noteId, questionId: r.questionId, participantId: r.participantId, score: r.score }));
   }
+
+  const currentNoteIds = new Set(allNotes.map((n) => n.id));
 
   const kbQueryNotes = [...allNotes]
     .sort((a, b) => a.id.localeCompare(b.id))
@@ -1142,12 +1148,14 @@ export async function getCurrentCohortInputsHash(spaceId: string): Promise<strin
     surveyQuestions: surveyQuestionsList.map((q) => ({ id: q.id, text: q.questionText, order: q.sortOrder })),
     categories: allCategories.map((c) => ({ id: c.id, name: c.name })),
     notes: allNotes.map((n) => ({ id: n.id, content: n.content, manualCategoryId: n.manualCategoryId ?? null })),
-    votes: pairwiseVotes.map((v) => ({ winnerNoteId: v.winnerNoteId, loserNoteId: v.loserNoteId })),
-    rankings: rankingData.map((r) => ({ noteId: r.noteId, rank: r.rank, participantId: r.participantId })),
-    marketplaceAllocations: marketplaceData.map((a) => ({ noteId: a.noteId, participantId: a.participantId, coinsAllocated: a.coinsAllocated })),
+    pairwiseTallies: pairwiseTallies.filter((t) => currentNoteIds.has(t.noteId)),
+    rankingAggregates: rankingAggregates.filter((a) => currentNoteIds.has(a.noteId)),
+    marketplaceTallies: marketplaceTallies.filter((t) => currentNoteIds.has(t.noteId)),
     matrixPositions: Array.from(matrixPositionsByNote.entries()).map(([noteId, p]) => ({ noteId, xCoord: p.x, yCoord: p.y })),
     staircasePositions: Array.from(staircaseScoresByNote.entries()).map(([noteId, score]) => ({ noteId, score })),
-    surveyResponses: surveyResponseRows,
+    surveyAggregates: hasSurvey
+      ? surveyAggregates.perNoteQuestion.filter((a) => currentNoteIds.has(a.noteId))
+      : [],
     kbChunkIds: kbChunks.map((c) => c.id),
     kbContentHash: hashKbChunkContents(kbChunks.map((c) => ({ id: c.id, content: c.content }))),
   };

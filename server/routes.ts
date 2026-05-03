@@ -17,8 +17,8 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { categorizeNotes, rewriteCard, suggestIdeas } from "./services/openai";
 import { getNextPair, calculateProgress } from "./services/pairwise";
-import { validateRanking, calculateBordaScores, calculateRankingProgress, hasParticipantCompleted } from "./services/stack-ranking";
-import { validateAllocation, calculateMarketplaceScores, calculateAllocationProgress, hasParticipantCompleted as hasParticipantCompletedAllocation, getParticipantRemainingBudget, DEFAULT_COIN_BUDGET } from "./services/marketplace";
+import { validateRanking, calculateBordaScores, calculateBordaScoresFromAggregates, calculateRankingProgress, calculateRankingProgressFromCounts, hasParticipantCompleted } from "./services/stack-ranking";
+import { validateAllocation, calculateMarketplaceScores, calculateMarketplaceScoresFromTallies, calculateAllocationProgress, calculateAllocationProgressFromTotals, hasParticipantCompleted as hasParticipantCompletedAllocation, getParticipantRemainingBudget, DEFAULT_COIN_BUDGET } from "./services/marketplace";
 import { generatePairwiseExport, generateStackRankingExport, generateMarketplaceExport } from "./services/export";
 import { generateCohortResults, generatePersonalizedResults, generateAllPersonalizedResults, getCurrentCohortInputsHash, getCurrentPersonalizedInputsHash } from "./services/results";
 import { hashPassword, requireAuth, requireRole, requireGlobalAdmin, requireCompanyAdmin, requireFacilitator } from "./auth";
@@ -5843,15 +5843,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Workspace not found" });
       }
       
+      // Fetch notes first (needed for Borda's totalNotes clamp), then push
+      // SUM/COUNT into Postgres so the response cost is O(notes), not
+      // O(rankings).
       const notes = await storage.getNotesBySpace(spaceId);
-      const rankings = await storage.getRankingsBySpace(spaceId);
-      
-      const bordaScores = calculateBordaScores(notes, rankings);
-      
+      const aggregates = await storage.getRankingAggregatesBySpace(spaceId, notes.length);
+
+      const bordaScores = calculateBordaScoresFromAggregates(notes, aggregates);
+      const totalRankings = aggregates.reduce((sum, a) => sum + a.count, 0);
+
       res.json({
         leaderboard: bordaScores,
         totalNotes: notes.length,
-        totalRankings: rankings.length,
+        totalRankings,
       });
     } catch (error) {
       console.error("Failed to fetch leaderboard:", error);
@@ -5867,13 +5871,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Workspace not found" });
       }
       
-      const participants = await storage.getParticipantsBySpace(spaceId);
-      const rankings = await storage.getRankingsBySpace(spaceId);
-      const notes = await storage.getNotesBySpace(spaceId);
-      
+      const [participants, rankingCounts, notes] = await Promise.all([
+        storage.getParticipantsBySpace(spaceId),
+        storage.getRankingCountsByParticipant(spaceId),
+        storage.getNotesBySpace(spaceId),
+      ]);
+
       const participantIds = participants.map(p => p.id);
-      const progress = calculateRankingProgress(participantIds, rankings, notes.length);
-      
+      const progress = calculateRankingProgressFromCounts(participantIds, rankingCounts, notes.length);
+
       res.json(progress);
     } catch (error) {
       console.error("Failed to fetch ranking progress:", error);
@@ -5994,11 +6000,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Workspace not found" });
       }
       
-      const notes = await storage.getNotesBySpace(spaceId);
-      const allocations = await storage.getMarketplaceAllocationsBySpace(spaceId);
-      
-      const leaderboard = calculateMarketplaceScores(notes, allocations);
-      
+      const [notes, tallies] = await Promise.all([
+        storage.getNotesBySpace(spaceId),
+        storage.getMarketplaceTalliesBySpace(spaceId),
+      ]);
+
+      const leaderboard = calculateMarketplaceScoresFromTallies(notes, tallies);
+
       res.json(leaderboard);
     } catch (error) {
       console.error("Failed to fetch marketplace leaderboard:", error);
@@ -6015,13 +6023,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const { coinBudget } = req.query;
       
-      const participants = await storage.getParticipantsBySpace(spaceId);
-      const allocations = await storage.getMarketplaceAllocationsBySpace(spaceId);
-      
+      const [participants, totals] = await Promise.all([
+        storage.getParticipantsBySpace(spaceId),
+        storage.getMarketplaceTotalsByParticipant(spaceId),
+      ]);
+
       const participantIds = participants.map(p => p.id);
-      const budget = coinBudget ? parseInt(coinBudget as string) : DEFAULT_COIN_BUDGET;
-      const progress = calculateAllocationProgress(participantIds, allocations, budget);
-      
+      const progress = calculateAllocationProgressFromTotals(participantIds, totals);
+
       res.json(progress);
     } catch (error) {
       console.error("Failed to fetch marketplace progress:", error);
@@ -6211,6 +6220,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Aggregated survey scores for the results grid. Pushes SUM/COUNT to
+  // Postgres so the payload is O(notes * questions) regardless of how many
+  // raw responses each (note, question) pair received.
+  app.get("/api/spaces/:spaceId/survey-aggregates", async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      const aggregates = await storage.getSurveyAggregatesBySpace(spaceId);
+      res.json(aggregates);
+    } catch (error) {
+      console.error("Failed to fetch survey aggregates:", error);
+      res.status(500).json({ error: "Failed to fetch survey aggregates" });
+    }
+  });
+
   // Get participant's survey responses
   app.get("/api/spaces/:spaceId/participants/:participantId/survey-responses", async (req, res) => {
     try {
@@ -6387,12 +6413,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Access denied. Facilitator or admin access required." });
       }
 
-      // Get notes and rankings
+      // Use SQL aggregates so the export endpoint scales like the
+      // leaderboard endpoint (O(notes), not O(rankings)).
       const notes = await storage.getNotesBySpace(spaceId);
-      const rankings = await storage.getRankingsBySpace(spaceId);
-
-      // Calculate Borda scores
-      const leaderboard = calculateBordaScores(notes, rankings);
+      const aggregates = await storage.getRankingAggregatesBySpace(spaceId, notes.length);
+      const leaderboard = calculateBordaScoresFromAggregates(notes, aggregates);
 
       const exportText = generateStackRankingExport(leaderboard);
       
@@ -6438,12 +6463,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Access denied. Facilitator or admin access required." });
       }
 
-      // Get notes and allocations
-      const notes = await storage.getNotesBySpace(spaceId);
-      const allocations = await storage.getMarketplaceAllocationsBySpace(spaceId);
-
-      // Calculate marketplace scores
-      const leaderboard = calculateMarketplaceScores(notes, allocations);
+      // Use SQL aggregates so the export endpoint scales like the
+      // marketplace leaderboard endpoint (O(notes), not O(allocations)).
+      const [notes, tallies] = await Promise.all([
+        storage.getNotesBySpace(spaceId),
+        storage.getMarketplaceTalliesBySpace(spaceId),
+      ]);
+      const leaderboard = calculateMarketplaceScoresFromTallies(notes, tallies);
 
       const exportText = generateMarketplaceExport(leaderboard);
       

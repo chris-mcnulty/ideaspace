@@ -306,18 +306,46 @@ export interface IStorage {
   getVotesBySpace(spaceId: string): Promise<Vote[]>;
   getVotesByParticipant(participantId: string): Promise<Vote[]>;
   createVote(vote: InsertVote): Promise<Vote>;
+  // Per-note pairwise wins + total comparisons, computed in Postgres so the
+  // results pipeline doesn't have to stream every vote row to Node.
+  getPairwiseTalliesBySpace(spaceId: string): Promise<Array<{
+    noteId: string;
+    wins: number;
+    comparisons: number;
+  }>>;
 
   // Rankings
   getRankingsBySpace(spaceId: string): Promise<Ranking[]>;
   getRankingsByParticipant(participantId: string): Promise<Ranking[]>;
   createRanking(ranking: InsertRanking): Promise<Ranking>;
   deleteRankingsByParticipant(participantId: string, spaceId: string): Promise<boolean>;
+  // Batched aggregations (GROUP BY in Postgres) so leaderboard/progress
+  // endpoints scale to large cohorts without streaming every row to Node.
+  getRankingAggregatesBySpace(spaceId: string, totalNotes: number): Promise<Array<{
+    noteId: string;
+    totalScore: number;
+    totalRank: number;
+    count: number;
+  }>>;
+  getRankingCountsByParticipant(spaceId: string): Promise<Array<{
+    participantId: string;
+    count: number;
+  }>>;
 
   // Marketplace Allocations
   getMarketplaceAllocationsBySpace(spaceId: string): Promise<MarketplaceAllocation[]>;
   getMarketplaceAllocationsByParticipant(participantId: string): Promise<MarketplaceAllocation[]>;
   createMarketplaceAllocation(allocation: InsertMarketplaceAllocation): Promise<MarketplaceAllocation>;
   deleteMarketplaceAllocationsByParticipant(participantId: string, spaceId: string): Promise<boolean>;
+  getMarketplaceTalliesBySpace(spaceId: string): Promise<Array<{
+    noteId: string;
+    totalCoins: number;
+    participantCount: number;
+  }>>;
+  getMarketplaceTotalsByParticipant(spaceId: string): Promise<Array<{
+    participantId: string;
+    totalAllocated: number;
+  }>>;
 
   // Survey Questions
   getSurveyQuestion(id: string): Promise<SurveyQuestion | undefined>;
@@ -325,6 +353,14 @@ export interface IStorage {
   createSurveyQuestion(question: InsertSurveyQuestion): Promise<SurveyQuestion>;
   updateSurveyQuestion(id: string, question: Partial<InsertSurveyQuestion>): Promise<SurveyQuestion | undefined>;
   deleteSurveyQuestion(id: string): Promise<boolean>;
+
+  // Per-note + per-(note,question) survey aggregates, computed in Postgres
+  // so cohort-results / leaderboard endpoints don't materialize the full
+  // response set in Node.
+  getSurveyAggregatesBySpace(spaceId: string): Promise<{
+    perNote: Array<{ noteId: string; sum: number; count: number }>;
+    perNoteQuestion: Array<{ noteId: string; questionId: string; sum: number; count: number }>;
+  }>;
 
   // Survey Responses
   getSurveyResponsesBySpace(spaceId: string): Promise<SurveyResponse[]>;
@@ -1622,6 +1658,37 @@ export class DbStorage implements IStorage {
     return created;
   }
 
+  // Per-note pairwise wins (winner_note_id) + total comparisons (winner OR
+  // loser), grouped in Postgres. UNION ALL lets a single GROUP BY collect
+  // both wins-counted and appearance-counted rows for each note.
+  async getPairwiseTalliesBySpace(
+    spaceId: string,
+  ): Promise<Array<{ noteId: string; wins: number; comparisons: number }>> {
+    const result = await db.execute(sql`
+      SELECT note_id,
+             SUM(is_win)::bigint AS wins,
+             COUNT(*)::bigint AS comparisons
+      FROM (
+        SELECT ${votes.winnerNoteId} AS note_id, 1 AS is_win
+          FROM ${votes} WHERE ${votes.spaceId} = ${spaceId}
+        UNION ALL
+        SELECT ${votes.loserNoteId} AS note_id, 0 AS is_win
+          FROM ${votes} WHERE ${votes.spaceId} = ${spaceId}
+      ) t
+      GROUP BY note_id
+    `);
+    const rows = result.rows as Array<{
+      note_id: string;
+      wins: string | number;
+      comparisons: string | number;
+    }>;
+    return rows.map((r) => ({
+      noteId: r.note_id,
+      wins: Number(r.wins) || 0,
+      comparisons: Number(r.comparisons) || 0,
+    }));
+  }
+
   // Rankings
   async getRankingsBySpace(spaceId: string): Promise<Ranking[]> {
     return db.select().from(rankings).where(eq(rankings.spaceId, spaceId));
@@ -1643,6 +1710,47 @@ export class DbStorage implements IStorage {
     return result.rowCount ? result.rowCount > 0 : false;
   }
 
+  // GROUP BY in Postgres so the leaderboard's Borda totals/avgs are
+  // computed server-side: O(1) row payload (per-note aggregates) regardless
+  // of cohort size. Rank is clamped to [1, totalNotes] to mirror the legacy
+  // calculateBordaScores behavior for invalid persisted ranks.
+  async getRankingAggregatesBySpace(
+    spaceId: string,
+    totalNotes: number,
+  ): Promise<Array<{ noteId: string; totalScore: number; totalRank: number; count: number }>> {
+    if (totalNotes <= 0) return [];
+    const rows = await db
+      .select({
+        noteId: rankings.noteId,
+        totalScore: sql<number>`COALESCE(SUM(${totalNotes} - GREATEST(1, LEAST(${rankings.rank}, ${totalNotes})) + 1), 0)`,
+        totalRank: sql<number>`COALESCE(SUM(${rankings.rank}), 0)`,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(rankings)
+      .where(eq(rankings.spaceId, spaceId))
+      .groupBy(rankings.noteId);
+    return rows.map((r) => ({
+      noteId: r.noteId,
+      totalScore: Number(r.totalScore) || 0,
+      totalRank: Number(r.totalRank) || 0,
+      count: Number(r.count) || 0,
+    }));
+  }
+
+  async getRankingCountsByParticipant(
+    spaceId: string,
+  ): Promise<Array<{ participantId: string; count: number }>> {
+    const rows = await db
+      .select({
+        participantId: rankings.participantId,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(rankings)
+      .where(eq(rankings.spaceId, spaceId))
+      .groupBy(rankings.participantId);
+    return rows.map((r) => ({ participantId: r.participantId, count: Number(r.count) || 0 }));
+  }
+
   // Marketplace Allocations
   async getMarketplaceAllocationsBySpace(spaceId: string): Promise<MarketplaceAllocation[]> {
     return db.select().from(marketplaceAllocations).where(eq(marketplaceAllocations.spaceId, spaceId));
@@ -1662,6 +1770,83 @@ export class DbStorage implements IStorage {
       and(eq(marketplaceAllocations.participantId, participantId), eq(marketplaceAllocations.spaceId, spaceId))
     );
     return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Per-note coin tally + distinct allocator count, both done in Postgres so
+  // the marketplace leaderboard ships only one row per note (not per
+  // allocation) over the wire.
+  async getMarketplaceTalliesBySpace(
+    spaceId: string,
+  ): Promise<Array<{ noteId: string; totalCoins: number; participantCount: number }>> {
+    const rows = await db
+      .select({
+        noteId: marketplaceAllocations.noteId,
+        totalCoins: sql<number>`COALESCE(SUM(${marketplaceAllocations.coinsAllocated}), 0)`,
+        participantCount: sql<number>`COUNT(DISTINCT ${marketplaceAllocations.participantId})`,
+      })
+      .from(marketplaceAllocations)
+      .where(eq(marketplaceAllocations.spaceId, spaceId))
+      .groupBy(marketplaceAllocations.noteId);
+    return rows.map((r) => ({
+      noteId: r.noteId,
+      totalCoins: Number(r.totalCoins) || 0,
+      participantCount: Number(r.participantCount) || 0,
+    }));
+  }
+
+  async getMarketplaceTotalsByParticipant(
+    spaceId: string,
+  ): Promise<Array<{ participantId: string; totalAllocated: number }>> {
+    const rows = await db
+      .select({
+        participantId: marketplaceAllocations.participantId,
+        totalAllocated: sql<number>`COALESCE(SUM(${marketplaceAllocations.coinsAllocated}), 0)`,
+      })
+      .from(marketplaceAllocations)
+      .where(eq(marketplaceAllocations.spaceId, spaceId))
+      .groupBy(marketplaceAllocations.participantId);
+    return rows.map((r) => ({
+      participantId: r.participantId,
+      totalAllocated: Number(r.totalAllocated) || 0,
+    }));
+  }
+
+  // Per-note + per-(note,question) survey averages computed in Postgres so
+  // results/leaderboard endpoints don't materialize the full response set.
+  async getSurveyAggregatesBySpace(spaceId: string): Promise<{
+    perNote: Array<{ noteId: string; sum: number; count: number }>;
+    perNoteQuestion: Array<{ noteId: string; questionId: string; sum: number; count: number }>;
+  }> {
+    const [perNoteRows, perNoteQuestionRows] = await Promise.all([
+      db
+        .select({
+          noteId: surveyResponses.noteId,
+          sum: sql<number>`COALESCE(SUM(${surveyResponses.score}), 0)`,
+          count: sql<number>`COUNT(*)`,
+        })
+        .from(surveyResponses)
+        .where(eq(surveyResponses.spaceId, spaceId))
+        .groupBy(surveyResponses.noteId),
+      db
+        .select({
+          noteId: surveyResponses.noteId,
+          questionId: surveyResponses.questionId,
+          sum: sql<number>`COALESCE(SUM(${surveyResponses.score}), 0)`,
+          count: sql<number>`COUNT(*)`,
+        })
+        .from(surveyResponses)
+        .where(eq(surveyResponses.spaceId, spaceId))
+        .groupBy(surveyResponses.noteId, surveyResponses.questionId),
+    ]);
+    return {
+      perNote: perNoteRows.map((r) => ({ noteId: r.noteId, sum: Number(r.sum) || 0, count: Number(r.count) || 0 })),
+      perNoteQuestion: perNoteQuestionRows.map((r) => ({
+        noteId: r.noteId,
+        questionId: r.questionId,
+        sum: Number(r.sum) || 0,
+        count: Number(r.count) || 0,
+      })),
+    };
   }
 
   // Survey Questions

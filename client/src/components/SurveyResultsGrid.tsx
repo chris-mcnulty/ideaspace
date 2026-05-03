@@ -4,7 +4,12 @@ import { ArrowUpDown, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { Note, SurveyQuestion, SurveyResponse, Participant } from "@shared/schema";
+import type { Note, SurveyQuestion, Participant } from "@shared/schema";
+
+interface SurveyAggregates {
+  perNote: Array<{ noteId: string; sum: number; count: number }>;
+  perNoteQuestion: Array<{ noteId: string; questionId: string; sum: number; count: number }>;
+}
 
 interface SurveyResultsGridProps {
   spaceId: string;
@@ -32,9 +37,10 @@ export function SurveyResultsGrid({ spaceId }: SurveyResultsGridProps) {
     queryKey: ["/api/spaces", spaceId, "survey-questions"],
   });
 
-  // Fetch all survey responses
-  const { data: responses = [] } = useQuery<SurveyResponse[]>({
-    queryKey: ["/api/spaces", spaceId, "survey-responses"],
+  // Fetch survey aggregates (SQL-side SUM/COUNT) instead of materializing
+  // every raw response in the client.
+  const { data: aggregates } = useQuery<SurveyAggregates>({
+    queryKey: ["/api/spaces", spaceId, "survey-aggregates"],
   });
 
   // Fetch participants
@@ -42,36 +48,52 @@ export function SurveyResultsGrid({ spaceId }: SurveyResultsGridProps) {
     queryKey: ["/api/spaces", spaceId, "participants"],
   });
 
-  // Calculate scores for each idea
+  // Calculate scores for each idea from aggregates.
   const ideasWithScores = useMemo<IdeaWithScores[]>(() => {
-    return notes.map(note => {
-      const noteResponses = responses.filter(r => r.noteId === note.id);
-      const questionScores: { [questionId: string]: number } = {};
-      
-      questions.forEach(question => {
-        const questionResponses = noteResponses.filter(r => r.questionId === question.id);
-        if (questionResponses.length > 0) {
-          const sum = questionResponses.reduce((acc, r) => acc + r.score, 0);
-          questionScores[question.id] = sum / questionResponses.length;
-        } else {
-          questionScores[question.id] = 0;
-        }
-      });
+    const perNoteQuestion = aggregates?.perNoteQuestion ?? [];
+    const validQuestionIds = new Set(questions.map(q => q.id));
 
-      // Calculate overall average
+    // Index per-note-question aggregates and accumulate per-note totals
+    // restricted to current questions (matches server-side filtering).
+    const noteQ = new Map<string, Map<string, { sum: number; count: number }>>();
+    const noteTotals = new Map<string, { sum: number; count: number }>();
+    for (const a of perNoteQuestion) {
+      if (a.count <= 0 || !validQuestionIds.has(a.questionId)) continue;
+      let qMap = noteQ.get(a.noteId);
+      if (!qMap) {
+        qMap = new Map();
+        noteQ.set(a.noteId, qMap);
+      }
+      qMap.set(a.questionId, { sum: a.sum, count: a.count });
+      const tot = noteTotals.get(a.noteId) ?? { sum: 0, count: 0 };
+      tot.sum += a.sum;
+      tot.count += a.count;
+      noteTotals.set(a.noteId, tot);
+    }
+
+    return notes.map(note => {
+      const qMap = noteQ.get(note.id);
+      const questionScores: { [questionId: string]: number } = {};
+      questions.forEach(question => {
+        const entry = qMap?.get(question.id);
+        questionScores[question.id] = entry && entry.count > 0 ? entry.sum / entry.count : 0;
+      });
+      // Preserve legacy semantics: average each question's mean across the
+      // *current* question set (unanswered questions count as 0), so the
+      // overall idea score isn't biased toward questions with more responses.
       const allScores = Object.values(questionScores);
       const averageScore = allScores.length > 0
-        ? allScores.reduce((acc, score) => acc + score, 0) / allScores.length
+        ? allScores.reduce((acc, s) => acc + s, 0) / allScores.length
         : 0;
-
+      const tot = noteTotals.get(note.id);
       return {
         ...note,
         averageScore,
         questionScores,
-        responseCount: noteResponses.length,
+        responseCount: tot?.count ?? 0,
       };
     });
-  }, [notes, questions, responses]);
+  }, [notes, questions, aggregates]);
 
   // Sort ideas
   const sortedIdeas = useMemo(() => {
@@ -139,7 +161,7 @@ export function SurveyResultsGrid({ spaceId }: SurveyResultsGridProps) {
     window.URL.revokeObjectURL(url);
   };
 
-  const totalResponses = responses.length;
+  const totalResponses = ideasWithScores.reduce((s, i) => s + i.responseCount, 0);
   const participantCount = participants.length;
   const expectedResponses = notes.length * questions.length * participantCount;
   const completionRate = expectedResponses > 0

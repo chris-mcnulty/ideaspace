@@ -410,7 +410,9 @@ export default function FacilitatorWorkspace() {
         break;
       case 'survey_response_submitted':
         queryClient.invalidateQueries({
-          predicate: (query) => query.queryKey.includes('survey-responses')
+          predicate: (query) =>
+            query.queryKey.includes('survey-responses') ||
+            query.queryKey.includes('survey-aggregates'),
         });
         break;
       case 'presence_changed':

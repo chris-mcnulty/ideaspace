@@ -85,6 +85,68 @@ export function calculateMarketplaceScores(
 }
 
 /**
+ * Same shape as calculateMarketplaceScores but consumes pre-aggregated rows
+ * (one per note) produced by the SQL GROUP BY in storage. Avoids streaming
+ * every individual allocation row to Node for large cohorts.
+ */
+export function calculateMarketplaceScoresFromTallies(
+  notes: Note[],
+  tallies: Array<{ noteId: string; totalCoins: number; participantCount: number }>,
+): MarketplaceScore[] {
+  const tallyByNote = new Map<string, { totalCoins: number; participantCount: number }>();
+  for (const t of tallies) tallyByNote.set(t.noteId, t);
+
+  const results: MarketplaceScore[] = notes.map((note) => {
+    const t = tallyByNote.get(note.id);
+    const totalCoins = t?.totalCoins ?? 0;
+    const participantCount = t?.participantCount ?? 0;
+    return {
+      noteId: note.id,
+      note,
+      totalCoins,
+      averageCoins: participantCount > 0 ? totalCoins / participantCount : 0,
+      participantCount,
+    };
+  });
+
+  results.sort((a, b) => {
+    if (b.totalCoins !== a.totalCoins) return b.totalCoins - a.totalCoins;
+    return b.participantCount - a.participantCount;
+  });
+
+  return results;
+}
+
+/**
+ * Compute allocation progress from per-participant totals (one row per
+ * participant) instead of every allocation row.
+ */
+export function calculateAllocationProgressFromTotals(
+  participantIds: string[],
+  totalsByParticipant: Array<{ participantId: string; totalAllocated: number }>,
+): AllocationProgress {
+  // "Completed" mirrors the legacy semantics: any participant with at least
+  // one allocation row counts as completed. After SUM grouping, that's any
+  // participant with a non-null aggregate row (totalAllocated may be 0 if
+  // they zeroed everything, but only zero-coin allocations are persisted
+  // when coins > 0 — see the bulk-create route — so the row's existence is
+  // the right signal).
+  const completedCount = totalsByParticipant.length;
+
+  const totalParticipants = participantIds.length;
+  const percentComplete = totalParticipants > 0
+    ? Math.round((completedCount / totalParticipants) * 100)
+    : 0;
+
+  return {
+    totalParticipants,
+    participantsCompleted: completedCount,
+    percentComplete,
+    isComplete: completedCount === totalParticipants && totalParticipants > 0,
+  };
+}
+
+/**
  * Validate that a participant's allocation is valid
  */
 export function validateAllocation(
