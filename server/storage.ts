@@ -1678,7 +1678,7 @@ export class DbStorage implements IStorage {
       INNER JOIN ${knowledgeBaseDocuments} ON ${knowledgeBaseDocuments.id} = c.document_id
       WHERE c.search_vector @@ to_tsquery('english', ${tsqueryString})
         AND (${scopeSql})
-      ORDER BY rank DESC
+      ORDER BY rank DESC, c.document_id ASC, c.chunk_index ASC
       LIMIT ${limit}
     `);
 
