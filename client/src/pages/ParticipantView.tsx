@@ -176,6 +176,12 @@ export default function ParticipantView() {
       if (message.type === 'note_updated' || message.type === 'note_deleted') {
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/notes`] });
       }
+      if (message.type === 'notes_bulk_imported') {
+        // Large CSV imports send a single batched event in lieu of per-note
+        // `note_created`s; participants need to refresh their note list.
+        queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/notes`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/categories`] });
+      }
       if (message.type === 'participant:joined' || message.type === 'participant:left') {
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/participants`] });
       }

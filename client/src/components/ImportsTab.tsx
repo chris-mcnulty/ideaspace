@@ -26,7 +26,17 @@ import {
 type ImportRow = TemplateCsvRow | UserCsvRow | IdeaCsvRow;
 type ImportPreview = CsvPreviewResponse<ImportRow>;
 
-interface UsersConfirmResult { created?: number; invites?: { sent?: number; failed?: number } }
+interface UsersConfirmResult { created?: number; queuedInvites?: number; jobId?: string | null }
+interface ImportJobStatus {
+  id: string;
+  kind: string;
+  status: "pending" | "running" | "complete";
+  total: number;
+  processed: number;
+  succeeded: number;
+  failed: number;
+  failures: { target: string; message: string }[];
+}
 interface IdeasConfirmResult { notes?: number; spaces?: number }
 interface TemplatesConfirmResult { templates?: { id: string }[] }
 type ConfirmResult = UsersConfirmResult | IdeasConfirmResult | TemplatesConfirmResult;
@@ -74,6 +84,36 @@ export function ImportsTab() {
   const [serverPreview, setServerPreview] = useState<ImportPreview | null>(null);
   const [sendInvites, setSendInvites] = useState(true);
   const [defaultWorkspaceCode, setDefaultWorkspaceCode] = useState<string>("");
+  const [inviteJob, setInviteJob] = useState<ImportJobStatus | null>(null);
+
+  // Poll the background invite-email job until it finishes. Big imports used
+  // to time out the confirm request; now the request returns immediately and
+  // this surfaces progress + final tally.
+  useEffect(() => {
+    if (!inviteJob || inviteJob.status === "complete") return;
+    const id = inviteJob.id;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/admin/imports/jobs/${id}`, { credentials: "include" });
+        if (!res.ok) return;
+        const data = (await res.json()) as ImportJobStatus;
+        if (cancelled) return;
+        setInviteJob(data);
+        if (data.status === "complete") {
+          toast({
+            title: "Invitation emails sent",
+            description: `${data.succeeded} sent, ${data.failed} failed of ${data.total}`,
+            variant: data.failed > 0 ? "destructive" : "default",
+          });
+        }
+      } catch {
+        // transient; next tick will retry
+      }
+    };
+    const handle = setInterval(poll, 1500);
+    return () => { cancelled = true; clearInterval(handle); };
+  }, [inviteJob, toast]);
 
   // Read the file into memory once chosen so client-side parse can run
   // immediately without waiting on server round-trips.
@@ -145,9 +185,29 @@ export function ImportsTab() {
     onSuccess: (data) => {
       const summary =
         type === "templates" ? `Imported ${(data as TemplatesConfirmResult).templates?.length ?? 0} templates`
-          : type === "users" ? `Created ${(data as UsersConfirmResult).created ?? 0} users (invites: ${(data as UsersConfirmResult).invites?.sent ?? 0} sent, ${(data as UsersConfirmResult).invites?.failed ?? 0} failed)`
+          : type === "users" ? (() => {
+              const u = data as UsersConfirmResult;
+              return u.queuedInvites && u.jobId
+                ? `Created ${u.created ?? 0} users — sending ${u.queuedInvites} invitation emails in the background`
+                : `Created ${u.created ?? 0} users`;
+            })()
           : `Imported ${(data as IdeasConfirmResult).notes ?? 0} ideas across ${(data as IdeasConfirmResult).spaces ?? 0} workspace(s)`;
       toast({ title: "Import successful", description: summary });
+      if (type === "users") {
+        const u = data as UsersConfirmResult;
+        if (u.jobId && u.queuedInvites) {
+          setInviteJob({
+            id: u.jobId,
+            kind: "user-invites",
+            status: "pending",
+            total: u.queuedInvites,
+            processed: 0,
+            succeeded: 0,
+            failed: 0,
+            failures: [],
+          });
+        }
+      }
       setServerPreview(null);
       setFile(null);
       setCsvText("");
@@ -316,6 +376,18 @@ export function ImportsTab() {
                 />
                 <Label htmlFor="send-invites" className="text-sm">Send SendGrid invitation emails after import</Label>
               </div>
+            )}
+
+            {inviteJob && (
+              <Alert data-testid="alert-invite-job">
+                <Loader2 className={`h-4 w-4 ${inviteJob.status === "complete" ? "" : "animate-spin"}`} />
+                <AlertTitle className="text-sm">
+                  {inviteJob.status === "complete" ? "Invitation emails finished" : "Sending invitation emails…"}
+                </AlertTitle>
+                <AlertDescription className="text-xs" data-testid="text-invite-job-progress">
+                  {inviteJob.processed}/{inviteJob.total} processed · {inviteJob.succeeded} sent · {inviteJob.failed} failed
+                </AlertDescription>
+              </Alert>
             )}
 
             {preview && (

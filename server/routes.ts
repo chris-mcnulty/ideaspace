@@ -24,6 +24,7 @@ import { generateCohortResults, generatePersonalizedResults, generateAllPersonal
 import { hashPassword, requireAuth, requireRole, requireGlobalAdmin, requireCompanyAdmin, requireFacilitator } from "./auth";
 import { generateWorkspaceCode, isValidWorkspaceCode } from "./services/workspace-code";
 import { sendAccessRequestEmail, sendEmailVerification, sendPasswordReset, sendSessionInviteEmail, sendPhaseChangeNotificationEmail, sendResultsAvailableEmail, sendBulkNotifications, type SessionInviteEmailData, type PhaseChangeEmailData, type ResultsReadyEmailData } from "./services/email";
+import { createImportJob, getImportJob, markJobRunning, recordJobSuccess, recordJobFailure, finishJob } from "./services/importJobs";
 import { randomBytes } from "crypto";
 import { fileUploadService } from "./services/file-upload";
 import { extractAndChunk } from "./services/kbExtraction";
@@ -3047,6 +3048,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return errors;
   }
 
+  // Status for background import jobs (e.g. invitation-email sending after a
+  // user import). Scoped to the admin who started the job; global admins can
+  // view any job for ops/debugging.
+  app.get("/api/admin/imports/jobs/:id", requireCompanyAdmin, async (req, res) => {
+    const currentUser = req.user as User;
+    const job = getImportJob(req.params.id);
+    if (!job) return res.status(404).json({ error: "Job not found" });
+    if (job.ownerUserId !== currentUser.id && currentUser.role !== "global_admin") {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    res.json({
+      id: job.id,
+      kind: job.kind,
+      status: job.status,
+      total: job.total,
+      processed: job.processed,
+      succeeded: job.succeeded,
+      failed: job.failed,
+      failures: job.failures,
+      startedAt: job.startedAt,
+      finishedAt: job.finishedAt ?? null,
+    });
+  });
+
   app.post("/api/admin/imports/preview", requireCompanyAdmin, upload.single("file"), async (req, res) => {
     try {
       const type = String(req.body?.type ?? "") as CsvImportType;
@@ -3346,51 +3371,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return out;
       });
 
-      // After commit, generate a password-setup token per imported user and
-      // fire off invite emails (best-effort; do not roll back). Reusing the
-      // password-reset flow lets imported users set a password and become
-      // emailVerified in one click — without that they cannot log in.
-      const inviteResults = { sent: 0, failed: 0 };
-      if (body.sendInvites) {
+      // After commit, queue invite-email work to a lightweight background
+      // job so the HTTP request returns immediately even for large imports
+      // (SendGrid sends are network-bound and used to hold the request long
+      // enough to hit a load-balancer timeout, surfacing as a "failed" toast
+      // even though every user was created). Progress is observable via
+      // GET /api/admin/imports/jobs/:id.
+      let jobId: string | null = null;
+      let queuedInvites = 0;
+      if (body.sendInvites && created.length > 0) {
+        queuedInvites = created.length;
         const protocol = req.protocol;
         const host = req.get("host") ?? "";
         const baseUrl = `${protocol}://${host}`;
-        for (let i = 0; i < created.length; i++) {
-          const user = created[i];
-          const row = resolvedRows[i];
-          try {
-            const token = randomBytes(32).toString("hex");
-            const expiresAt = new Date();
-            expiresAt.setDate(expiresAt.getDate() + 7); // 7-day acceptance window
-            await storage.createPasswordResetToken({
-              userId: user.id,
-              token,
-              expiresAt,
-              used: false,
-            });
+        const job = createImportJob("user-invites", queuedInvites, currentUser.id);
+        jobId = job.id;
 
-            const orgName = row.organizationId
-              ? (allOrgs.find((o) => o.id === row.organizationId)?.name ?? "Your Organization")
-              : "Nebula";
-            await sendSessionInviteEmail(user.email, {
-              inviteeName: row.displayName,
-              role: row.role === "facilitator" || row.role === "company_admin" || row.role === "global_admin" ? "facilitator" : "participant",
-              organizationName: orgName,
-              workspaceName: "Nebula Account",
-              workspaceCode: "----",
-              joinUrl: `${baseUrl}/reset-password?token=${token}`,
-              facilitatorName: currentUser.displayName ?? currentUser.email,
-              personalMessage: "An admin has created a Nebula account for you. Click the link to set your password and sign in. The link is valid for 7 days.",
-            });
-            inviteResults.sent++;
-          } catch (emailErr) {
-            console.error(`Failed to send invite to ${user.email}:`, emailErr);
-            inviteResults.failed++;
-          }
-        }
+        const facilitatorName = currentUser.displayName ?? currentUser.email;
+        const inviteWork = created.map((user, i) => ({ user, row: resolvedRows[i] }));
+
+        setImmediate(() => {
+          void (async () => {
+            markJobRunning(job.id);
+            for (const { user, row } of inviteWork) {
+              try {
+                const token = randomBytes(32).toString("hex");
+                const expiresAt = new Date();
+                expiresAt.setDate(expiresAt.getDate() + 7);
+                await storage.createPasswordResetToken({
+                  userId: user.id,
+                  token,
+                  expiresAt,
+                  used: false,
+                });
+                const orgName = row.organizationId
+                  ? (allOrgs.find((o) => o.id === row.organizationId)?.name ?? "Your Organization")
+                  : "Nebula";
+                await sendSessionInviteEmail(user.email, {
+                  inviteeName: row.displayName,
+                  role: row.role === "facilitator" || row.role === "company_admin" || row.role === "global_admin" ? "facilitator" : "participant",
+                  organizationName: orgName,
+                  workspaceName: "Nebula Account",
+                  workspaceCode: "----",
+                  joinUrl: `${baseUrl}/reset-password?token=${token}`,
+                  facilitatorName,
+                  personalMessage: "An admin has created a Nebula account for you. Click the link to set your password and sign in. The link is valid for 7 days.",
+                });
+                recordJobSuccess(job.id);
+              } catch (emailErr) {
+                console.error(`Failed to send invite to ${user.email}:`, emailErr);
+                recordJobFailure(job.id, user.email, emailErr instanceof Error ? emailErr.message : "send failed");
+              }
+            }
+            finishJob(job.id);
+          })();
+        });
       }
 
-      res.status(201).json({ success: true, created: created.length, invites: inviteResults });
+      res.status(201).json({ success: true, created: created.length, queuedInvites, jobId });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: error.errors });
@@ -3481,15 +3519,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
 
-      // Broadcast after commit so live participants see the new ideas. Send
-      // both individual `note_created` events (for participant views) and a
-      // single `notes_bulk_imported` (handled by the facilitator workspace).
+      // Broadcast after commit so live participants see the new ideas.
+      // Small workspaces still receive per-note `note_created` events so
+      // participant views can animate each card; large workspaces are
+      // batched into a single `notes_bulk_imported` event (carrying the new
+      // notes inline) to avoid flooding every connected client with N
+      // messages per workspace, which previously slowed the request and
+      // hammered the WS layer for big imports.
+      const PER_NOTE_BROADCAST_LIMIT = 50;
       for (const bucket of broadcastBuckets) {
         if (bucket.notes.length === 0) continue;
-        for (const note of bucket.notes) {
-          broadcastToSpace(bucket.spaceId, { type: "note_created", data: note });
+        if (bucket.notes.length <= PER_NOTE_BROADCAST_LIMIT) {
+          for (const note of bucket.notes) {
+            broadcastToSpace(bucket.spaceId, { type: "note_created", data: note });
+          }
         }
-        broadcastToSpace(bucket.spaceId, { type: "notes_bulk_imported", data: { count: bucket.notes.length } });
+        broadcastToSpace(bucket.spaceId, {
+          type: "notes_bulk_imported",
+          data: {
+            count: bucket.notes.length,
+            batched: bucket.notes.length > PER_NOTE_BROADCAST_LIMIT,
+          },
+        });
       }
 
       res.status(201).json({ success: true, ...totals });
