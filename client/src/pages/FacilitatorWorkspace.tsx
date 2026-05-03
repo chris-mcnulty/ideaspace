@@ -1939,11 +1939,7 @@ export default function FacilitatorWorkspace() {
           Live cohort engagement — tiles, idea velocity, and top contributors update as events arrive.
         </p>
       </div>
-      <PulsePanel
-        spaceId={params.space}
-        liveEvent={lastPulseEvent}
-        presenceCount={presenceCount}
-      />
+      <PulsePanel spaceId={params.space} liveEvent={lastPulseEvent} />
     </div>
   );
 

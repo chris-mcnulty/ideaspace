@@ -20,46 +20,42 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
+interface ContributorStat {
+  notes: number;
+  votes: number;
+}
+
 interface PulseSnapshot {
   participants: { joined: number; online: number };
   totals: { ideas: number; votes: number };
-  // Distinct participantIds engaged with each module. Tile counts and
-  // perModuleParticipation are derived from these sets so re-submissions in
-  // upsert-style flows (rankings/marketplace/survey/matrix/staircase) don't
-  // overcount.
   engagedByModule: Record<string, string[]>;
   enabledModules: string[];
-  topContributors: Array<{
-    participantId: string;
-    displayName: string;
-    notes: number;
-    votes: number;
-  }>;
+  contributorStats: Record<string, ContributorStat>;
+  participantNames: Record<string, string>;
   recentNoteTimestamps: number[];
   generatedAt: string;
 }
 
-// Internal view holds Sets instead of arrays for fast incremental adds.
 interface PulseView {
   participants: { joined: number; online: number };
   totals: { ideas: number; votes: number };
   engagedByModule: Record<string, Set<string>>;
   enabledModules: string[];
-  topContributors: PulseSnapshot["topContributors"];
+  contributorStats: Record<string, ContributorStat>;
+  participantNames: Record<string, string>;
   recentNoteTimestamps: number[];
 }
 
 function snapshotToView(s: PulseSnapshot): PulseView {
   const engaged: Record<string, Set<string>> = {};
-  for (const [k, v] of Object.entries(s.engagedByModule)) {
-    engaged[k] = new Set(v);
-  }
+  for (const [k, v] of Object.entries(s.engagedByModule)) engaged[k] = new Set(v);
   return {
     participants: { ...s.participants },
     totals: { ...s.totals },
     engagedByModule: engaged,
     enabledModules: s.enabledModules,
-    topContributors: s.topContributors,
+    contributorStats: { ...s.contributorStats },
+    participantNames: { ...s.participantNames },
     recentNoteTimestamps: s.recentNoteTimestamps,
   };
 }
@@ -173,12 +169,8 @@ export interface PulseLiveEvent {
 export interface PulsePanelProps {
   spaceId: string;
   liveEvent?: PulseLiveEvent | null;
-  presenceCount?: number | null;
 }
 
-// Events whose effect on the snapshot can't be reliably diffed locally
-// (bulk operations, module-set changes). For these we trigger a debounced
-// snapshot refetch (≤1/sec).
 const REFETCH_EVENTS = new Set<string>([
   "notes_deleted",
   "notes_updated",
@@ -186,11 +178,12 @@ const REFETCH_EVENTS = new Set<string>([
   "module_configured",
   "module_updated",
   "categories_updated",
+  // Lifecycle events change participants.joined/online and the participantNames
+  // map (new participant names need to be available for the leaderboard).
+  "participant_joined",
+  "participant_left",
 ]);
 
-// Map an incremental event to the module key whose participant set should
-// gain the event's participantId. note_created is special-cased (also bumps
-// totals.ideas + sparkline + leaderboard).
 const EVENT_MODULE_MAP: Record<string, string> = {
   note_created: "ideation",
   vote_recorded: "pairwise-voting",
@@ -204,95 +197,51 @@ const EVENT_MODULE_MAP: Record<string, string> = {
 function applyDelta(prev: PulseView, ev: PulseLiveEvent): PulseView {
   const data = (ev.data && typeof ev.data === "object" ? ev.data : {}) as Record<string, unknown>;
   const participantId = typeof data.participantId === "string" ? data.participantId : null;
-  const authorName = typeof data.authorName === "string" ? data.authorName : null;
 
-  // Participant lifecycle
-  if (ev.type === "participant_joined") {
-    return { ...prev, participants: { ...prev.participants, joined: prev.participants.joined + 1 } };
-  }
-  if (ev.type === "participant_left") {
-    return {
-      ...prev,
-      participants: { ...prev.participants, joined: Math.max(0, prev.participants.joined - 1) },
-    };
-  }
-
-  // Note lifecycle: ideas counter + sparkline + ideation engagement set
   if (ev.type === "note_created") {
     const nextEngaged = { ...prev.engagedByModule };
+    const nextStats = { ...prev.contributorStats };
     if (participantId) {
-      const existing = nextEngaged.ideation || new Set<string>();
-      const updated = new Set(existing);
-      updated.add(participantId);
-      nextEngaged.ideation = updated;
-    }
-    let topContributors = prev.topContributors;
-    if (participantId) {
-      const idx = prev.topContributors.findIndex(c => c.participantId === participantId);
-      if (idx >= 0) {
-        const updated = { ...prev.topContributors[idx], notes: prev.topContributors[idx].notes + 1 };
-        topContributors = [
-          ...prev.topContributors.slice(0, idx),
-          updated,
-          ...prev.topContributors.slice(idx + 1),
-        ].sort((a, b) => b.notes + b.votes - (a.notes + a.votes));
-      } else if (authorName) {
-        topContributors = [
-          ...prev.topContributors,
-          { participantId, displayName: authorName, notes: 1, votes: 0 },
-        ]
-          .sort((a, b) => b.notes + b.votes - (a.notes + a.votes))
-          .slice(0, 5);
-      }
+      const set = new Set(nextEngaged.ideation || []);
+      set.add(participantId);
+      nextEngaged.ideation = set;
+      const cur = nextStats[participantId] || { notes: 0, votes: 0 };
+      nextStats[participantId] = { notes: cur.notes + 1, votes: cur.votes };
     }
     return {
       ...prev,
       totals: { ...prev.totals, ideas: prev.totals.ideas + 1 },
       recentNoteTimestamps: [...prev.recentNoteTimestamps, Date.now()],
       engagedByModule: nextEngaged,
-      topContributors,
+      contributorStats: nextStats,
     };
   }
   if (ev.type === "note_deleted") {
     return { ...prev, totals: { ...prev.totals, ideas: Math.max(0, prev.totals.ideas - 1) } };
   }
-
-  // Pairwise vote: total counter + voter engagement set + leaderboard
   if (ev.type === "vote_recorded") {
     const nextEngaged = { ...prev.engagedByModule };
+    const nextStats = { ...prev.contributorStats };
     if (participantId) {
-      const existing = nextEngaged["pairwise-voting"] || new Set<string>();
-      const updated = new Set(existing);
-      updated.add(participantId);
-      nextEngaged["pairwise-voting"] = updated;
-    }
-    let topContributors = prev.topContributors;
-    if (participantId) {
-      const idx = prev.topContributors.findIndex(c => c.participantId === participantId);
-      if (idx >= 0) {
-        const updated = { ...prev.topContributors[idx], votes: prev.topContributors[idx].votes + 1 };
-        topContributors = [
-          ...prev.topContributors.slice(0, idx),
-          updated,
-          ...prev.topContributors.slice(idx + 1),
-        ].sort((a, b) => b.notes + b.votes - (a.notes + a.votes));
-      }
+      const set = new Set(nextEngaged["pairwise-voting"] || []);
+      set.add(participantId);
+      nextEngaged["pairwise-voting"] = set;
+      const cur = nextStats[participantId] || { notes: 0, votes: 0 };
+      nextStats[participantId] = { notes: cur.notes, votes: cur.votes + 1 };
     }
     return {
       ...prev,
       totals: { ...prev.totals, votes: prev.totals.votes + 1 },
       engagedByModule: nextEngaged,
-      topContributors,
+      contributorStats: nextStats,
     };
   }
 
-  // Upsert-style module submissions: only add to the engagement set; no raw
-  // counter exists for these. Re-submissions are idempotent.
   const moduleKey = EVENT_MODULE_MAP[ev.type];
   if (moduleKey && participantId) {
-    const existing = prev.engagedByModule[moduleKey] || new Set<string>();
-    if (existing.has(participantId)) return prev;
-    const updated = new Set(existing);
+    const existing = prev.engagedByModule[moduleKey];
+    if (existing && existing.has(participantId)) return prev;
+    const updated = new Set(existing || []);
     updated.add(participantId);
     return {
       ...prev,
@@ -303,7 +252,24 @@ function applyDelta(prev: PulseView, ev: PulseLiveEvent): PulseView {
   return prev;
 }
 
-export default function PulsePanel({ spaceId, liveEvent, presenceCount }: PulsePanelProps) {
+function deriveTopContributors(
+  stats: Record<string, ContributorStat>,
+  names: Record<string, string>,
+  limit = 5,
+): Array<{ participantId: string; displayName: string; notes: number; votes: number }> {
+  return Object.entries(stats)
+    .map(([participantId, s]) => ({
+      participantId,
+      displayName: names[participantId] || "Anonymous",
+      notes: s.notes,
+      votes: s.votes,
+    }))
+    .filter(c => c.notes + c.votes > 0)
+    .sort((a, b) => b.notes + b.votes - (a.notes + a.votes) || b.notes - a.notes)
+    .slice(0, limit);
+}
+
+export default function PulsePanel({ spaceId, liveEvent }: PulsePanelProps) {
   const queryKey = useMemo(() => [`/api/spaces/${spaceId}/pulse`], [spaceId]);
   const { data, isLoading, error, refetch } = useQuery<PulseSnapshot>({
     queryKey,
@@ -315,8 +281,6 @@ export default function PulsePanel({ spaceId, liveEvent, presenceCount }: PulseP
     if (data) setView(snapshotToView(data));
   }, [data]);
 
-  // Apply incremental deltas. The seq guard protects against double-applies if
-  // React strict-mode re-runs the effect.
   const lastSeqRef = useRef<number>(-1);
   useEffect(() => {
     if (!liveEvent || liveEvent.seq === lastSeqRef.current) return;
@@ -324,15 +288,15 @@ export default function PulsePanel({ spaceId, liveEvent, presenceCount }: PulseP
     setView(prev => (prev ? applyDelta(prev, liveEvent) : prev));
   }, [liveEvent]);
 
-  // Debounced snapshot refetch for ambiguous/bulk events. The pending timer is
-  // intentionally NOT cleared by subsequent unrelated events — earlier reviews
-  // flagged that as a reliability bug. We only clear it on unmount.
+  // Debounced refetch (≤1/sec) for events whose effect can't be diffed locally.
+  // Pending timers are only cleared on unmount so a burst of events does not
+  // cancel an already-scheduled refetch.
   const lastInvalidatedAt = useRef<number>(0);
   const invalidateTimer = useRef<number | null>(null);
   useEffect(() => {
     if (!spaceId || !liveEvent) return;
     if (!REFETCH_EVENTS.has(liveEvent.type)) return;
-    if (invalidateTimer.current != null) return; // already scheduled
+    if (invalidateTimer.current != null) return;
     const since = Date.now() - lastInvalidatedAt.current;
     if (since >= 1000) {
       lastInvalidatedAt.current = Date.now();
@@ -355,7 +319,6 @@ export default function PulsePanel({ spaceId, liveEvent, presenceCount }: PulseP
     };
   }, []);
 
-  // Periodically prune the rolling sparkline buffer to the last 10 minutes.
   useEffect(() => {
     const id = window.setInterval(() => {
       setView(prev => {
@@ -410,16 +373,18 @@ export default function PulsePanel({ spaceId, liveEvent, presenceCount }: PulseP
 
   if (!view) return null;
 
-  const { participants, totals, engagedByModule, enabledModules, topContributors, recentNoteTimestamps } = view;
-  const onlineNow = typeof presenceCount === "number" ? presenceCount : participants.online;
+  const { participants, totals, engagedByModule, enabledModules, recentNoteTimestamps } = view;
   const total = participants.joined;
   const sizeOf = (k: string) => engagedByModule[k]?.size ?? 0;
   const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
+  const topContributors = deriveTopContributors(view.contributorStats, view.participantNames);
 
-  const moduleEntries = enabledModules.map(key => {
-    const engaged = sizeOf(key);
-    return { key, engaged, total, percent: pct(engaged) };
-  });
+  const moduleEntries = enabledModules.map(key => ({
+    key,
+    engaged: sizeOf(key),
+    total,
+    percent: pct(sizeOf(key)),
+  }));
 
   return (
     <div className="space-y-6" data-testid="pulse-panel">
@@ -428,7 +393,7 @@ export default function PulsePanel({ spaceId, liveEvent, presenceCount }: PulseP
           icon={Users}
           label="Participants"
           value={participants.joined}
-          hint={`${onlineNow} online now`}
+          hint={`${participants.online} online now`}
           testId="tile-participants"
         />
         <Tile

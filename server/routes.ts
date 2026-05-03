@@ -3994,32 +3994,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       const enabledModules = modules.filter(m => m.enabled).map(m => m.moduleType);
 
-      // Top contributors leaderboard (notes authored + votes cast).
-      const noteCountByPid = new Map<string, number>();
-      for (const n of notesList) {
-        if (!n.participantId) continue;
-        noteCountByPid.set(n.participantId, (noteCountByPid.get(n.participantId) || 0) + 1);
-      }
-      const voteCountByPid = new Map<string, number>();
-      for (const v of votesList) {
-        if (!v.participantId) continue;
-        voteCountByPid.set(v.participantId, (voteCountByPid.get(v.participantId) || 0) + 1);
-      }
-      const nameByPid = new Map(participants.map(p => [p.id, p.displayName] as const));
-      const contributorIds = new Set<string>();
-      noteCountByPid.forEach((_v, k) => contributorIds.add(k));
-      voteCountByPid.forEach((_v, k) => contributorIds.add(k));
-      const topContributors = Array.from(contributorIds)
-        .map(pid => ({
-          participantId: pid,
-          displayName: nameByPid.get(pid) || 'Anonymous',
-          notes: noteCountByPid.get(pid) || 0,
-          votes: voteCountByPid.get(pid) || 0,
-        }))
-        .sort((a, b) => (b.notes + b.votes) - (a.notes + a.votes) || b.notes - a.notes)
-        .slice(0, 5);
+      // Full contributor stats (notes + votes per participant). The client
+      // derives the top-N leaderboard so it can promote previously-unseen
+      // contributors live without needing a refetch.
+      const contributorStats: Record<string, { notes: number; votes: number }> = {};
+      const bump = (pid: string | null, key: 'notes' | 'votes') => {
+        if (!pid) return;
+        const cur = contributorStats[pid] || { notes: 0, votes: 0 };
+        cur[key] += 1;
+        contributorStats[pid] = cur;
+      };
+      for (const n of notesList) bump(n.participantId, 'notes');
+      for (const v of votesList) bump(v.participantId, 'votes');
+      const participantNames: Record<string, string> = {};
+      for (const p of participants) participantNames[p.id] = p.displayName;
 
-      // Recent note timestamps (last 10 minutes) for the velocity sparkline.
       const cutoff = Date.now() - 10 * 60 * 1000;
       const recentNoteTimestamps = notesList
         .map(n => (n.createdAt instanceof Date ? n.createdAt.getTime() : new Date(String(n.createdAt)).getTime()))
@@ -4028,17 +4017,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({
         participants: { joined, online },
-        // Total ideas and total pairwise votes are append-only and meaningful
-        // as raw counts. Other tile values are derived client-side from
-        // engagedByModule (distinct participant sets) so re-submissions don't
-        // overcount.
         totals: {
           ideas: notesList.length,
           votes: votesList.length,
         },
         engagedByModule,
         enabledModules,
-        topContributors,
+        contributorStats,
+        participantNames,
         recentNoteTimestamps,
         generatedAt: new Date().toISOString(),
       });
