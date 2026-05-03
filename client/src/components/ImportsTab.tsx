@@ -1,13 +1,13 @@
-import { useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Loader2, Upload, FileWarning, CheckCircle2, Download } from "lucide-react";
@@ -15,6 +15,7 @@ import {
   TEMPLATE_CSV_HEADERS,
   USER_CSV_HEADERS,
   IDEA_CSV_HEADERS,
+  buildCsvPreview,
   type CsvImportType,
   type CsvPreviewResponse,
 } from "@shared/csvImport";
@@ -43,15 +44,42 @@ const SAMPLES: Record<CsvImportType, string> = {
 const HEADER_DESC: Record<CsvImportType, string> = {
   templates: "Headers: " + TEMPLATE_CSV_HEADERS.join(", ") + ". One row per template. The 'ideas' and 'categories' cells are newline-separated lists; each idea is 'text' or 'text|category'; each category is 'name' or 'name|#hexcolor'.",
   users: "Headers: " + USER_CSV_HEADERS.join(", ") + ". organization is required for non-global_admin roles and accepts a slug or name.",
-  ideas: "Headers: " + IDEA_CSV_HEADERS.join(", ") + ". workspaceCode must be in nnnn-nnnn format. text is the idea content. category is optional and will be created if it doesn't exist.",
+  ideas: "Headers: " + IDEA_CSV_HEADERS.join(", ") + ". Also accepts the per-workspace export format (Idea, Category, Participant, Created At) — when 'workspaceCode' is missing, set the Default workspace code below to round-trip.",
 };
 
 export function ImportsTab() {
   const { toast } = useToast();
   const [type, setType] = useState<CsvImportType>("templates");
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<CsvPreviewResponse<any> | null>(null);
+  const [csvText, setCsvText] = useState<string>("");
+  const [serverPreview, setServerPreview] = useState<CsvPreviewResponse<any> | null>(null);
   const [sendInvites, setSendInvites] = useState(true);
+  const [defaultWorkspaceCode, setDefaultWorkspaceCode] = useState<string>("");
+
+  // Read the file into memory once chosen so client-side parse can run
+  // immediately without waiting on server round-trips.
+  useEffect(() => {
+    if (!file) { setCsvText(""); return; }
+    const reader = new FileReader();
+    reader.onload = () => setCsvText(typeof reader.result === "string" ? reader.result : "");
+    reader.readAsText(file);
+  }, [file]);
+
+  // Client-side parse + Zod validation using the shared schema. Provides
+  // instant feedback before the server round-trip; the server preview
+  // remains the authoritative source for DB-aware checks.
+  const localPreview = useMemo<CsvPreviewResponse<any> | null>(() => {
+    if (!csvText) return null;
+    try {
+      return buildCsvPreview<any>(type, csvText, {
+        defaultWorkspaceCode: type === "ideas" && defaultWorkspaceCode.trim() ? defaultWorkspaceCode.trim() : undefined,
+      });
+    } catch {
+      return null;
+    }
+  }, [csvText, type, defaultWorkspaceCode]);
+
+  const preview = serverPreview ?? localPreview;
 
   const previewMutation = useMutation({
     mutationFn: async () => {
@@ -59,6 +87,9 @@ export function ImportsTab() {
       const fd = new FormData();
       fd.append("type", type);
       fd.append("file", file);
+      if (type === "ideas" && defaultWorkspaceCode.trim()) {
+        fd.append("defaultWorkspaceCode", defaultWorkspaceCode.trim());
+      }
       const res = await fetch("/api/admin/imports/preview", { method: "POST", body: fd, credentials: "include" });
       if (!res.ok) {
         const text = await res.text();
@@ -67,23 +98,23 @@ export function ImportsTab() {
       return (await res.json()) as CsvPreviewResponse<any>;
     },
     onSuccess: (data) => {
-      setPreview(data);
-      toast({ title: "Preview ready", description: `${data.validRows.length} valid / ${data.errors.length} errors` });
+      setServerPreview(data);
+      toast({ title: "Server preview ready", description: `${data.validRows.length} valid / ${data.errors.length} errors (DB-checked)` });
     },
     onError: (err: any) => {
-      setPreview(null);
+      setServerPreview(null);
       toast({ title: "Preview failed", description: err?.message ?? "Unknown error", variant: "destructive" });
     },
   });
 
   const confirmMutation = useMutation({
     mutationFn: async () => {
-      if (!preview || preview.validRows.length === 0) throw new Error("Nothing to import");
+      if (!serverPreview || serverPreview.validRows.length === 0) throw new Error("Run server preview first");
       const url =
         type === "templates" ? "/api/admin/imports/templates/confirm"
           : type === "users" ? "/api/admin/imports/users/confirm"
           : "/api/admin/imports/ideas/confirm";
-      const body: Record<string, unknown> = { rows: preview.validRows };
+      const body: Record<string, unknown> = { rows: serverPreview.validRows };
       if (type === "users") body.sendInvites = sendInvites;
       const res = await apiRequest("POST", url, body);
       return res.json();
@@ -94,8 +125,9 @@ export function ImportsTab() {
           : type === "users" ? `Created ${data.created ?? 0} users (invites: ${data.invites?.sent ?? 0} sent, ${data.invites?.failed ?? 0} failed)`
           : `Imported ${data.notes ?? 0} ideas across ${data.spaces ?? 0} workspace(s)`;
       toast({ title: "Import successful", description: summary });
-      setPreview(null);
+      setServerPreview(null);
       setFile(null);
+      setCsvText("");
       if (type === "templates") {
         queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
         queryClient.invalidateQueries({ queryKey: ["/api/templates/spaces"] });
@@ -126,6 +158,9 @@ export function ImportsTab() {
     const fd = new FormData();
     fd.append("type", type);
     fd.append("file", file);
+    if (type === "ideas" && defaultWorkspaceCode.trim()) {
+      fd.append("defaultWorkspaceCode", defaultWorkspaceCode.trim());
+    }
     const res = await fetch("/api/admin/imports/preview?format=errors-csv", { method: "POST", body: fd, credentials: "include" });
     if (!res.ok) {
       toast({ title: "Could not download error report", variant: "destructive" });
@@ -150,16 +185,51 @@ export function ImportsTab() {
     URL.revokeObjectURL(url);
   };
 
+  const renderPreviewRow = (row: any, idx: number) => {
+    if (type === "templates") {
+      return (
+        <TableRow key={idx} data-testid={`row-preview-${idx}`}>
+          <TableCell>{row.name}</TableCell>
+          <TableCell className="text-muted-foreground text-xs">{row.description ?? ""}</TableCell>
+          <TableCell>{row.ideas?.length ?? 0}</TableCell>
+          <TableCell>{row.categories?.length ?? 0}</TableCell>
+        </TableRow>
+      );
+    }
+    if (type === "users") {
+      return (
+        <TableRow key={idx} data-testid={`row-preview-${idx}`}>
+          <TableCell>{row.email}</TableCell>
+          <TableCell>{row.displayName}</TableCell>
+          <TableCell><Badge variant="secondary">{row.role}</Badge></TableCell>
+          <TableCell className="text-muted-foreground text-xs">{row.organization ?? ""}</TableCell>
+        </TableRow>
+      );
+    }
+    return (
+      <TableRow key={idx} data-testid={`row-preview-${idx}`}>
+        <TableCell><code className="text-xs">{row.workspaceCode}</code></TableCell>
+        <TableCell>{row.text}</TableCell>
+        <TableCell className="text-muted-foreground text-xs">{row.category ?? ""}</TableCell>
+      </TableRow>
+    );
+  };
+
+  const previewHeaders =
+    type === "templates" ? ["Name", "Description", "Ideas", "Categories"]
+      : type === "users" ? ["Email", "Display name", "Role", "Organization"]
+        : ["Workspace code", "Text", "Category"];
+
   return (
     <Card data-testid="card-imports">
       <CardHeader>
         <CardTitle>CSV Import</CardTitle>
         <CardDescription>
-          Bulk import workspace templates, users, or ideas from a CSV file. All rows are validated; on confirm, the import runs in a single database transaction (all-or-nothing).
+          Bulk import workspace templates, users, or ideas from a CSV file. Validation runs locally as you select a file, and again on the server (with database-aware checks) when you click Preview. Confirm runs the import in a single transaction (all-or-nothing).
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <Tabs value={type} onValueChange={(v) => { setType(v as CsvImportType); setPreview(null); setFile(null); }}>
+        <Tabs value={type} onValueChange={(v) => { setType(v as CsvImportType); setServerPreview(null); setFile(null); setCsvText(""); }}>
           <TabsList>
             <TabsTrigger value="templates" data-testid="tab-import-templates">Templates</TabsTrigger>
             <TabsTrigger value="users" data-testid="tab-import-users">Users</TabsTrigger>
@@ -178,15 +248,11 @@ export function ImportsTab() {
                   id="csv-file"
                   type="file"
                   accept=".csv,text/csv"
-                  onChange={(e) => { setFile(e.target.files?.[0] ?? null); setPreview(null); }}
+                  onChange={(e) => { setFile(e.target.files?.[0] ?? null); setServerPreview(null); }}
                   data-testid="input-csv-file"
                 />
               </div>
-              <Button
-                variant="outline"
-                onClick={downloadSample}
-                data-testid="button-download-sample"
-              >
+              <Button variant="outline" onClick={downloadSample} data-testid="button-download-sample">
                 <Download className="h-4 w-4 mr-2" /> Sample
               </Button>
               <Button
@@ -195,9 +261,23 @@ export function ImportsTab() {
                 data-testid="button-preview"
               >
                 {previewMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
-                Preview
+                Server preview
               </Button>
             </div>
+
+            {type === "ideas" && (
+              <div className="flex-1 min-w-[260px]">
+                <Label htmlFor="default-workspace-code" className="text-sm">Default workspace code (for round-trip with per-workspace exports)</Label>
+                <Input
+                  id="default-workspace-code"
+                  type="text"
+                  placeholder="nnnn-nnnn"
+                  value={defaultWorkspaceCode}
+                  onChange={(e) => { setDefaultWorkspaceCode(e.target.value); setServerPreview(null); }}
+                  data-testid="input-default-workspace-code"
+                />
+              </div>
+            )}
 
             {type === "users" && (
               <div className="flex items-center gap-2">
@@ -218,6 +298,9 @@ export function ImportsTab() {
                   <Badge variant="secondary" data-testid="badge-total-rows">Total: {preview.totalRows}</Badge>
                   <Badge variant="default" data-testid="badge-valid-rows">Valid: {preview.validRows.length}</Badge>
                   <Badge variant="destructive" data-testid="badge-error-count">Errors: {preview.errors.length}</Badge>
+                  {!serverPreview && (
+                    <Badge variant="outline" data-testid="badge-local-only">Local check only — click "Server preview" for DB validation</Badge>
+                  )}
                 </div>
 
                 {preview.errors.length > 0 && (
@@ -243,22 +326,41 @@ export function ImportsTab() {
                 )}
 
                 {preview.validRows.length > 0 && (
-                  <Alert>
-                    <CheckCircle2 className="h-4 w-4" />
-                    <AlertTitle className="text-sm">Ready to import</AlertTitle>
-                    <AlertDescription className="text-xs">
-                      {preview.validRows.length} row(s) will be committed in a single transaction. If any database error occurs, no rows will be saved.
-                    </AlertDescription>
-                  </Alert>
+                  <div className="space-y-2">
+                    <Alert>
+                      <CheckCircle2 className="h-4 w-4" />
+                      <AlertTitle className="text-sm">Ready to import</AlertTitle>
+                      <AlertDescription className="text-xs">
+                        {preview.validRows.length} row(s) will be committed in a single transaction. If any database error occurs, no rows will be saved.
+                      </AlertDescription>
+                    </Alert>
+                    <div className="border rounded-md overflow-hidden">
+                      <Table data-testid="table-preview">
+                        <TableHeader>
+                          <TableRow>
+                            {previewHeaders.map((h) => <TableHead key={h}>{h}</TableHead>)}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {preview.validRows.slice(0, 50).map((r, i) => renderPreviewRow(r, i))}
+                        </TableBody>
+                      </Table>
+                      {preview.validRows.length > 50 && (
+                        <div className="p-2 text-xs text-muted-foreground border-t" data-testid="text-preview-truncated">
+                          Showing first 50 of {preview.validRows.length} rows.
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
 
                 <Button
                   onClick={() => confirmMutation.mutate()}
-                  disabled={preview.validRows.length === 0 || confirmMutation.isPending}
+                  disabled={!serverPreview || serverPreview.validRows.length === 0 || confirmMutation.isPending}
                   data-testid="button-confirm-import"
                 >
                   {confirmMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Confirm import ({preview.validRows.length} row{preview.validRows.length === 1 ? "" : "s"})
+                  Confirm import {serverPreview ? `(${serverPreview.validRows.length} row${serverPreview.validRows.length === 1 ? "" : "s"})` : "(run server preview)"}
                 </Button>
               </div>
             )}

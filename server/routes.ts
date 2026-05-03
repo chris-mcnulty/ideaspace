@@ -3035,7 +3035,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No file uploaded" });
       }
       const csvText = req.file.buffer.toString("utf-8");
-      const preview = buildCsvPreview(type, csvText);
+      const defaultWorkspaceCode = typeof req.body?.defaultWorkspaceCode === "string" && req.body.defaultWorkspaceCode.trim()
+        ? req.body.defaultWorkspaceCode.trim()
+        : undefined;
+      const preview = buildCsvPreview(type, csvText, { defaultWorkspaceCode });
 
       // Augment with DB-aware checks so the preview surfaces referential and
       // tenant-authorization failures before the user clicks Confirm.

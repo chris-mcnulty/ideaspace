@@ -81,6 +81,176 @@ export const TEMPLATE_CSV_HEADERS = ["name", "description", "ideas", "categories
 export const USER_CSV_HEADERS = ["email", "displayName", "role", "organization"] as const;
 export const IDEA_CSV_HEADERS = ["workspaceCode", "text", "category"] as const;
 
+// Aliases let the unified importer accept CSVs produced by the per-workspace
+// idea exporter (`Idea,Category,Participant,Created At`). When workspaceCode
+// is absent in the CSV, callers may supply a `defaultWorkspaceCode` and the
+// `Participant` / `Created At` columns are ignored.
+export const IDEA_HEADER_ALIASES: Record<string, string> = {
+  idea: "text",
+  text: "text",
+  category: "category",
+  workspacecode: "workspaceCode",
+  "workspace code": "workspaceCode",
+};
+
+function parseCsvLine(line: string): string[] {
+  const fields: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+      else { inQuotes = !inQuotes; }
+    } else if (ch === "," && !inQuotes) {
+      fields.push(current); current = "";
+    } else { current += ch; }
+  }
+  fields.push(current);
+  return fields;
+}
+
+function splitCsvRows(text: string): string[] {
+  const rows: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') {
+      if (inQuotes && text[i + 1] === '"') { current += '""'; i++; }
+      else { inQuotes = !inQuotes; current += ch; }
+    } else if ((ch === "\n" || ch === "\r") && !inQuotes) {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      if (current.length > 0) rows.push(current);
+      current = "";
+    } else { current += ch; }
+  }
+  if (current.length > 0) rows.push(current);
+  return rows;
+}
+
+const HEADER_BY_TYPE: Record<CsvImportType, readonly string[]> = {
+  templates: TEMPLATE_CSV_HEADERS,
+  users: USER_CSV_HEADERS,
+  ideas: IDEA_CSV_HEADERS,
+};
+
+const ROW_SCHEMA_BY_TYPE = {
+  templates: templateCsvRowSchema,
+  users: userCsvRowSchema,
+  ideas: ideaCsvRowSchema,
+} as const;
+
+const REQUIRED_HEADERS: Record<CsvImportType, readonly string[]> = {
+  templates: ["name"],
+  users: ["email", "displayName", "role"],
+  ideas: ["text"],
+};
+
+export interface BuildCsvPreviewOptions {
+  /** When set and the CSV has no workspaceCode column, fills it for ideas. */
+  defaultWorkspaceCode?: string;
+}
+
+/**
+ * Parse + Zod-validate a CSV. Used by both the client (for instant feedback
+ * before upload) and the server (for the authoritative preview).
+ */
+export function buildCsvPreview<T>(
+  type: CsvImportType,
+  csvText: string,
+  opts: BuildCsvPreviewOptions = {},
+): CsvPreviewResponse<T> {
+  if (!CSV_IMPORT_TYPES.includes(type)) {
+    throw new Error(`Unsupported CSV import type: ${type}`);
+  }
+
+  const expectedHeaders = HEADER_BY_TYPE[type];
+  const requiredHeaders = REQUIRED_HEADERS[type];
+  const schema = ROW_SCHEMA_BY_TYPE[type] as z.ZodTypeAny;
+
+  const rows = splitCsvRows(csvText.replace(/^\uFEFF/, ""));
+  if (rows.length === 0) {
+    return { type, totalRows: 0, validRows: [], invalidCount: 1, errors: [{ row: 1, message: "CSV is empty" }] };
+  }
+
+  const rawHeaders = parseCsvLine(rows[0]).map((h) => h.trim());
+  const headerIndex = new Map<string, number>();
+  rawHeaders.forEach((h, idx) => {
+    if (type === "ideas") {
+      const norm = IDEA_HEADER_ALIASES[h.toLowerCase()] ?? h;
+      headerIndex.set(norm, idx);
+    } else {
+      headerIndex.set(h, idx);
+    }
+  });
+
+  const errors: CsvPreviewError[] = [];
+  const hasDefaultWs = type === "ideas" && !!opts.defaultWorkspaceCode;
+  const effectiveRequired = type === "ideas" && hasDefaultWs
+    ? requiredHeaders.filter((h) => h !== "workspaceCode")
+    : type === "ideas"
+      ? ["workspaceCode", "text"]
+      : requiredHeaders;
+  const missing = effectiveRequired.filter((h) => !headerIndex.has(h));
+  if (missing.length > 0) {
+    errors.push({
+      row: 1,
+      message: `Missing required header(s): ${missing.join(", ")}. Expected: ${expectedHeaders.join(",")}`,
+    });
+  }
+
+  const validRows: T[] = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    const sourceRow = i + 1;
+    const line = rows[i];
+    if (line.trim() === "") continue;
+
+    const fields = parseCsvLine(line);
+    const raw: Record<string, string> = {};
+    for (const header of expectedHeaders) {
+      const idx = headerIndex.get(header);
+      raw[header] = idx !== undefined && idx < fields.length ? fields[idx] : "";
+    }
+
+    if (type === "ideas" && hasDefaultWs && !raw.workspaceCode) {
+      raw.workspaceCode = opts.defaultWorkspaceCode!;
+    }
+
+    let candidate: unknown = raw;
+    if (type === "templates") {
+      candidate = {
+        name: raw.name,
+        description: raw.description || undefined,
+        ideas: parseTemplateIdeasCell(raw.ideas ?? ""),
+        categories: parseTemplateCategoriesCell(raw.categories ?? ""),
+      };
+    }
+
+    const parsed = schema.safeParse(candidate);
+    if (parsed.success) {
+      validRows.push(parsed.data as T);
+    } else {
+      for (const issue of parsed.error.issues) {
+        errors.push({
+          row: sourceRow,
+          field: issue.path.join(".") || undefined,
+          message: issue.message,
+        });
+      }
+    }
+  }
+
+  return {
+    type,
+    totalRows: Math.max(0, rows.length - 1),
+    validRows,
+    invalidCount: errors.length,
+    errors,
+  };
+}
+
 /**
  * Parse a multi-line cell from the templates CSV (newline-separated entries
  * with optional `|` delimiter) into structured items.
