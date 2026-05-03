@@ -71,7 +71,7 @@ const SAMPLES: Record<CsvImportType, string> = {
 };
 
 const HEADER_DESC: Record<CsvImportType, string> = {
-  templates: "Headers: " + TEMPLATE_CSV_HEADERS.join(", ") + ". One row per template. The 'ideas' and 'categories' cells are newline-separated lists; each idea is 'text' or 'text|category'; each category is 'name' or 'name|#hexcolor'.",
+  templates: "Headers: " + TEMPLATE_CSV_HEADERS.join(", ") + ". One row per template. The 'ideas' and 'categories' cells are newline-separated lists; each idea is 'text' or 'text|category'; each category is 'name' or 'name|#hexcolor'. Imported categories are saved on the template and re-created in every workspace cloned from it (matched to ideas by name; missing colors get a random hex).",
   users: "Headers: " + USER_CSV_HEADERS.join(", ") + ". organization is required for non-global_admin roles and accepts a slug or name.",
   ideas: "Headers: " + IDEA_CSV_HEADERS.join(", ") + ". Also accepts the per-workspace export format (Idea, Category, Participant, Created At) — when 'workspaceCode' is missing, set the Default workspace code below to round-trip.",
 };

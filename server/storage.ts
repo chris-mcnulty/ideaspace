@@ -1809,13 +1809,34 @@ export class DbStorage implements IStorage {
       throw new Error("Template does not belong to the same organization as the workspace");
     }
 
-    // Get template notes and documents
+    // Get template notes, documents, and categories. Categories live on the
+    // template's source space (when present) — this lets CSV-imported
+    // templates and any other templates that declared real category rows
+    // round-trip into freshly cloned workspaces with proper category
+    // assignments instead of dropping them on the floor.
     const templateNotes = await this.getWorkspaceTemplateNotes(templateId);
     const templateDocuments = await this.getWorkspaceTemplateDocuments(templateId);
+    const sourceSpaceId = template.sourceSpaceId ?? null;
+    const sourceCategories = sourceSpaceId
+      ? await this.getCategoriesBySpace(sourceSpaceId)
+      : [];
 
-    // Only create participant if there are notes or documents to clone
-    if (templateNotes.length === 0 && templateDocuments.length === 0) {
+    // Only create participant if there are notes, documents, or categories to clone
+    if (templateNotes.length === 0 && templateDocuments.length === 0 && sourceCategories.length === 0) {
       return; // Nothing to clone, exit early
+    }
+
+    // Recreate categories in the destination workspace and remember them by
+    // lower-cased name so we can resolve the free-text `category` column on
+    // template notes back to a real category id.
+    const categoryByName = new Map<string, string>();
+    for (const cat of sourceCategories) {
+      const newCat = await this.createCategory({
+        spaceId,
+        name: cat.name,
+        color: cat.color,
+      });
+      categoryByName.set(cat.name.toLowerCase(), newCat.id);
     }
 
     // Create a template participant for the cloned notes
@@ -1825,13 +1846,19 @@ export class DbStorage implements IStorage {
     };
     const [participant] = await db.insert(participants).values(participantData).returning();
 
-    // Clone notes into workspace
+    // Clone notes into workspace, mapping the free-text category label onto
+    // the new category id when one exists in the destination workspace.
     for (const templateNote of templateNotes) {
+      const matchedCategoryId = templateNote.category
+        ? categoryByName.get(templateNote.category.toLowerCase()) ?? null
+        : null;
       const noteData: InsertNote = {
         spaceId,
         content: templateNote.content,
         participantId: participant.id,
         category: templateNote.category || undefined,
+        manualCategoryId: matchedCategoryId,
+        isManualOverride: matchedCategoryId !== null,
       };
       await db.insert(notes).values(noteData);
     }
