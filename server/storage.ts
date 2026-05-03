@@ -71,6 +71,9 @@ import {
   type InsertStaircasePosition,
   type Notification,
   type InsertNotification,
+  type NotificationPreference,
+  type NotificationType,
+  NOTIFICATION_TYPE_DEFAULTS,
   type ClientError,
   type InsertClientError,
   type SystemSetting,
@@ -115,6 +118,7 @@ import {
   staircaseModules,
   staircasePositions,
   notifications,
+  notificationPreferences,
   clientErrors,
   pulseActivityEvents,
 } from "@shared/schema";
@@ -461,6 +465,11 @@ export interface IStorage {
   getUnreadNotificationCount(userId: string): Promise<number>;
   markNotificationRead(id: string, userId: string): Promise<Notification | undefined>;
   markAllNotificationsRead(userId: string): Promise<number>;
+
+  // Notification preferences
+  getNotificationPreferences(userId: string): Promise<NotificationPreference[]>;
+  isNotificationTypeEnabled(userId: string, type: string): Promise<boolean>;
+  setNotificationPreferences(userId: string, prefs: Partial<Record<NotificationType, boolean>>): Promise<NotificationPreference[]>;
 
   // Client errors (telemetry)
   createClientError(record: InsertClientError): Promise<ClientError>;
@@ -2620,6 +2629,38 @@ export class DbStorage implements IStorage {
       .set({ readAt: new Date() })
       .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
     return result.rowCount || 0;
+  }
+
+  // Notification preferences
+  async getNotificationPreferences(userId: string): Promise<NotificationPreference[]> {
+    return db.select().from(notificationPreferences)
+      .where(eq(notificationPreferences.userId, userId));
+  }
+
+  async isNotificationTypeEnabled(userId: string, type: string): Promise<boolean> {
+    const [row] = await db.select().from(notificationPreferences)
+      .where(and(eq(notificationPreferences.userId, userId), eq(notificationPreferences.type, type)))
+      .limit(1);
+    if (!row) {
+      return NOTIFICATION_TYPE_DEFAULTS[type as NotificationType] ?? true;
+    }
+    return row.enabled;
+  }
+
+  async setNotificationPreferences(
+    userId: string,
+    prefs: Partial<Record<NotificationType, boolean>>,
+  ): Promise<NotificationPreference[]> {
+    const entries = Object.entries(prefs) as [NotificationType, boolean][];
+    for (const [type, enabled] of entries) {
+      await db.insert(notificationPreferences)
+        .values({ userId, type, enabled })
+        .onConflictDoUpdate({
+          target: [notificationPreferences.userId, notificationPreferences.type],
+          set: { enabled, updatedAt: new Date() },
+        });
+    }
+    return this.getNotificationPreferences(userId);
   }
 
   async createClientError(record: InsertClientError): Promise<ClientError> {

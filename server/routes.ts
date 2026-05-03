@@ -8,7 +8,7 @@ import { getUserIdFromUpgradeRequest } from "./session";
 import oauthRoutes from "./routes/auth-oauth";
 import entraRoutes from "./routes/auth-entra";
 import { db } from "./db";
-import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, type Space, type InsertSpace, organizations, users, companyAdmins as companyAdminsTable, knowledgeBaseDocuments, workspaceTemplates, workspaceTemplateNotes, aiUsageLog, insertIdeaSchema, insertWorkspaceModuleSchema, insertWorkspaceModuleRunSchema, insertPriorityMatrixSchema, insertPriorityMatrixPositionSchema, insertStaircaseModuleSchema, insertStaircasePositionSchema, projectMembers, categories, notes, participants, projects, spaces } from "@shared/schema";
+import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, type Space, type InsertSpace, organizations, users, companyAdmins as companyAdminsTable, knowledgeBaseDocuments, workspaceTemplates, workspaceTemplateNotes, aiUsageLog, insertIdeaSchema, insertWorkspaceModuleSchema, insertWorkspaceModuleRunSchema, insertPriorityMatrixSchema, insertPriorityMatrixPositionSchema, insertStaircaseModuleSchema, insertStaircasePositionSchema, projectMembers, categories, notes, participants, projects, spaces, NOTIFICATION_TYPES, NOTIFICATION_TYPE_DEFAULTS, type NotificationType, updateNotificationPreferencesSchema } from "@shared/schema";
 import { CSV_IMPORT_TYPES, csvConfirmTemplatesBodySchema, csvConfirmUsersBodySchema, csvConfirmIdeasBodySchema, type CsvImportType, type TemplateCsvRow, type UserCsvRow, type IdeaCsvRow } from "@shared/csvImport";
 import { buildCsvPreview, buildErrorReportCsv } from "./services/csvImport";
 import { uploadImage, validateImageFile, cleanupTempFile } from "./middleware/uploadMiddleware";
@@ -7545,6 +7545,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Notification preferences
+  app.get("/api/notification-preferences", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as User;
+      const rows = await storage.getNotificationPreferences(user.id);
+      const overrides: Record<string, boolean> = {};
+      for (const row of rows) overrides[row.type] = row.enabled;
+      const preferences: Record<NotificationType, boolean> = { ...NOTIFICATION_TYPE_DEFAULTS };
+      for (const t of NOTIFICATION_TYPES) {
+        if (t in overrides) preferences[t] = overrides[t];
+      }
+      res.json({ preferences, defaults: NOTIFICATION_TYPE_DEFAULTS });
+    } catch (e) {
+      console.error("Failed to fetch notification preferences:", e);
+      res.status(500).json({ error: "Failed to fetch notification preferences" });
+    }
+  });
+
+  app.put("/api/notification-preferences", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as User;
+      const parsed = updateNotificationPreferencesSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid preferences", details: parsed.error.flatten() });
+      }
+      await storage.setNotificationPreferences(user.id, parsed.data.preferences);
+      const rows = await storage.getNotificationPreferences(user.id);
+      const overrides: Record<string, boolean> = {};
+      for (const row of rows) overrides[row.type] = row.enabled;
+      const preferences: Record<NotificationType, boolean> = { ...NOTIFICATION_TYPE_DEFAULTS };
+      for (const t of NOTIFICATION_TYPES) {
+        if (t in overrides) preferences[t] = overrides[t];
+      }
+      res.json({ preferences, defaults: NOTIFICATION_TYPE_DEFAULTS });
+    } catch (e) {
+      console.error("Failed to update notification preferences:", e);
+      res.status(500).json({ error: "Failed to update notification preferences" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   // WebSocket server for real-time updates
@@ -7802,6 +7842,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     spaceId?: string | null;
   }) {
     try {
+      // Respect the recipient's per-type preference.
+      const enabled = await storage.isNotificationTypeEnabled(params.userId, params.type);
+      if (!enabled) return;
       const created = await storage.createNotification({
         userId: params.userId,
         type: params.type,

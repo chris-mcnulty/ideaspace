@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
-import { Bell, Check, CheckCheck } from "lucide-react";
+import { Bell, Check, CheckCheck, Settings } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -149,18 +149,29 @@ export function NotificationBell() {
               </Badge>
             )}
           </div>
-          {items.length > 0 && unreadCount > 0 && (
+          <div className="flex items-center gap-1">
+            {items.length > 0 && unreadCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => markAllRead.mutate()}
+                disabled={markAllRead.isPending}
+                data-testid="button-mark-all-read"
+              >
+                <CheckCheck className="h-4 w-4 mr-1" />
+                Mark all read
+              </Button>
+            )}
             <Button
               variant="ghost"
-              size="sm"
-              onClick={() => markAllRead.mutate()}
-              disabled={markAllRead.isPending}
-              data-testid="button-mark-all-read"
+              size="icon"
+              onClick={() => setLocation("/settings/notifications")}
+              data-testid="button-notification-settings"
+              aria-label="Notification settings"
             >
-              <CheckCheck className="h-4 w-4 mr-1" />
-              Mark all read
+              <Settings className="h-4 w-4" />
             </Button>
-          )}
+          </div>
         </div>
         <ScrollArea className="max-h-96">
           {isLoading ? (

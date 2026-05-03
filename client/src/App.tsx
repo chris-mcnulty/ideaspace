@@ -35,6 +35,7 @@ import PublicResults from "@/pages/PublicResults";
 import PriorityMatrixParticipant from "@/pages/PriorityMatrixParticipant";
 import StaircaseParticipant from "@/pages/StaircaseParticipant";
 import MyProjects from "@/pages/MyProjects";
+import NotificationSettings from "@/pages/NotificationSettings";
 
 import LandingPageExample from "@/components/examples/LandingPage";
 import OrganizationHomeExample from "@/components/examples/OrganizationHome";
@@ -101,6 +102,7 @@ function Router() {
       <Route path="/admin/migrations" component={AdminMigrationsBoundary} />
       <Route path="/dashboard" component={FacilitatorDashboardBoundary} />
       <Route path="/projects" component={MyProjectsBoundary} />
+      <Route path="/settings/notifications" component={NotificationSettings} />
       <Route path="/o/:org" component={OrganizationHomeBoundary} />
       <Route path="/o/:org/s/:space" component={WaitingRoomBoundary} />
       <Route path="/o/:org/s/:space/participate" component={ParticipantViewBoundary} />

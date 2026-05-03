@@ -1104,3 +1104,89 @@ export const insertClientErrorSchema = createInsertSchema(clientErrors).omit({
 });
 export type ClientError = typeof clientErrors.$inferSelect;
 export type InsertClientError = z.infer<typeof insertClientErrorSchema>;
+
+// Per-user notification preferences. One row per (user, type). If no row exists
+// for a given type, the default (see NOTIFICATION_TYPE_DEFAULTS) is used.
+export const notificationPreferences = pgTable("notification_preferences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  type: text("type").notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  uniqueUserType: unique().on(table.userId, table.type),
+}));
+
+export const NOTIFICATION_TYPES = [
+  "participant_joined",
+  "phase_changed",
+  "results_ready",
+  "access_request_submitted",
+  "access_request_approved",
+  "access_request_denied",
+  "ai_generation_completed",
+] as const;
+
+export type NotificationType = typeof NOTIFICATION_TYPES[number];
+
+// Sensible defaults: all on by default. High-priority types are still listed
+// here so the UI can mark them as recommended.
+export const NOTIFICATION_TYPE_DEFAULTS: Record<NotificationType, boolean> = {
+  participant_joined: true,
+  phase_changed: true,
+  results_ready: true,
+  access_request_submitted: true,
+  access_request_approved: true,
+  access_request_denied: true,
+  ai_generation_completed: true,
+};
+
+export const HIGH_PRIORITY_NOTIFICATION_TYPES: NotificationType[] = [
+  "results_ready",
+  "access_request_approved",
+  "access_request_denied",
+  "ai_generation_completed",
+];
+
+export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, { label: string; description: string }> = {
+  participant_joined: {
+    label: "Participant joined",
+    description: "When a new participant joins one of your workspaces.",
+  },
+  phase_changed: {
+    label: "Phase changed",
+    description: "When a workspace advances to a new phase.",
+  },
+  results_ready: {
+    label: "Results ready",
+    description: "When personalized or cohort results are ready to view.",
+  },
+  access_request_submitted: {
+    label: "Access request submitted",
+    description: "When someone requests access to a workspace you facilitate.",
+  },
+  access_request_approved: {
+    label: "Access request approved",
+    description: "When your access request to a workspace is approved.",
+  },
+  access_request_denied: {
+    label: "Access request denied",
+    description: "When your access request to a workspace is denied.",
+  },
+  ai_generation_completed: {
+    label: "AI generation completed",
+    description: "When a long-running AI generation finishes.",
+  },
+};
+
+export const insertNotificationPreferenceSchema = createInsertSchema(notificationPreferences).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export const updateNotificationPreferencesSchema = z.object({
+  preferences: z.record(z.enum(NOTIFICATION_TYPES), z.boolean()),
+});
+
+export type NotificationPreference = typeof notificationPreferences.$inferSelect;
+export type InsertNotificationPreference = z.infer<typeof insertNotificationPreferenceSchema>;

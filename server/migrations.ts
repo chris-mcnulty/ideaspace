@@ -214,9 +214,31 @@ export async function ensureParticipantsSpaceUserUniqueIndex(): Promise<void> {
   `);
 }
 
+/**
+ * Ensure the per-user notification_preferences table exists.
+ * Idempotent; safe to run on every startup.
+ */
+export async function ensureNotificationPreferencesTable(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS notification_preferences (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id varchar NOT NULL,
+      type text NOT NULL,
+      enabled boolean NOT NULL DEFAULT true,
+      updated_at timestamp NOT NULL DEFAULT now(),
+      CONSTRAINT notification_preferences_user_id_type_unique UNIQUE (user_id, type)
+    );
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_notification_preferences_user
+    ON notification_preferences(user_id);
+  `);
+}
+
 export async function runStartupMigrations(): Promise<void> {
   await ensureNotificationsTable();
   await ensureClientErrorsTable();
   await ensurePulseActivityEventsTable();
   await ensureParticipantsSpaceUserUniqueIndex();
+  await ensureNotificationPreferencesTable();
 }
