@@ -2969,7 +2969,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Confirm: Templates
+  // Confirm: Templates — creates template *spaces* (isTemplate=true) so they
+  // appear in the existing template picker (/api/templates/spaces).
   app.post("/api/admin/imports/templates/confirm", requireCompanyAdmin, async (req, res) => {
     try {
       const currentUser = req.user as User;
@@ -2983,38 +2984,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
         groups.get(key)!.push(row);
       }
 
-      // Permission: company_admin can only create org-scoped templates for their org
-      const targetOrgId = currentUser.role === "company_admin" ? currentUser.organizationId ?? null : null;
-      if (currentUser.role === "company_admin" && !targetOrgId) {
-        return res.status(403).json({ error: "Company admin has no organization" });
+      // Permission/scope rules:
+      // - company_admin: always organization-scope (their own org)
+      // - global_admin: respects ?scope=organization|system; defaults to
+      //   "organization" if they have an organization, else "system"
+      const requestedScope = String(req.query?.scope ?? "");
+      let templateScope: "system" | "organization";
+      if (currentUser.role === "global_admin") {
+        if (requestedScope === "system" || requestedScope === "organization") {
+          templateScope = requestedScope;
+        } else {
+          templateScope = currentUser.organizationId ? "organization" : "system";
+        }
+      } else {
+        templateScope = "organization";
+      }
+      const targetOrgId = templateScope === "system" ? null : (currentUser.organizationId ?? null);
+      if (templateScope === "organization" && !targetOrgId) {
+        return res.status(403).json({ error: "Cannot create organization template without an organization" });
       }
 
       const created = await db.transaction(async (tx) => {
-        const out: { id: string; name: string; noteCount: number }[] = [];
-        for (const [name, rows] of groups.entries()) {
+        const out: { id: string; name: string; noteCount: number; categoryCount: number; code: string }[] = [];
+        for (const [name, rows] of Array.from(groups.entries())) {
           const first = rows[0];
-          const [tpl] = await tx.insert(workspaceTemplates).values({
-            name,
-            type: first.templateType ?? "general",
-            description: first.templateDescription,
+          // Generate a unique workspace code for the template space
+          let code = await generateWorkspaceCode();
+          // Retry once on the off chance of a collision
+          const [existing] = await tx.select().from(spaces).where(eq(spaces.code, code)).limit(1);
+          if (existing) code = await generateWorkspaceCode();
+
+          const [tplSpace] = await tx.insert(spaces).values({
             organizationId: targetOrgId,
-            settings: { guestAllowed: false, status: "draft" },
+            code,
+            name,
+            purpose: first.templateDescription ?? `Template: ${name}`,
+            sessionMode: first.templateType ?? "general",
+            hidden: true,
+            status: "archived",
+            isTemplate: true,
+            templateScope,
             createdBy: currentUser.id,
+          } as any).returning();
+
+          // Create a "Template" participant so notes have an attribution
+          const [tplParticipant] = await tx.insert(participants).values({
+            spaceId: tplSpace.id,
+            displayName: "Template",
+            isGuest: true,
+            isOnline: false,
           }).returning();
 
+          // First pass: create categories (both explicit category rows and
+          // any category names referenced by idea rows).
+          const catByName = new Map<string, { id: string }>();
+          let categoryCount = 0;
+          for (const row of rows) {
+            const catName = row.itemKind === "category" ? row.itemContent : row.itemCategory;
+            if (!catName) continue;
+            const key = catName.toLowerCase();
+            if (catByName.has(key)) {
+              // If this is an explicit category row with a color, update the
+              // color of the existing record we created.
+              if (row.itemKind === "category" && row.itemColor) {
+                await tx.update(categories).set({ color: row.itemColor })
+                  .where(eq(categories.id, catByName.get(key)!.id));
+              }
+              continue;
+            }
+            const color = row.itemColor && /^#?[0-9a-fA-F]{6}$/.test(row.itemColor)
+              ? (row.itemColor.startsWith("#") ? row.itemColor : `#${row.itemColor}`)
+              : `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0")}`;
+            const [cat] = await tx.insert(categories).values({
+              spaceId: tplSpace.id,
+              name: catName,
+              color,
+            }).returning();
+            catByName.set(key, cat);
+            categoryCount++;
+          }
+
+          // Second pass: insert ideas, attaching the matching category if any
           let noteCount = 0;
           for (const row of rows) {
-            // Categories are descriptive only — they hint a category label on
-            // ideas. Template notes carry a free-text `category` column.
             if (row.itemKind !== "idea") continue;
-            await tx.insert(workspaceTemplateNotes).values({
-              templateId: tpl.id,
+            const catId = row.itemCategory
+              ? (catByName.get(row.itemCategory.toLowerCase())?.id ?? null)
+              : null;
+            await tx.insert(notes).values({
+              spaceId: tplSpace.id,
+              participantId: tplParticipant.id,
               content: row.itemContent,
-              category: row.itemCategory ?? null,
+              manualCategoryId: catId,
+              isManualOverride: catId !== null,
             });
             noteCount++;
           }
-          out.push({ id: tpl.id, name: tpl.name, noteCount });
+          out.push({ id: tplSpace.id, name, noteCount, categoryCount, code });
         }
         return out;
       });
@@ -3184,7 +3250,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       type Resolved = { space: Space; rows: typeof body.rows };
       const resolved: Resolved[] = [];
-      for (const [code, rows] of codeGroups.entries()) {
+      for (const [code, rows] of Array.from(codeGroups.entries())) {
         const space = await storage.getSpaceByCode(code);
         if (!space) {
           return res.status(404).json({ error: `Workspace not found for code: ${code}` });
@@ -3196,7 +3262,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const totals = { notes: 0, categories: 0, spaces: resolved.length };
-      const broadcastBuckets: { spaceId: string; ids: string[] }[] = [];
+      const broadcastBuckets: { spaceId: string; notes: typeof notes.$inferSelect[] }[] = [];
 
       await db.transaction(async (tx) => {
         for (const { space, rows } of resolved) {
@@ -3216,7 +3282,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           const cats = await tx.select().from(categories).where(eq(categories.spaceId, space.id));
           const catByName = new Map(cats.map((c) => [c.name.toLowerCase(), c]));
-          const newIds: string[] = [];
+          const newNotes: (typeof notes.$inferSelect)[] = [];
 
           for (const row of rows) {
             let categoryId: string | null = null;
@@ -3242,18 +3308,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
               manualCategoryId: categoryId,
               isManualOverride: categoryId !== null,
             }).returning();
-            newIds.push(note.id);
+            newNotes.push(note);
             totals.notes++;
           }
-          broadcastBuckets.push({ spaceId: space.id, ids: newIds });
+          broadcastBuckets.push({ spaceId: space.id, notes: newNotes });
         }
       });
 
-      // Broadcast after commit so live participants see the new ideas.
-      for (const { spaceId, ids } of broadcastBuckets) {
-        if (ids.length > 0) {
-          broadcastToSpace(spaceId, { type: "notes_bulk_imported", data: { count: ids.length } });
+      // Broadcast after commit so live participants see the new ideas. Send
+      // both individual `note_created` events (for participant views) and a
+      // single `notes_bulk_imported` (handled by the facilitator workspace).
+      for (const bucket of broadcastBuckets) {
+        if (bucket.notes.length === 0) continue;
+        for (const note of bucket.notes) {
+          broadcastToSpace(bucket.spaceId, { type: "note_created", data: note });
         }
+        broadcastToSpace(bucket.spaceId, { type: "notes_bulk_imported", data: { count: bucket.notes.length } });
       }
 
       res.status(201).json({ success: true, ...totals });
