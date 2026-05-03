@@ -204,6 +204,43 @@ function createWorkspaceAccessMiddleware(options: {
   };
 }
 
+// Helper: verifies the authenticated user is allowed to facilitate the given
+// space. A user qualifies if they are global_admin, the matching company_admin
+// for the owning org, or have an explicit space_facilitators row for the space.
+// Returns true on success and writes a 401/403/404 response and returns false
+// otherwise. Centralizes the workspace-scoped facilitator check used by AI/
+// mutating endpoints so we don't rely on requireFacilitator alone (which only
+// checks role and would let a facilitator from another org call into any
+// workspace by guessing its id).
+async function assertFacilitatorForSpace(
+  req: ExpressRequest,
+  res: ExpressResponse,
+  space: Space
+): Promise<boolean> {
+  const user = req.user as User | undefined;
+  if (!user) {
+    res.status(401).json({ error: "Authentication required" });
+    return false;
+  }
+  if (user.role === 'global_admin') return true;
+  // Company-admin access: the user.organizationId shortcut OR an explicit
+  // company_admins association row for the owning org. This matches the
+  // pattern used elsewhere in routes.ts (see getCompanyAdminsByUser usages).
+  if (space.organizationId) {
+    if (user.role === 'company_admin' && user.organizationId === space.organizationId) {
+      return true;
+    }
+    const companyAdmins = await storage.getCompanyAdminsByUser(user.id);
+    if (companyAdmins.some(ca => ca.organizationId === space.organizationId)) {
+      return true;
+    }
+  }
+  const facilitators = await storage.getSpaceFacilitatorsBySpace(space.id);
+  if (facilitators.some(f => f.userId === user.id)) return true;
+  res.status(403).json({ error: "Not authorized for this workspace" });
+  return false;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Register OAuth routes
   app.use(oauthRoutes);
@@ -3999,16 +4036,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!Array.isArray(ids) || ids.length === 0) {
         return res.status(400).json({ error: "Invalid note IDs" });
       }
-      
+
+      // Resolve target workspace via the first note and ensure the caller is
+      // authorized to facilitate it. All notes in a single bulk request must
+      // belong to the same workspace; cross-workspace ids are rejected.
+      const firstNote = await storage.getNote(ids[0]);
+      if (!firstNote) {
+        return res.status(404).json({ error: "Notes not found" });
+      }
+      const targetSpace = await storage.getSpace(firstNote.spaceId);
+      if (!targetSpace) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      if (!(await assertFacilitatorForSpace(req, res, targetSpace))) return;
+
+      // Pre-validate every note belongs to the same workspace BEFORE mutating
+      // anything, so a mixed-workspace payload cannot partially update earlier
+      // notes before the request is rejected.
+      const fetched = await Promise.all(ids.map(noteId => storage.getNote(noteId)));
+      for (const note of fetched) {
+        if (note && note.spaceId !== targetSpace.id) {
+          return res.status(400).json({ error: "All notes must belong to the same workspace" });
+        }
+      }
+
       // Update each note with the category
       let updated = 0;
       let spaceId: string | null = null;
-      
-      for (const noteId of ids) {
-        const note = await storage.getNote(noteId);
+
+      for (const note of fetched) {
         if (note) {
           spaceId = note.spaceId;
-          await storage.updateNote(noteId, { manualCategoryId: categoryId });
+          await storage.updateNote(note.id, { manualCategoryId: categoryId });
           updated++;
         }
       }
@@ -4032,7 +4091,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!spaceId) {
         return res.status(404).json({ error: "Workspace not found" });
       }
-      
+
+      const importSpace = await storage.getSpace(spaceId);
+      if (!importSpace) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      if (!(await assertFacilitatorForSpace(req, res, importSpace))) return;
+
       const { notes: noteContents } = req.body as { notes: string[] };
       if (!Array.isArray(noteContents) || noteContents.length === 0) {
         return res.status(400).json({ error: "No notes provided" });
@@ -4191,6 +4256,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Space not found" });
       }
 
+      // Workspace-scoped authorization so a facilitator from another org can't
+      // rewrite notes in a workspace they don't own.
+      if (!(await assertFacilitatorForSpace(req, res, space))) return;
+
       // Generate AI rewrites with usage tracking context
       let result;
       try {
@@ -4228,14 +4297,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Protected: Facilitators can trigger AI categorization
   app.post("/api/spaces/:spaceId/categorize", requireFacilitator, async (req, res) => {
     try {
-      const { spaceId } = req.params;
-      
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
       // Get space for context
       const space = await storage.getSpace(spaceId);
       if (!space) {
         return res.status(404).json({ error: "Space not found" });
       }
-      
+
+      // Workspace-scoped authorization so only admins of the owning org or an
+      // explicit space facilitator can trigger AI categorization here.
+      if (!(await assertFacilitatorForSpace(req, res, space))) return;
+
       // Fetch all notes for this space
       const allNotes = await storage.getNotesBySpace(spaceId);
       
@@ -4394,18 +4470,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Workspace not found" });
       }
 
-      // Workspace-scoped authorization: global_admin OR company_admin of the
-      // owning org OR an explicit facilitator on this space.
-      const reqUser = req.user as User;
-      if (reqUser.role !== 'global_admin') {
-        const isCompanyAdminForOrg = reqUser.role === 'company_admin' && reqUser.organizationId === space.organizationId;
-        if (!isCompanyAdminForOrg) {
-          const facilitators = await storage.getSpaceFacilitatorsBySpace(spaceId);
-          if (!facilitators.some(f => f.userId === reqUser.id)) {
-            return res.status(403).json({ error: "Not authorized for this workspace" });
-          }
-        }
-      }
+      // Workspace-scoped authorization via the shared helper.
+      if (!(await assertFacilitatorForSpace(req, res, space))) return;
 
       const requestedCount = typeof req.body?.count === 'number' ? req.body.count : 8;
 
@@ -4484,16 +4550,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Workspace not found" });
       }
 
-      const reqUser2 = req.user as User;
-      if (reqUser2.role !== 'global_admin') {
-        const isCompanyAdminForOrg = reqUser2.role === 'company_admin' && reqUser2.organizationId === acceptSpace.organizationId;
-        if (!isCompanyAdminForOrg) {
-          const facilitators = await storage.getSpaceFacilitatorsBySpace(spaceId);
-          if (!facilitators.some(f => f.userId === reqUser2.id)) {
-            return res.status(403).json({ error: "Not authorized for this workspace" });
-          }
-        }
-      }
+      if (!(await assertFacilitatorForSpace(req, res, acceptSpace))) return;
 
       const acceptSchema = z.object({
         content: z.string().min(1).max(2000),
