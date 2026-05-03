@@ -45,6 +45,27 @@ The design system features a dark mode with a primary purple accent, dark blue-b
 - **Backend**: Express.js, WebSocket (`ws`).
 - **Database**: PostgreSQL (Neon) with Drizzle ORM.
 
+## Accessibility Regression Testing
+
+An automated WCAG 2.1 AA regression scan lives in `tests/a11y.spec.ts` and runs via Playwright + `@axe-core/playwright`.
+
+### Test plan
+
+- **Public routes scanned**: `/`, `/login`, `/register`, `/forgot-password`.
+- **Authenticated routes scanned** (signed in as the seeded `company_admin` test user): `/admin`, `/dashboard`, `/projects`.
+- `/admin/migrations` is intentionally **not** scanned: its underlying APIs require `global_admin`, so the seeded `company_admin` would only exercise an unauthorized fallback state. Add it once a global-admin seed exists.
+- For each route, axe-core is invoked with the `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa` rule tags. The test fails only when a violation has an `impact` of `serious` or `critical`, keeping the signal aligned with the WCAG 2.1 AA baseline established in Task #3. Minor / moderate findings are not currently reported — extend the `scan()` helper if you want to log them.
+- A small sanity test confirms axe-core itself loads and analyzes the landing page.
+
+### Running locally
+
+1. Ensure the app is running (`npm run dev`) — Playwright's `webServer` block will reuse it if it is already up.
+2. Seed the test admin once: `npx tsx scripts/create-test-admin.ts` (creates `testadmin@e2e.test` / `TestAdmin123!`).
+3. Install browsers (first run only): `npx playwright install chromium`.
+4. Execute the scan: `npx playwright test tests/a11y.spec.ts`.
+
+Override credentials with the `A11Y_TEST_EMAIL` / `A11Y_TEST_PASSWORD` env vars; override the target URL with `PLAYWRIGHT_BASE_URL`. Set `PLAYWRIGHT_NO_SERVER=1` to skip the bundled `webServer` when running against a separately-managed instance.
+
 ## External Dependencies
 - **Database**: PostgreSQL (Neon)
 - **ORM**: Drizzle ORM
