@@ -28,6 +28,7 @@ import { createImportJob, getImportJob, markJobRunning, recordJobSuccess, record
 import { randomBytes } from "crypto";
 import { fileUploadService } from "./services/file-upload";
 import { extractAndChunk } from "./services/kbExtraction";
+import { getPresenceForSpace, buildPresenceChangedMessage, type PresenceWsMeta } from "./presence";
 
 // Extend express-session types to include participantId
 declare module "express-session" {
@@ -7690,7 +7691,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const clients = new Map<string, Set<WebSocket>>();
   const userClients = new Map<string, Set<WebSocket>>();
   // Per-socket metadata so we can build presence rosters and reap stale sockets.
-  type WsMeta = { spaceId: string | null; userId: string | null; isAlive: boolean };
+  type WsMeta = PresenceWsMeta;
   const wsMeta = new WeakMap<WebSocket, WsMeta>();
 
   wss.on("connection", async (ws, req) => {
@@ -7815,6 +7816,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Sweep stale sockets every 30s. Any socket that didn't pong since the
   // previous sweep is terminated and cleaned up via its close handler.
   const HEARTBEAT_MS = 30_000;
+  // unref so the heartbeat alone never keeps the process alive — the HTTP
+  // listener owns process lifetime, and tests/embedders can shut down
+  // cleanly without manually clearing this interval.
   const heartbeatInterval = setInterval(() => {
     wss.clients.forEach((ws) => {
       const meta = wsMeta.get(ws);
@@ -7828,6 +7832,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try { ws.ping(); } catch { /* ignore */ }
     });
   }, HEARTBEAT_MS);
+  heartbeatInterval.unref?.();
   wss.on("close", () => clearInterval(heartbeatInterval));
 
   function broadcast(message: any) {
@@ -7856,21 +7861,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Presence: count currently-connected sockets per workspace and emit a
   // `presence_changed` event whenever it changes. Facilitators can also poll
   // via GET /api/spaces/:spaceId/presence.
-  function getPresenceForSpace(spaceId: string): { count: number; userIds: string[] } {
-    const set = clients.get(spaceId);
-    if (!set) return { count: 0, userIds: [] };
-    const userIds = new Set<string>();
-    set.forEach((sock) => {
-      const meta = wsMeta.get(sock);
-      if (meta?.userId) userIds.add(meta.userId);
-    });
-    return { count: set.size, userIds: Array.from(userIds) };
-  }
   function broadcastPresence(spaceId: string) {
     // Only broadcast count over the wire — userIds are PII and only returned
     // to authorized callers via the GET endpoint below.
-    const { count } = getPresenceForSpace(spaceId);
-    broadcastToSpace(spaceId, { type: "presence_changed", data: { spaceId, count } });
+    const { count } = getPresenceForSpace(spaceId, clients, wsMeta);
+    broadcastToSpace(spaceId, buildPresenceChangedMessage(spaceId, count));
   }
   app.get(
     "/api/spaces/:spaceId/presence",
@@ -7878,11 +7873,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req, res) => {
       try {
         // Middleware has already resolved/validated the workspace ID.
-        // Only the count is returned — userIds are kept server-internal to
-        // avoid leaking participant/user identity to guests or other
-        // unprivileged callers who happen to have workspace access.
-        const { count } = getPresenceForSpace(req.params.spaceId);
-        res.json({ count });
+        // userIds are PII and are only returned to authenticated callers
+        // who are admins, facilitators, or project members on this
+        // workspace. Guests/anonymous participants only receive the count.
+        const spaceId = req.params.spaceId;
+        const { count, userIds } = getPresenceForSpace(spaceId, clients, wsMeta);
+        const currentUser = req.user as User | undefined;
+        if (!currentUser) {
+          return res.status(401).json({ error: "Authentication required" });
+        }
+        let authorized = false;
+        if (currentUser.role === "global_admin") {
+          authorized = true;
+        } else {
+          const space = await storage.getSpace(spaceId);
+          if (
+            space &&
+            currentUser.role === "company_admin" &&
+            currentUser.organizationId === space.organizationId
+          ) {
+            authorized = true;
+          } else if (space) {
+            const facilitators = await storage.getSpaceFacilitatorsBySpace(spaceId);
+            if (facilitators.some((f) => f.userId === currentUser.id)) {
+              authorized = true;
+            } else if (space.projectId) {
+              authorized = await storage.isProjectMember(space.projectId, currentUser.id);
+            }
+          }
+        }
+        if (!authorized) {
+          return res.status(403).json({ error: "Not authorized to view presence roster" });
+        }
+        res.json({ count, userIds });
       } catch (e) {
         res.status(500).json({ error: "Failed to fetch presence" });
       }
