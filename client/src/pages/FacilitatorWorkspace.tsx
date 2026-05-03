@@ -5,6 +5,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { QueryErrorState } from "@/components/QueryErrorState";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
@@ -443,7 +444,7 @@ export default function FacilitatorWorkspace() {
     });
   }, [params.space]);
 
-  useWebSocket({
+  const { isConnected: wsIsConnected } = useWebSocket({
     spaceId: params.space,
     onMessage: handleWebSocketMessage,
     onOpen: handleSocketOpen,
@@ -2371,6 +2372,7 @@ export default function FacilitatorWorkspace() {
 
   return (
     <div className="min-h-screen bg-background">
+      <ConnectionStatus isConnected={wsIsConnected} />
       <header className="sticky top-0 z-50 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-full items-center justify-between px-6">
           <div className="flex items-center gap-3">

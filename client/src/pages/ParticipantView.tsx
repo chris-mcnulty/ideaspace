@@ -18,6 +18,7 @@ import {
 import { Plus, Users, User, Clock, Vote, ListOrdered, Coins, ClipboardList, Lightbulb, Sparkles, Timer } from "lucide-react";
 import { CountdownTimer } from "@/components/CountdownTimer";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { useAnnouncer } from "@/components/LiveAnnouncer";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -430,6 +431,7 @@ export default function ParticipantView() {
 
   return (
     <div className="flex h-screen flex-col bg-background">
+      <ConnectionStatus isConnected={isConnected} />
       {/* Dark Header */}
       <header className="sticky top-0 z-50 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-full items-center justify-between px-6">
