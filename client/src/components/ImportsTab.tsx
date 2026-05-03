@@ -20,8 +20,10 @@ import {
 } from "@shared/csvImport";
 
 const TEMPLATES_SAMPLE = `${TEMPLATE_CSV_HEADERS.join(",")}
-"Q1 Strategy",strategy,"Quarterly planning template",idea,"Increase ARR by 20%",Goals,
-"Q1 Strategy",strategy,"Quarterly planning template",idea,"Hire 3 engineers",Hiring,
+"Q1 Strategy","Quarterly planning template","Increase ARR by 20%|Goals
+Hire 3 engineers|Hiring
+Launch v2","Goals|#3366cc
+Hiring|#cc6633"
 `;
 const USERS_SAMPLE = `${USER_CSV_HEADERS.join(",")}
 alice@acme.com,Alice Anderson,facilitator,acme
@@ -39,9 +41,9 @@ const SAMPLES: Record<CsvImportType, string> = {
 };
 
 const HEADER_DESC: Record<CsvImportType, string> = {
-  templates: "Headers: " + TEMPLATE_CSV_HEADERS.join(", ") + ". One row per item; itemKind = idea or category. Rows are grouped by templateName.",
+  templates: "Headers: " + TEMPLATE_CSV_HEADERS.join(", ") + ". One row per template. The 'ideas' and 'categories' cells are newline-separated lists; each idea is 'text' or 'text|category'; each category is 'name' or 'name|#hexcolor'.",
   users: "Headers: " + USER_CSV_HEADERS.join(", ") + ". organization is required for non-global_admin roles and accepts a slug or name.",
-  ideas: "Headers: " + IDEA_CSV_HEADERS.join(", ") + ". workspaceCode must be in nnnn-nnnn format. category is optional and will be created if it doesn't exist.",
+  ideas: "Headers: " + IDEA_CSV_HEADERS.join(", ") + ". workspaceCode must be in nnnn-nnnn format. text is the idea content. category is optional and will be created if it doesn't exist.",
 };
 
 export function ImportsTab() {

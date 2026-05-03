@@ -8,7 +8,7 @@ import { getUserIdFromUpgradeRequest } from "./session";
 import oauthRoutes from "./routes/auth-oauth";
 import entraRoutes from "./routes/auth-entra";
 import { db } from "./db";
-import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, type Space, organizations, users, companyAdmins, knowledgeBaseDocuments, workspaceTemplates, workspaceTemplateNotes, aiUsageLog, insertIdeaSchema, insertWorkspaceModuleSchema, insertWorkspaceModuleRunSchema, insertPriorityMatrixSchema, insertPriorityMatrixPositionSchema, insertStaircaseModuleSchema, insertStaircasePositionSchema, projectMembers, categories, notes, participants, projects, spaces } from "@shared/schema";
+import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, type Space, type InsertSpace, organizations, users, companyAdmins, knowledgeBaseDocuments, workspaceTemplates, workspaceTemplateNotes, aiUsageLog, insertIdeaSchema, insertWorkspaceModuleSchema, insertWorkspaceModuleRunSchema, insertPriorityMatrixSchema, insertPriorityMatrixPositionSchema, insertStaircaseModuleSchema, insertStaircasePositionSchema, projectMembers, categories, notes, participants, projects, spaces } from "@shared/schema";
 import { CSV_IMPORT_TYPES, csvConfirmTemplatesBodySchema, csvConfirmUsersBodySchema, csvConfirmIdeasBodySchema, type CsvImportType } from "@shared/csvImport";
 import { buildCsvPreview, buildErrorReportCsv } from "./services/csvImport";
 import { uploadImage, validateImageFile, cleanupTempFile } from "./middleware/uploadMiddleware";
@@ -2941,10 +2941,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============================================================
   // Unified CSV Import (Admin) — templates, users, ideas
   // ============================================================
-  // POST /api/admin/imports/preview  — multipart: type, file
-  // POST /api/admin/imports/templates/confirm  — body: { rows }
-  // POST /api/admin/imports/users/confirm      — body: { rows, sendInvites }
-  // POST /api/admin/imports/ideas/confirm      — body: { rows }
+  type DbValidationError = { rowIndex: number; row: number; field?: string; message: string };
+
+  async function validateImportAgainstDb(
+    type: CsvImportType,
+    rows: any[],
+    user: User,
+  ): Promise<DbValidationError[]> {
+    const errors: DbValidationError[] = [];
+    if (rows.length === 0) return errors;
+
+    if (type === "users") {
+      const allOrgs = await storage.getAllOrganizations();
+      const orgKey = (s: string) => s.toLowerCase();
+      const bySlug = new Map(allOrgs.map((o) => [orgKey(o.slug), o]));
+      const byName = new Map(allOrgs.map((o) => [orgKey(o.name), o]));
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        const sourceRow = i + 2;
+        let orgId: string | null = null;
+        if (r.organization) {
+          const found = bySlug.get(orgKey(r.organization)) ?? byName.get(orgKey(r.organization));
+          if (!found) {
+            errors.push({ rowIndex: i, row: sourceRow, field: "organization", message: `Unknown organization: ${r.organization}` });
+            continue;
+          }
+          orgId = found.id;
+        }
+        if (r.role !== "global_admin" && !orgId) {
+          errors.push({ rowIndex: i, row: sourceRow, field: "organization", message: "organization is required unless role is global_admin" });
+          continue;
+        }
+        if (user.role === "company_admin") {
+          if (r.role === "global_admin" || r.role === "company_admin") {
+            errors.push({ rowIndex: i, row: sourceRow, field: "role", message: "Company admins cannot create admin users" });
+            continue;
+          }
+          if (orgId !== user.organizationId) {
+            errors.push({ rowIndex: i, row: sourceRow, field: "organization", message: "Company admins can only create users in their own organization" });
+            continue;
+          }
+        }
+        const existing = await storage.getUserByEmail(r.email);
+        if (existing) {
+          errors.push({ rowIndex: i, row: sourceRow, field: "email", message: `Email already registered: ${r.email}` });
+        }
+      }
+    } else if (type === "ideas") {
+      const codeCache = new Map<string, Space | undefined>();
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        const sourceRow = i + 2;
+        let space = codeCache.get(r.workspaceCode);
+        if (space === undefined) {
+          space = await storage.getSpaceByCode(r.workspaceCode);
+          codeCache.set(r.workspaceCode, space);
+        }
+        if (!space) {
+          errors.push({ rowIndex: i, row: sourceRow, field: "workspaceCode", message: `Workspace not found: ${r.workspaceCode}` });
+          continue;
+        }
+        if (user.role === "company_admin" && space.organizationId !== user.organizationId) {
+          errors.push({ rowIndex: i, row: sourceRow, field: "workspaceCode", message: `No access to workspace ${r.workspaceCode}` });
+        }
+      }
+    } else if (type === "templates") {
+      // Warn on duplicate template names within an organization scope.
+      const targetOrgId = user.role === "company_admin" ? user.organizationId : user.organizationId;
+      const existing = await storage.getAllTemplates();
+      const existingNames = new Set(
+        existing
+          .filter((s) => targetOrgId ? s.organizationId === targetOrgId : s.templateScope === "system")
+          .map((s) => s.name.toLowerCase()),
+      );
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        if (existingNames.has(r.name.toLowerCase())) {
+          errors.push({ rowIndex: i, row: i + 2, field: "name", message: `Template name already exists: ${r.name}` });
+        }
+      }
+    }
+    return errors;
+  }
+
   app.post("/api/admin/imports/preview", requireCompanyAdmin, upload.single("file"), async (req, res) => {
     try {
       const type = String(req.body?.type ?? "") as CsvImportType;
@@ -2956,6 +3035,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const csvText = req.file.buffer.toString("utf-8");
       const preview = buildCsvPreview(type, csvText);
+
+      // Augment with DB-aware checks so the preview surfaces referential and
+      // tenant-authorization failures before the user clicks Confirm.
+      const currentUser = req.user as User;
+      const dbErrors = await validateImportAgainstDb(type, preview.validRows as any[], currentUser);
+      if (dbErrors.length > 0) {
+        const validIdsToDrop = new Set(dbErrors.map((e) => e.rowIndex));
+        const filtered: any[] = [];
+        preview.validRows.forEach((r, i) => {
+          if (!validIdsToDrop.has(i)) filtered.push(r);
+        });
+        preview.validRows = filtered;
+        preview.errors.push(...dbErrors.map((e) => ({ row: e.row, field: e.field, message: e.message })));
+        preview.invalidCount = preview.errors.length;
+      }
+
       const wantsCsv = String(req.query?.format ?? "") === "errors-csv";
       if (wantsCsv) {
         res.setHeader("Content-Type", "text/csv");
@@ -2975,14 +3070,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const currentUser = req.user as User;
       const body = csvConfirmTemplatesBodySchema.parse(req.body);
-
-      // Group rows by templateName (case-sensitive trimmed)
-      const groups = new Map<string, typeof body.rows>();
-      for (const row of body.rows) {
-        const key = row.templateName;
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key)!.push(row);
-      }
 
       // Permission/scope rules:
       // - company_admin: always organization-scope (their own org)
@@ -3006,28 +3093,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const created = await db.transaction(async (tx) => {
         const out: { id: string; name: string; noteCount: number; categoryCount: number; code: string }[] = [];
-        for (const [name, rows] of Array.from(groups.entries())) {
-          const first = rows[0];
-          // Generate a unique workspace code for the template space
+        for (const row of body.rows) {
           let code = await generateWorkspaceCode();
-          // Retry once on the off chance of a collision
-          const [existing] = await tx.select().from(spaces).where(eq(spaces.code, code)).limit(1);
-          if (existing) code = await generateWorkspaceCode();
+          const [collision] = await tx.select().from(spaces).where(eq(spaces.code, code)).limit(1);
+          if (collision) code = await generateWorkspaceCode();
 
-          const [tplSpace] = await tx.insert(spaces).values({
+          const spaceValues: InsertSpace = {
             organizationId: targetOrgId,
             code,
-            name,
-            purpose: first.templateDescription ?? `Template: ${name}`,
-            sessionMode: first.templateType ?? "general",
+            name: row.name,
+            purpose: row.description ?? `Template: ${row.name}`,
             hidden: true,
             status: "archived",
             isTemplate: true,
             templateScope,
             createdBy: currentUser.id,
-          } as any).returning();
+          };
+          const [tplSpace] = await tx.insert(spaces).values(spaceValues).returning();
 
-          // Create a "Template" participant so notes have an attribution
           const [tplParticipant] = await tx.insert(participants).values({
             spaceId: tplSpace.id,
             displayName: "Template",
@@ -3035,52 +3118,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
             isOnline: false,
           }).returning();
 
-          // First pass: create categories (both explicit category rows and
-          // any category names referenced by idea rows).
           const catByName = new Map<string, { id: string }>();
-          let categoryCount = 0;
-          for (const row of rows) {
-            const catName = row.itemKind === "category" ? row.itemContent : row.itemCategory;
-            if (!catName) continue;
-            const key = catName.toLowerCase();
-            if (catByName.has(key)) {
-              // If this is an explicit category row with a color, update the
-              // color of the existing record we created.
-              if (row.itemKind === "category" && row.itemColor) {
-                await tx.update(categories).set({ color: row.itemColor })
-                  .where(eq(categories.id, catByName.get(key)!.id));
-              }
-              continue;
-            }
-            const color = row.itemColor && /^#?[0-9a-fA-F]{6}$/.test(row.itemColor)
-              ? (row.itemColor.startsWith("#") ? row.itemColor : `#${row.itemColor}`)
-              : `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0")}`;
-            const [cat] = await tx.insert(categories).values({
+          for (const cat of row.categories) {
+            const key = cat.name.toLowerCase();
+            if (catByName.has(key)) continue;
+            const color = cat.color
+              ?? `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0")}`;
+            const [created] = await tx.insert(categories).values({
               spaceId: tplSpace.id,
-              name: catName,
+              name: cat.name,
               color,
             }).returning();
-            catByName.set(key, cat);
-            categoryCount++;
+            catByName.set(key, created);
+          }
+          // Auto-create categories referenced by ideas but not declared explicitly
+          for (const idea of row.ideas) {
+            if (!idea.category) continue;
+            const key = idea.category.toLowerCase();
+            if (catByName.has(key)) continue;
+            const [created] = await tx.insert(categories).values({
+              spaceId: tplSpace.id,
+              name: idea.category,
+              color: `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0")}`,
+            }).returning();
+            catByName.set(key, created);
           }
 
-          // Second pass: insert ideas, attaching the matching category if any
-          let noteCount = 0;
-          for (const row of rows) {
-            if (row.itemKind !== "idea") continue;
-            const catId = row.itemCategory
-              ? (catByName.get(row.itemCategory.toLowerCase())?.id ?? null)
+          for (const idea of row.ideas) {
+            const catId = idea.category
+              ? (catByName.get(idea.category.toLowerCase())?.id ?? null)
               : null;
             await tx.insert(notes).values({
               spaceId: tplSpace.id,
               participantId: tplParticipant.id,
-              content: row.itemContent,
+              content: idea.text,
               manualCategoryId: catId,
               isManualOverride: catId !== null,
             });
-            noteCount++;
           }
-          out.push({ id: tplSpace.id, name, noteCount, categoryCount, code });
+          out.push({
+            id: tplSpace.id,
+            name: row.name,
+            noteCount: row.ideas.length,
+            categoryCount: catByName.size,
+            code,
+          });
         }
         return out;
       });
@@ -3304,7 +3386,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const [note] = await tx.insert(notes).values({
               spaceId: space.id,
               participantId: importer.id,
-              content: row.content,
+              content: row.text,
               manualCategoryId: categoryId,
               isManualOverride: categoryId !== null,
             }).returning();

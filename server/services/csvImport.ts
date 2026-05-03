@@ -7,16 +7,13 @@ import {
   templateCsvRowSchema,
   userCsvRowSchema,
   ideaCsvRowSchema,
+  parseTemplateIdeasCell,
+  parseTemplateCategoriesCell,
   type CsvImportType,
   type CsvPreviewError,
   type CsvPreviewResponse,
 } from "@shared/csvImport";
 
-/**
- * Parse a single CSV line into fields, supporting quoted values and escaped
- * double-quotes ("") inside quoted fields. Mirrors the inline parser used in
- * server/routes.ts for the existing /import/data-csv endpoint.
- */
 function parseCsvLine(line: string): string[] {
   const fields: string[] = [];
   let current = "";
@@ -41,10 +38,6 @@ function parseCsvLine(line: string): string[] {
   return fields;
 }
 
-/**
- * Split CSV text into logical lines. CSV records may contain newlines inside
- * quoted fields, so we cannot just split on \n.
- */
 function splitCsvRows(text: string): string[] {
   const rows: string[] = [];
   let current = "";
@@ -60,7 +53,6 @@ function splitCsvRows(text: string): string[] {
         current += ch;
       }
     } else if ((ch === "\n" || ch === "\r") && !inQuotes) {
-      // Treat \r\n as a single break
       if (ch === "\r" && text[i + 1] === "\n") i++;
       if (current.length > 0) rows.push(current);
       current = "";
@@ -84,14 +76,12 @@ const ROW_SCHEMA_BY_TYPE = {
   ideas: ideaCsvRowSchema,
 } as const;
 
-export interface ParsePreviewResult<T> {
-  preview: CsvPreviewResponse<T>;
-}
+const REQUIRED_HEADERS: Record<CsvImportType, readonly string[]> = {
+  templates: ["name"],
+  users: ["email", "displayName", "role"],
+  ideas: ["workspaceCode", "text"],
+};
 
-/**
- * Parse a CSV buffer for the given import type and return a structured preview
- * with valid rows and per-row errors. Does not touch the database.
- */
 export function buildCsvPreview<T>(
   type: CsvImportType,
   csvText: string,
@@ -101,6 +91,7 @@ export function buildCsvPreview<T>(
   }
 
   const expectedHeaders = HEADER_BY_TYPE[type];
+  const requiredHeaders = REQUIRED_HEADERS[type];
   const schema = ROW_SCHEMA_BY_TYPE[type] as z.ZodTypeAny;
 
   const rows = splitCsvRows(csvText.replace(/^\uFEFF/, ""));
@@ -109,45 +100,51 @@ export function buildCsvPreview<T>(
       type,
       totalRows: 0,
       validRows: [],
-      invalidCount: 0,
+      invalidCount: 1,
       errors: [{ row: 1, message: "CSV is empty" }],
     };
   }
 
   const headerFields = parseCsvLine(rows[0]).map((h) => h.trim());
-  const headerErrors: CsvPreviewError[] = [];
-
-  // Build header -> index map; missing required headers produce a global error
   const headerIndex = new Map<string, number>();
   headerFields.forEach((h, idx) => headerIndex.set(h, idx));
 
-  const missing = expectedHeaders.filter(
-    (h) => !["templateDescription", "templateType", "itemCategory", "itemColor", "category", "organization"].includes(h)
-      && !headerIndex.has(h),
-  );
+  const errors: CsvPreviewError[] = [];
+  const missing = requiredHeaders.filter((h) => !headerIndex.has(h));
   if (missing.length > 0) {
-    headerErrors.push({
+    errors.push({
       row: 1,
       message: `Missing required header(s): ${missing.join(", ")}. Expected: ${expectedHeaders.join(",")}`,
     });
   }
 
   const validRows: T[] = [];
-  const errors: CsvPreviewError[] = [...headerErrors];
 
   for (let i = 1; i < rows.length; i++) {
-    const sourceRow = i + 1; // 1-based, header is row 1
+    const sourceRow = i + 1;
     const line = rows[i];
     if (line.trim() === "") continue;
 
     const fields = parseCsvLine(line);
-    const obj: Record<string, string> = {};
+    const raw: Record<string, string> = {};
     for (const header of expectedHeaders) {
       const idx = headerIndex.get(header);
-      obj[header] = idx !== undefined && idx < fields.length ? fields[idx] : "";
+      raw[header] = idx !== undefined && idx < fields.length ? fields[idx] : "";
     }
 
-    const parsed = schema.safeParse(obj);
+    // For templates, parse multi-line cells into structured arrays before
+    // handing to Zod.
+    let candidate: unknown = raw;
+    if (type === "templates") {
+      candidate = {
+        name: raw.name,
+        description: raw.description || undefined,
+        ideas: parseTemplateIdeasCell(raw.ideas ?? ""),
+        categories: parseTemplateCategoriesCell(raw.categories ?? ""),
+      };
+    }
+
+    const parsed = schema.safeParse(candidate);
     if (parsed.success) {
       validRows.push(parsed.data as T);
     } else {
@@ -170,13 +167,9 @@ export function buildCsvPreview<T>(
   };
 }
 
-/**
- * Convert a CsvPreviewResponse into a downloadable CSV string with one row per
- * error. Used by the Admin Imports UI as a "download error report".
- */
 export function buildErrorReportCsv(preview: CsvPreviewResponse<unknown>): string {
   const escape = (v: string) => {
-    if (v.includes(",") || v.includes("\"") || v.includes("\n")) {
+    if (v.includes(",") || v.includes('"') || v.includes("\n")) {
       return '"' + v.replace(/"/g, '""') + '"';
     }
     return v;
