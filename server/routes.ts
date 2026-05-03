@@ -8,7 +8,9 @@ import { getUserIdFromUpgradeRequest } from "./session";
 import oauthRoutes from "./routes/auth-oauth";
 import entraRoutes from "./routes/auth-entra";
 import { db } from "./db";
-import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, type Space, organizations, users, companyAdmins, knowledgeBaseDocuments, workspaceTemplates, aiUsageLog, insertIdeaSchema, insertWorkspaceModuleSchema, insertWorkspaceModuleRunSchema, insertPriorityMatrixSchema, insertPriorityMatrixPositionSchema, insertStaircaseModuleSchema, insertStaircasePositionSchema } from "@shared/schema";
+import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, type Space, organizations, users, companyAdmins, knowledgeBaseDocuments, workspaceTemplates, workspaceTemplateNotes, aiUsageLog, insertIdeaSchema, insertWorkspaceModuleSchema, insertWorkspaceModuleRunSchema, insertPriorityMatrixSchema, insertPriorityMatrixPositionSchema, insertStaircaseModuleSchema, insertStaircasePositionSchema, projectMembers, categories, notes, participants, projects, spaces } from "@shared/schema";
+import { CSV_IMPORT_TYPES, csvConfirmTemplatesBodySchema, csvConfirmUsersBodySchema, csvConfirmIdeasBodySchema, type CsvImportType } from "@shared/csvImport";
+import { buildCsvPreview, buildErrorReportCsv } from "./services/csvImport";
 import { uploadImage, validateImageFile, cleanupTempFile } from "./middleware/uploadMiddleware";
 import { processUploadedImage } from "./utils/contentUtils";
 import { z } from "zod";
@@ -2933,6 +2935,334 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Failed to delete template:", error);
       res.status(500).json({ error: "Failed to delete template" });
+    }
+  });
+
+  // ============================================================
+  // Unified CSV Import (Admin) — templates, users, ideas
+  // ============================================================
+  // POST /api/admin/imports/preview  — multipart: type, file
+  // POST /api/admin/imports/templates/confirm  — body: { rows }
+  // POST /api/admin/imports/users/confirm      — body: { rows, sendInvites }
+  // POST /api/admin/imports/ideas/confirm      — body: { rows }
+  app.post("/api/admin/imports/preview", requireCompanyAdmin, upload.single("file"), async (req, res) => {
+    try {
+      const type = String(req.body?.type ?? "") as CsvImportType;
+      if (!CSV_IMPORT_TYPES.includes(type)) {
+        return res.status(400).json({ error: `type must be one of: ${CSV_IMPORT_TYPES.join(", ")}` });
+      }
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+      const csvText = req.file.buffer.toString("utf-8");
+      const preview = buildCsvPreview(type, csvText);
+      const wantsCsv = String(req.query?.format ?? "") === "errors-csv";
+      if (wantsCsv) {
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", `attachment; filename="import-errors-${type}.csv"`);
+        return res.send(buildErrorReportCsv(preview));
+      }
+      res.json(preview);
+    } catch (error) {
+      console.error("CSV preview failed:", error);
+      res.status(500).json({ error: "Failed to parse CSV" });
+    }
+  });
+
+  // Confirm: Templates
+  app.post("/api/admin/imports/templates/confirm", requireCompanyAdmin, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const body = csvConfirmTemplatesBodySchema.parse(req.body);
+
+      // Group rows by templateName (case-sensitive trimmed)
+      const groups = new Map<string, typeof body.rows>();
+      for (const row of body.rows) {
+        const key = row.templateName;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(row);
+      }
+
+      // Permission: company_admin can only create org-scoped templates for their org
+      const targetOrgId = currentUser.role === "company_admin" ? currentUser.organizationId ?? null : null;
+      if (currentUser.role === "company_admin" && !targetOrgId) {
+        return res.status(403).json({ error: "Company admin has no organization" });
+      }
+
+      const created = await db.transaction(async (tx) => {
+        const out: { id: string; name: string; noteCount: number }[] = [];
+        for (const [name, rows] of groups.entries()) {
+          const first = rows[0];
+          const [tpl] = await tx.insert(workspaceTemplates).values({
+            name,
+            type: first.templateType ?? "general",
+            description: first.templateDescription,
+            organizationId: targetOrgId,
+            settings: { guestAllowed: false, status: "draft" },
+            createdBy: currentUser.id,
+          }).returning();
+
+          let noteCount = 0;
+          for (const row of rows) {
+            // Categories are descriptive only — they hint a category label on
+            // ideas. Template notes carry a free-text `category` column.
+            if (row.itemKind !== "idea") continue;
+            await tx.insert(workspaceTemplateNotes).values({
+              templateId: tpl.id,
+              content: row.itemContent,
+              category: row.itemCategory ?? null,
+            });
+            noteCount++;
+          }
+          out.push({ id: tpl.id, name: tpl.name, noteCount });
+        }
+        return out;
+      });
+
+      res.status(201).json({ success: true, templates: created });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Templates import failed:", error);
+      res.status(500).json({ error: "Failed to import templates" });
+    }
+  });
+
+  // Confirm: Users
+  app.post("/api/admin/imports/users/confirm", requireCompanyAdmin, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const body = csvConfirmUsersBodySchema.parse(req.body);
+
+      // Resolve organizations (slug or name) to IDs and validate permissions
+      const allOrgs = await storage.getAllOrganizations();
+      const bySlug = new Map(allOrgs.map((o) => [o.slug.toLowerCase(), o]));
+      const byName = new Map(allOrgs.map((o) => [o.name.toLowerCase(), o]));
+
+      type ResolvedRow = (typeof body.rows)[number] & { organizationId: string | null };
+      const resolvedRows: ResolvedRow[] = [];
+      const failures: { row: number; message: string }[] = [];
+
+      body.rows.forEach((row, idx) => {
+        const sourceRow = idx + 2; // header + 1-based
+        let organizationId: string | null = null;
+        if (row.organization) {
+          const key = row.organization.toLowerCase();
+          const org = bySlug.get(key) ?? byName.get(key);
+          if (!org) {
+            failures.push({ row: sourceRow, message: `Unknown organization: ${row.organization}` });
+            return;
+          }
+          organizationId = org.id;
+        }
+        if (row.role !== "global_admin" && !organizationId) {
+          failures.push({ row: sourceRow, message: "organization is required unless role is global_admin" });
+          return;
+        }
+        if (currentUser.role === "company_admin") {
+          if (row.role === "global_admin" || row.role === "company_admin") {
+            failures.push({ row: sourceRow, message: "Company admins cannot create admin users" });
+            return;
+          }
+          if (organizationId !== currentUser.organizationId) {
+            failures.push({ row: sourceRow, message: "Company admins can only create users in their own organization" });
+            return;
+          }
+        }
+        resolvedRows.push({ ...row, organizationId });
+      });
+
+      if (failures.length > 0) {
+        return res.status(400).json({ error: "Row-level authorization failures", failures });
+      }
+
+      // Pre-check email uniqueness up-front for clearer errors
+      const dupes: { row: number; email: string }[] = [];
+      for (let i = 0; i < resolvedRows.length; i++) {
+        const existing = await storage.getUserByEmail(resolvedRows[i].email);
+        if (existing) dupes.push({ row: i + 2, email: resolvedRows[i].email });
+      }
+      if (dupes.length > 0) {
+        return res.status(409).json({ error: "Some emails are already registered", duplicates: dupes });
+      }
+
+      // Pre-hash random passwords outside the transaction (bcrypt is slow and
+      // we don't want to hold a tx open during it).
+      const prepped = await Promise.all(resolvedRows.map(async (row) => {
+        const tempPassword = randomBytes(16).toString("hex");
+        const hashed = await hashPassword(tempPassword);
+        const username = row.email; // Username collisions guarded by DB unique constraint
+        return { row, hashed, username };
+      }));
+
+      const created = await db.transaction(async (tx) => {
+        const out: { id: string; email: string; organizationId: string | null }[] = [];
+        for (const { row, hashed, username } of prepped) {
+          const [user] = await tx.insert(users).values({
+            email: row.email,
+            username,
+            password: hashed,
+            displayName: row.displayName,
+            role: row.role,
+            organizationId: row.organizationId,
+            authProvider: "local",
+            emailVerified: false,
+          }).returning();
+
+          // Mirror /api/admin/users behavior: assign to default project
+          if (user.organizationId) {
+            const orgProjects = await tx.select().from(projects).where(eq(projects.organizationId, user.organizationId));
+            const def = orgProjects.find((p) => p.isDefault) ?? orgProjects[0];
+            if (def) {
+              await tx.insert(projectMembers).values({
+                projectId: def.id,
+                userId: user.id,
+                role: row.role === "company_admin" ? "admin" : "member",
+              }).onConflictDoNothing();
+            }
+          }
+          out.push({ id: user.id, email: user.email, organizationId: user.organizationId });
+        }
+        return out;
+      });
+
+      // After commit, fire off invite emails (best-effort; do not roll back).
+      const inviteResults = { sent: 0, failed: 0 };
+      if (body.sendInvites) {
+        const protocol = req.protocol;
+        const host = req.get("host") ?? "";
+        const baseUrl = `${protocol}://${host}`;
+        for (let i = 0; i < created.length; i++) {
+          const user = created[i];
+          const row = resolvedRows[i];
+          try {
+            const orgName = row.organizationId
+              ? (allOrgs.find((o) => o.id === row.organizationId)?.name ?? "Your Organization")
+              : "Nebula";
+            await sendSessionInviteEmail(user.email, {
+              inviteeName: row.displayName,
+              role: row.role === "facilitator" || row.role === "company_admin" || row.role === "global_admin" ? "facilitator" : "participant",
+              organizationName: orgName,
+              workspaceName: "Nebula Account",
+              workspaceCode: "----", // Placeholder; not workspace-specific
+              joinUrl: `${baseUrl}/forgot-password?email=${encodeURIComponent(user.email)}`,
+              facilitatorName: currentUser.displayName ?? currentUser.email,
+              personalMessage: "An admin has created a Nebula account for you. Click the link to set your password and sign in.",
+            });
+            inviteResults.sent++;
+          } catch (emailErr) {
+            console.error(`Failed to send invite to ${user.email}:`, emailErr);
+            inviteResults.failed++;
+          }
+        }
+      }
+
+      res.status(201).json({ success: true, created: created.length, invites: inviteResults });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Users import failed:", error);
+      res.status(500).json({ error: "Failed to import users" });
+    }
+  });
+
+  // Confirm: Ideas
+  app.post("/api/admin/imports/ideas/confirm", requireCompanyAdmin, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const body = csvConfirmIdeasBodySchema.parse(req.body);
+
+      // Group rows by workspace code, resolve to spaces, and verify access
+      const codeGroups = new Map<string, typeof body.rows>();
+      for (const row of body.rows) {
+        const key = row.workspaceCode;
+        if (!codeGroups.has(key)) codeGroups.set(key, []);
+        codeGroups.get(key)!.push(row);
+      }
+
+      type Resolved = { space: Space; rows: typeof body.rows };
+      const resolved: Resolved[] = [];
+      for (const [code, rows] of codeGroups.entries()) {
+        const space = await storage.getSpaceByCode(code);
+        if (!space) {
+          return res.status(404).json({ error: `Workspace not found for code: ${code}` });
+        }
+        if (currentUser.role === "company_admin" && space.organizationId !== currentUser.organizationId) {
+          return res.status(403).json({ error: `No access to workspace ${code}` });
+        }
+        resolved.push({ space, rows });
+      }
+
+      const totals = { notes: 0, categories: 0, spaces: resolved.length };
+      const broadcastBuckets: { spaceId: string; ids: string[] }[] = [];
+
+      await db.transaction(async (tx) => {
+        for (const { space, rows } of resolved) {
+          // Reuse or create a "CSV Import" participant per workspace.
+          const existing = await tx.select().from(participants)
+            .where(eq(participants.spaceId, space.id));
+          let importer = existing.find((p) => p.displayName === "CSV Import");
+          if (!importer) {
+            const [created] = await tx.insert(participants).values({
+              spaceId: space.id,
+              displayName: "CSV Import",
+              isGuest: true,
+              isOnline: false,
+            }).returning();
+            importer = created;
+          }
+
+          const cats = await tx.select().from(categories).where(eq(categories.spaceId, space.id));
+          const catByName = new Map(cats.map((c) => [c.name.toLowerCase(), c]));
+          const newIds: string[] = [];
+
+          for (const row of rows) {
+            let categoryId: string | null = null;
+            if (row.category) {
+              const key = row.category.toLowerCase();
+              let existingCat = catByName.get(key);
+              if (!existingCat) {
+                const [cat] = await tx.insert(categories).values({
+                  spaceId: space.id,
+                  name: row.category,
+                  color: `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0")}`,
+                }).returning();
+                catByName.set(key, cat);
+                existingCat = cat;
+                totals.categories++;
+              }
+              categoryId = existingCat.id;
+            }
+            const [note] = await tx.insert(notes).values({
+              spaceId: space.id,
+              participantId: importer.id,
+              content: row.content,
+              manualCategoryId: categoryId,
+              isManualOverride: categoryId !== null,
+            }).returning();
+            newIds.push(note.id);
+            totals.notes++;
+          }
+          broadcastBuckets.push({ spaceId: space.id, ids: newIds });
+        }
+      });
+
+      // Broadcast after commit so live participants see the new ideas.
+      for (const { spaceId, ids } of broadcastBuckets) {
+        if (ids.length > 0) {
+          broadcastToSpace(spaceId, { type: "notes_bulk_imported", data: { count: ids.length } });
+        }
+      }
+
+      res.status(201).json({ success: true, ...totals });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Ideas import failed:", error);
+      res.status(500).json({ error: "Failed to import ideas" });
     }
   });
 

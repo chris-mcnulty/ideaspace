@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Building2, Plus, LogOut, Loader2, Mail, Clock, Check, X, BookOpen, FileStack, Activity, Users, Edit, Trash2, FolderKanban } from "lucide-react";
+import { Building2, Plus, LogOut, Loader2, Mail, Clock, Check, X, BookOpen, FileStack, Activity, Users, Edit, Trash2, FolderKanban, Upload } from "lucide-react";
+import { ImportsTab } from "@/components/ImportsTab";
 import type { Organization, Space, User, AccessRequest, WorkspaceTemplate, SystemSetting, Project, ProjectMember } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
@@ -157,6 +158,10 @@ export default function AdminPanel() {
               <FileStack className="h-4 w-4 mr-2" />
               Templates
             </TabsTrigger>
+            <TabsTrigger value="imports" data-testid="tab-imports">
+              <Upload className="h-4 w-4 mr-2" />
+              Imports
+            </TabsTrigger>
             <TabsTrigger value="ai-usage" data-testid="tab-ai-usage">
               <Activity className="h-4 w-4 mr-2" />
               AI Usage
@@ -246,6 +251,10 @@ export default function AdminPanel() {
               currentUser={currentUser}
               organizations={displayOrgs}
             />
+          </TabsContent>
+
+          <TabsContent value="imports">
+            <ImportsTab />
           </TabsContent>
 
           <TabsContent value="ai-usage">
