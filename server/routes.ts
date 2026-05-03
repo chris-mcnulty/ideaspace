@@ -3918,6 +3918,148 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ============================================
+  // Live "Pulse" facilitator analytics dashboard
+  // ============================================
+  // Returns a single batched snapshot of every metric the Pulse tab shows.
+  // Read-only and facilitator-scoped (global_admin OR matching company_admin
+  // OR an explicit space_facilitator) so participants can never poll it.
+  app.get("/api/spaces/:spaceId/pulse", requireAuth, async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) return res.status(404).json({ error: "Workspace not found" });
+      const space = await storage.getSpace(spaceId);
+      if (!space) return res.status(404).json({ error: "Workspace not found" });
+
+      const reqUser = req.user as User;
+      if (reqUser.role !== 'global_admin') {
+        const isCompanyAdminForOrg = reqUser.role === 'company_admin' && reqUser.organizationId === space.organizationId;
+        if (!isCompanyAdminForOrg) {
+          const facilitators = await storage.getSpaceFacilitatorsBySpace(spaceId);
+          if (!facilitators.some(f => f.userId === reqUser.id)) {
+            return res.status(403).json({ error: "Not authorized for this workspace" });
+          }
+        }
+      }
+
+      // Fetch everything in parallel. For 100 participants the per-table row
+      // counts are small (rankings/votes/allocations bounded by N×ideas) and
+      // these tables are all FK-indexed on space_id, so this stays cheap.
+      const [
+        participants,
+        notesList,
+        votesList,
+        rankingsList,
+        marketplaceList,
+        surveyResponsesList,
+        modules,
+        priorityMatrix,
+        staircaseModule,
+      ] = await Promise.all([
+        storage.getParticipantsBySpace(spaceId),
+        storage.getNotesBySpace(spaceId),
+        storage.getVotesBySpace(spaceId),
+        storage.getRankingsBySpace(spaceId),
+        storage.getMarketplaceAllocationsBySpace(spaceId),
+        storage.getSurveyResponsesBySpace(spaceId),
+        storage.getWorkspaceModules(spaceId),
+        storage.getPriorityMatrix(spaceId),
+        storage.getStaircaseModule(spaceId),
+      ]);
+
+      const [matrixPositions, staircasePositions] = await Promise.all([
+        priorityMatrix ? storage.getPriorityMatrixPositions(priorityMatrix.id) : Promise.resolve([]),
+        staircaseModule ? storage.getStaircasePositions(staircaseModule.id) : Promise.resolve([]),
+      ]);
+
+      const joined = participants.length;
+      const online = participants.filter(p => p.isOnline).length;
+
+      const distinctIds = (rows: { participantId: string | null }[]) => {
+        const s = new Set<string>();
+        for (const r of rows) if (r.participantId) s.add(r.participantId);
+        return s.size;
+      };
+      const pct = (count: number) => (joined > 0 ? Math.round((count / joined) * 100) : 0);
+
+      const participantNotes = distinctIds(notesList);
+      const participantVoters = distinctIds(votesList);
+      const participantRankers = distinctIds(rankingsList);
+      const participantMarket = distinctIds(marketplaceList);
+      const participantSurvey = distinctIds(surveyResponsesList);
+      const participantMatrix = distinctIds(matrixPositions);
+      const participantStaircase = distinctIds(staircasePositions);
+
+      // Per-module participation: include only modules the workspace has
+      // configured + enabled, so the UI doesn't show 0% for unused modules.
+      const enabledTypes = new Set(modules.filter(m => m.enabled).map(m => m.moduleType));
+      const perModuleParticipation: Record<string, { engaged: number; total: number; percent: number }> = {};
+      const addPm = (key: string, engaged: number) => {
+        perModuleParticipation[key] = { engaged, total: joined, percent: pct(engaged) };
+      };
+      if (enabledTypes.has('ideation')) addPm('ideation', participantNotes);
+      if (enabledTypes.has('pairwise-voting')) addPm('pairwise-voting', participantVoters);
+      if (enabledTypes.has('stack-ranking')) addPm('stack-ranking', participantRankers);
+      if (enabledTypes.has('marketplace')) addPm('marketplace', participantMarket);
+      if (enabledTypes.has('survey')) addPm('survey', participantSurvey);
+      if (enabledTypes.has('priority-matrix')) addPm('priority-matrix', participantMatrix);
+      if (enabledTypes.has('staircase')) addPm('staircase', participantStaircase);
+
+      // Top contributors leaderboard (notes authored + votes cast).
+      const noteCountByPid = new Map<string, number>();
+      for (const n of notesList) {
+        if (!n.participantId) continue;
+        noteCountByPid.set(n.participantId, (noteCountByPid.get(n.participantId) || 0) + 1);
+      }
+      const voteCountByPid = new Map<string, number>();
+      for (const v of votesList) {
+        if (!v.participantId) continue;
+        voteCountByPid.set(v.participantId, (voteCountByPid.get(v.participantId) || 0) + 1);
+      }
+      const nameByPid = new Map(participants.map(p => [p.id, p.displayName] as const));
+      const contributorIds = new Set<string>();
+      noteCountByPid.forEach((_v, k) => contributorIds.add(k));
+      voteCountByPid.forEach((_v, k) => contributorIds.add(k));
+      const topContributors = Array.from(contributorIds)
+        .map(pid => ({
+          participantId: pid,
+          displayName: nameByPid.get(pid) || 'Anonymous',
+          notes: noteCountByPid.get(pid) || 0,
+          votes: voteCountByPid.get(pid) || 0,
+        }))
+        .sort((a, b) => (b.notes + b.votes) - (a.notes + a.votes) || b.notes - a.notes)
+        .slice(0, 5);
+
+      // Recent note timestamps (last 10 minutes) for the velocity sparkline.
+      const cutoff = Date.now() - 10 * 60 * 1000;
+      const recentNoteTimestamps = notesList
+        .map(n => (n.createdAt instanceof Date ? n.createdAt.getTime() : new Date(n.createdAt as any).getTime()))
+        .filter(t => Number.isFinite(t) && t >= cutoff)
+        .sort((a, b) => a - b);
+
+      res.json({
+        participants: { joined, online },
+        counts: {
+          ideas: notesList.length,
+          votes: votesList.length,
+          rankings: rankingsList.length,
+          marketplaceAllocations: marketplaceList.length,
+          surveyResponses: surveyResponsesList.length,
+          matrixPlacements: matrixPositions.length,
+          staircasePlacements: staircasePositions.length,
+        },
+        perModuleParticipation,
+        topContributors,
+        recentNoteTimestamps,
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error("[pulse] failed:", errorMessage);
+      res.status(500).json({ error: "Failed to load pulse snapshot", details: errorMessage });
+    }
+  });
+
+  // ============================================
   // Ideas Management API Routes
   // ============================================
   

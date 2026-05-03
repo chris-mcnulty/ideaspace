@@ -67,6 +67,7 @@ import {
   Copy,
   ExternalLink,
   Target,
+  Activity,
 } from "lucide-react";
 import type { Organization, Space, Note, Participant, Category, User, Idea, WorkspaceModule, Project } from "@shared/schema";
 import { Leaderboard } from "@/components/Leaderboard";
@@ -77,6 +78,7 @@ import { SurveyResultsGrid } from "@/components/SurveyResultsGrid";
 import { generateCohortResultsPDF } from "@/lib/pdfGenerator";
 import IdeasHub from "@/components/IdeasHub";
 import SuggestIdeasPanel from "@/components/SuggestIdeasPanel";
+import PulsePanel from "@/components/PulsePanel";
 import ModuleConfiguration from "@/components/ModuleConfiguration";
 import PriorityMatrix from "@/components/PriorityMatrix";
 import StaircaseModule from "@/components/StaircaseModule";
@@ -317,8 +319,25 @@ export default function FacilitatorWorkspace() {
   const [isDataManagementDialogOpen, setIsDataManagementDialogOpen] = useState(false);
   const [dataManagementTab, setDataManagementTab] = useState<"export" | "import">("export");
 
+  // Pulse-tab WS event types — every metric that should drive a live refresh.
+  const PULSE_EVENTS = useMemo(() => new Set([
+    'note_created', 'note_updated', 'note_deleted', 'notes_deleted',
+    'notes_updated', 'notes_bulk_imported',
+    'vote_recorded',
+    'ranking_submitted',
+    'marketplace_allocation_submitted',
+    'matrix_position_updated',
+    'staircase_position_updated',
+    'survey_response_submitted',
+    'participant_joined', 'participant_left',
+    'presence_changed',
+  ]), []);
+
   // WebSocket connection for real-time updates
   const handleWebSocketMessage = useCallback((message: { type: string; data: any }) => {
+    if (PULSE_EVENTS.has(message.type)) {
+      setPulseTick(t => t + 1);
+    }
     switch (message.type) {
       case 'note_created':
       case 'note_updated':
@@ -389,10 +408,15 @@ export default function FacilitatorWorkspace() {
         setPresenceCount(typeof message.data?.count === 'number' ? message.data.count : null);
         break;
     }
-  }, [params.space, toast]);
+  }, [params.space, toast, PULSE_EVENTS]);
 
   // Live presence count surfaced from WS `presence_changed` events.
   const [presenceCount, setPresenceCount] = useState<number | null>(null);
+
+  // Monotonic tick bumped whenever a Pulse-relevant WS event arrives. Lets
+  // PulsePanel piggy-back on the existing WebSocket subscription and refetch
+  // its snapshot without opening a second connection.
+  const [pulseTick, setPulseTick] = useState(0);
 
   // On (re)connect, re-sync any cached state for this workspace by invalidating
   // every query whose key references the space. This makes the client
@@ -545,12 +569,13 @@ export default function FacilitatorWorkspace() {
 
   // Build facilitator tabs in journey sequence
   const facilitatorTabs = useMemo((): TabConfig[] => {
-    // Fixed tabs: Modules → Ideas Hub → Knowledge Base (if needed) → Participants
+    // Fixed tabs: Modules → Ideas Hub → Knowledge Base → Participants → Pulse
     const baseTabs: TabConfig[] = [
       { value: "modules", label: "Modules", icon: Settings },
       { value: "ideas", label: "Ideas Hub", icon: FolderPlus },
       { value: "knowledge-base", label: "Knowledge Base", icon: BookOpen },
       { value: "participants", label: "Participants", count: participants.length },
+      { value: "pulse", label: "Pulse", icon: Activity },
     ];
 
     // Get enabled modules sorted by orderIndex
@@ -1898,6 +1923,18 @@ export default function FacilitatorWorkspace() {
     </div>
   );
 
+  const renderPulseTab = () => (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold">Pulse</h2>
+        <p className="text-muted-foreground mt-1">
+          Live cohort engagement — tiles, idea velocity, and top contributors update as events arrive.
+        </p>
+      </div>
+      <PulsePanel spaceId={params.space} liveTick={pulseTick} />
+    </div>
+  );
+
   const renderResultsTab = () => (
     <div className="space-y-6">
       {/* Module Header - matches pattern of other modules */}
@@ -2319,6 +2356,7 @@ export default function FacilitatorWorkspace() {
     "voting": renderVotingTab,
     "ranking": renderRankingTab,
     "marketplace": renderMarketplaceTab,
+    "pulse": renderPulseTab,
     "results": renderResultsTab,
   };
 
