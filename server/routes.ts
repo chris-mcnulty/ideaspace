@@ -13,7 +13,7 @@ import { uploadImage, validateImageFile, cleanupTempFile } from "./middleware/up
 import { processUploadedImage } from "./utils/contentUtils";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { categorizeNotes, rewriteCard } from "./services/openai";
+import { categorizeNotes, rewriteCard, suggestIdeas } from "./services/openai";
 import { getNextPair, calculateProgress } from "./services/pairwise";
 import { validateRanking, calculateBordaScores, calculateRankingProgress, hasParticipantCompleted } from "./services/stack-ranking";
 import { validateAllocation, calculateMarketplaceScores, calculateAllocationProgress, hasParticipantCompleted as hasParticipantCompletedAllocation, getParticipantRemainingBudget, DEFAULT_COIN_BUDGET } from "./services/marketplace";
@@ -3750,6 +3750,141 @@ export async function registerRoutes(app: Express): Promise<Server> {
         error: "Failed to categorize notes",
         details: errorMessage
       });
+    }
+  });
+
+  // ============================================
+  // AI "Suggest New Ideas" assistant
+  // ============================================
+
+  // Generate net-new idea suggestions for a workspace, grounded in its
+  // purpose, existing ideas, and KB. Facilitators only — does NOT persist
+  // anything; the client decides which suggestions to accept.
+  app.post("/api/spaces/:spaceId/suggest-ideas", requireFacilitator, async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      const space = await storage.getSpace(spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      const requestedCount = typeof req.body?.count === 'number' ? req.body.count : 8;
+
+      // Build the existing-ideas list from BOTH session notes (participant
+      // contributions) and the Ideas Hub. We dedupe by lowercase content.
+      const [allNotes, allIdeas] = await Promise.all([
+        storage.getNotesBySpace(spaceId),
+        storage.getIdeasBySpace(spaceId),
+      ]);
+      const existingSet = new Map<string, string>();
+      for (const n of allNotes) {
+        const key = n.content.trim().toLowerCase();
+        if (key && !existingSet.has(key)) existingSet.set(key, n.content.trim());
+      }
+      for (const i of allIdeas) {
+        const key = i.content.trim().toLowerCase();
+        if (key && !existingSet.has(key)) existingSet.set(key, i.content.trim());
+      }
+      const existingIdeas = Array.from(existingSet.values());
+
+      // Pull KB chunks relevant to the workspace purpose + a sample of
+      // existing ideas, so suggestions stay grounded in the org's context.
+      let knowledgeBaseSnippets: string[] = [];
+      try {
+        const querySeed = [space.purpose, ...existingIdeas.slice(0, 10)].filter(Boolean).join(' ');
+        if (querySeed.trim().length > 0) {
+          const hits = await storage.searchKnowledgeBaseChunks({
+            query: querySeed,
+            spaceId,
+            organizationId: space.organizationId ?? undefined,
+            includeSystem: true,
+            limit: 6,
+          });
+          knowledgeBaseSnippets = hits.map(h => h.content);
+        }
+      } catch (kbErr) {
+        // KB grounding is best-effort — log and continue without it.
+        console.warn("[suggest-ideas] KB lookup failed:", kbErr instanceof Error ? kbErr.message : kbErr);
+      }
+
+      const user = req.user as User;
+      const result = await suggestIdeas(
+        {
+          workspaceName: space.name,
+          workspacePurpose: space.purpose,
+          existingIdeas,
+          knowledgeBaseSnippets,
+          count: requestedCount,
+        },
+        {
+          organizationId: space.organizationId ?? undefined,
+          spaceId: space.id,
+          userId: user?.id,
+        },
+      );
+
+      res.json(result);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error("[suggest-ideas] failed:", errorMessage);
+      res.status(500).json({ error: "Failed to suggest ideas", details: errorMessage });
+    }
+  });
+
+  // Persist an accepted AI suggestion as a note (with aiGenerated=true) and
+  // broadcast it so participant boards update in real time.
+  app.post("/api/spaces/:spaceId/suggest-ideas/accept", requireFacilitator, async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      const acceptSchema = z.object({
+        content: z.string().min(1).max(2000),
+        manualCategoryId: z.string().nullable().optional(),
+      });
+      const parsed = acceptSchema.parse(req.body);
+
+      const user = req.user as User;
+      if (!user?.id) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+
+      // Reuse the facilitator's participant record (matches bulk-import
+      // pattern) so accepted suggestions are attributed to the facilitator.
+      let participant = await storage.getParticipantBySpaceAndUserId(spaceId, user.id);
+      if (!participant) {
+        participant = await storage.createParticipant({
+          spaceId,
+          displayName: user.displayName || user.email || 'Facilitator',
+          userId: user.id,
+        });
+      }
+
+      const note = await storage.createNote({
+        spaceId,
+        participantId: participant.id,
+        content: parsed.content.trim(),
+        manualCategoryId: parsed.manualCategoryId ?? null,
+        isManualOverride: !!parsed.manualCategoryId,
+        aiGenerated: true,
+      });
+
+      broadcastToSpace(spaceId, { type: "note_created", data: note });
+
+      res.status(201).json(note);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error("[suggest-ideas/accept] failed:", errorMessage);
+      res.status(500).json({ error: "Failed to accept suggestion", details: errorMessage });
     }
   });
 

@@ -76,6 +76,7 @@ import { SurveyQuestionsManager } from "@/components/SurveyQuestionsManager";
 import { SurveyResultsGrid } from "@/components/SurveyResultsGrid";
 import { generateCohortResultsPDF } from "@/lib/pdfGenerator";
 import IdeasHub from "@/components/IdeasHub";
+import SuggestIdeasPanel from "@/components/SuggestIdeasPanel";
 import ModuleConfiguration from "@/components/ModuleConfiguration";
 import PriorityMatrix from "@/components/PriorityMatrix";
 import StaircaseModule from "@/components/StaircaseModule";
@@ -1256,7 +1257,10 @@ export default function FacilitatorWorkspace() {
   );
 
   const renderIdeasTab = () => (
-    <IdeasHub spaceId={space.id} categories={manualCategories} />
+    <div className="space-y-6">
+      <SuggestIdeasPanel spaceId={space.id} />
+      <IdeasHub spaceId={space.id} categories={manualCategories} />
+    </div>
   );
 
   const renderKnowledgeBaseTab = () => (

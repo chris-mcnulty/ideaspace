@@ -305,3 +305,154 @@ Respond with valid JSON in this exact format:
 
   throw new Error(`Failed to rewrite card after ${maxRetries + 1} attempts: ${lastError?.message || 'Unknown error'}`);
 }
+
+// Suggest New Ideas Interfaces
+export interface IdeaSuggestion {
+  content: string;
+  rationale?: string;
+}
+
+export interface SuggestIdeasResponse {
+  suggestions: IdeaSuggestion[];
+}
+
+const suggestIdeasResponseSchema = z.object({
+  suggestions: z.array(z.object({
+    content: z.string().min(1),
+    rationale: z.string().optional(),
+  })),
+});
+
+export interface SuggestIdeasParams {
+  workspaceName: string;
+  workspacePurpose: string;
+  existingIdeas: string[];
+  knowledgeBaseSnippets?: string[];
+  count?: number; // Target number of suggestions (5-10), defaults to 8
+}
+
+/**
+ * Generate net-new idea suggestions for a facilitator. The model is grounded
+ * in the workspace purpose, existing ideas (so we don't duplicate them) and
+ * (optionally) snippets pulled from the workspace's knowledge base.
+ */
+export async function suggestIdeas(
+  params: SuggestIdeasParams,
+  context?: AiContext,
+  maxRetries = 2,
+): Promise<SuggestIdeasResponse> {
+  const target = Math.max(5, Math.min(10, params.count ?? 8));
+
+  const existingBlock = params.existingIdeas.length
+    ? `EXISTING IDEAS (do NOT duplicate these — your suggestions must be net-new):
+${params.existingIdeas.slice(0, 200).map((c, i) => `${i + 1}. ${c}`).join('\n')}`
+    : 'EXISTING IDEAS: (none yet)';
+
+  const kbBlock = params.knowledgeBaseSnippets && params.knowledgeBaseSnippets.length
+    ? `RELEVANT KNOWLEDGE BASE SNIPPETS (use these to ground your suggestions in the organization's context):
+${params.knowledgeBaseSnippets.slice(0, 8).map((s, i) => `[${i + 1}] ${s}`).join('\n\n')}`
+    : '';
+
+  const prompt = `You are an expert facilitator helping to expand a collaborative envisioning session with fresh, high-quality ideas.
+
+WORKSPACE: ${params.workspaceName}
+PURPOSE: ${params.workspacePurpose}
+
+${existingBlock}
+
+${kbBlock}
+
+Your task: Propose ${target} NEW idea suggestions that the cohort has not already raised. Each suggestion must:
+1. Be directly relevant to the workspace purpose
+2. Be distinctly different from every existing idea (no rephrasing of existing ones)
+3. Be specific and actionable, not generic platitudes
+4. Be 10-40 words, written as a concrete idea statement (not a question)
+5. Cover diverse angles — don't cluster suggestions around a single theme
+
+Respond with valid JSON in this exact format:
+{
+  "suggestions": [
+    { "content": "Concrete idea statement here.", "rationale": "1-sentence reason this is worth exploring." }
+  ]
+}`;
+
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const completion = await openai.chat.completions.create({
+        model: "gpt-5",
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert facilitator and ideation specialist. You generate net-new, diverse, concrete ideas that build on what a cohort has already produced — never duplicating their existing ideas.",
+          },
+          { role: "user", content: prompt },
+        ],
+        response_format: { type: "json_object" },
+        max_completion_tokens: 8192,
+      });
+
+      const responseText = completion.choices[0].message.content;
+      if (!responseText) {
+        throw new Error("No response from OpenAI");
+      }
+
+      let parsedResult: unknown;
+      try {
+        parsedResult = JSON.parse(responseText);
+      } catch (parseError) {
+        throw new Error(`Failed to parse JSON response: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+      }
+
+      const validationResult = suggestIdeasResponseSchema.safeParse(parsedResult);
+      if (!validationResult.success) {
+        throw new Error(`Invalid response format: ${validationResult.error.message}`);
+      }
+
+      // Deduplicate against existing ideas (case-insensitive, normalized)
+      const norm = (s: string) => s.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+      const existingNorm = new Set(params.existingIdeas.map(norm));
+      const seen = new Set<string>();
+      const filtered: IdeaSuggestion[] = [];
+      for (const s of validationResult.data.suggestions) {
+        const key = norm(s.content);
+        if (!key || existingNorm.has(key) || seen.has(key)) continue;
+        seen.add(key);
+        filtered.push({ content: s.content.trim(), rationale: s.rationale?.trim() || undefined });
+      }
+
+      const usage = extractUsageMetrics(completion);
+      if (usage && context) {
+        await logAiUsage({
+          organizationId: context.organizationId,
+          spaceId: context.spaceId,
+          userId: context.userId,
+          modelName: "gpt-5",
+          operation: "suggest_ideas",
+          usage,
+          metadata: {
+            existingIdeaCount: params.existingIdeas.length,
+            kbSnippetCount: params.knowledgeBaseSnippets?.length ?? 0,
+            requested: target,
+            returned: filtered.length,
+            duplicatesFiltered: validationResult.data.suggestions.length - filtered.length,
+            attempt: attempt + 1,
+          },
+        });
+      }
+
+      return { suggestions: filtered };
+
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.error(`Suggest ideas attempt ${attempt + 1} failed:`, lastError.message);
+
+      if (attempt === maxRetries) break;
+
+      await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+    }
+  }
+
+  throw new Error(`Failed to suggest ideas after ${maxRetries + 1} attempts: ${lastError?.message || 'Unknown error'}`);
+}

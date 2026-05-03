@@ -227,6 +227,7 @@ export const notes = pgTable("notes", {
   visibleInMarketplace: boolean("visible_in_marketplace").notNull().default(true), // Facilitator can hide from marketplace phase
   isSeed: boolean("is_seed").notNull().default(false), // True when note was pushed from Ideas Hub as seed idea
   sourceIdeaId: varchar("source_idea_id").references(() => ideas.id), // Links back to source idea if this is a seed
+  aiGenerated: boolean("ai_generated").notNull().default(false), // True when note originated from the "Suggest New Ideas" AI assistant
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
   spaceIdx: index("idx_notes_space").on(table.spaceId),
