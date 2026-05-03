@@ -18,7 +18,7 @@ import { getNextPair, calculateProgress } from "./services/pairwise";
 import { validateRanking, calculateBordaScores, calculateRankingProgress, hasParticipantCompleted } from "./services/stack-ranking";
 import { validateAllocation, calculateMarketplaceScores, calculateAllocationProgress, hasParticipantCompleted as hasParticipantCompletedAllocation, getParticipantRemainingBudget, DEFAULT_COIN_BUDGET } from "./services/marketplace";
 import { generatePairwiseExport, generateStackRankingExport, generateMarketplaceExport } from "./services/export";
-import { generateCohortResults, generatePersonalizedResults, generateAllPersonalizedResults } from "./services/results";
+import { generateCohortResults, generatePersonalizedResults, generateAllPersonalizedResults, getCurrentCohortInputsHash, getCurrentPersonalizedInputsHash } from "./services/results";
 import { hashPassword, requireAuth, requireRole, requireGlobalAdmin, requireCompanyAdmin, requireFacilitator } from "./auth";
 import { generateWorkspaceCode, isValidWorkspaceCode } from "./services/workspace-code";
 import { sendAccessRequestEmail, sendEmailVerification, sendPasswordReset, sendSessionInviteEmail, sendPhaseChangeNotificationEmail, sendResultsAvailableEmail, sendBulkNotifications, type SessionInviteEmailData, type PhaseChangeEmailData, type ResultsReadyEmailData } from "./services/email";
@@ -6251,12 +6251,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const cohortResults = await storage.getCohortResultsBySpace(spaceId);
 
-      // Return the most recent cohort result
+      // Validate persisted hash against current workspace state so callers
+      // never see stale rows after notes/votes/KB docs change.
       if (cohortResults.length > 0) {
-        res.json(cohortResults[0]);
-      } else {
-        res.status(404).json({ error: "No cohort results found for this workspace" });
+        const stored = cohortResults[0];
+        const currentHash = await getCurrentCohortInputsHash(spaceId);
+        if (currentHash && stored.inputsHash && currentHash !== stored.inputsHash) {
+          return res.status(404).json({ error: "Cohort results are stale; regenerate to refresh.", stale: true });
+        }
+        return res.json(stored);
       }
+      res.status(404).json({ error: "No cohort results found for this workspace" });
     } catch (error) {
       console.error("Failed to fetch cohort results:", error);
       res.status(500).json({ error: "Failed to fetch cohort results" });
@@ -6276,6 +6281,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Return the most recent cohort result if available
       if (cohortResults.length > 0) {
         const result = cohortResults[0];
+        const currentHash = await getCurrentCohortInputsHash(spaceId);
+        if (currentHash && result.inputsHash && currentHash !== result.inputsHash) {
+          return res.status(404).json({ error: "Results are stale; please check back shortly.", stale: true });
+        }
         const metadata = result.metadata as { totalNotes?: number; totalVotes?: number } | null;
         
         // Get participant count from the space
@@ -6346,10 +6355,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Return the most recent personalized result for this workspace
       const workspaceResults = personalResults.filter(r => r.spaceId === spaceId);
       if (workspaceResults.length > 0) {
-        res.json(workspaceResults[0]);
-      } else {
-        res.status(404).json({ error: "No personalized results found" });
+        const stored = workspaceResults[0];
+        const currentHash = await getCurrentPersonalizedInputsHash(spaceId, sessionParticipantId);
+        if (currentHash && stored.inputsHash && currentHash !== stored.inputsHash) {
+          return res.status(404).json({ error: "Personalized results are stale; regenerate to refresh.", stale: true });
+        }
+        return res.json(stored);
       }
+      res.status(404).json({ error: "No personalized results found" });
     } catch (error) {
       console.error("Failed to fetch personalized results:", error);
       res.status(500).json({ error: "Failed to fetch personalized results" });

@@ -121,21 +121,32 @@ export interface PersonalizedInputs {
   participantId: string;
   participantDisplayName?: string | null;
   cohortResultId: string | null;
-  inputsHash: string; // matches the cohort inputs hash this was generated against
+  cohortInputsHash: string;
+  participantNotes: Array<{ id: string; content: string; manualCategoryId: string | null }>;
+  participantVotes: Array<{ winnerNoteId: string; loserNoteId: string }>;
+  participantRankings: Array<{ noteId: string; rank: number }>;
+  participantAllocations: Array<{ noteId: string; coinsAllocated: number }>;
+  noteImpacts: Array<{ noteId: string; wins: number; totalComparisons: number }>;
+  cohortSummary?: string | null;
 }
 
 export function computePersonalizedInputsHash(inputs: PersonalizedInputs): string {
-  return createHash("sha256")
-    .update(
-      stableStringify({
-        spaceId: inputs.spaceId,
-        participantId: inputs.participantId,
-        participantDisplayName: inputs.participantDisplayName ?? null,
-        cohortResultId: inputs.cohortResultId,
-        cohortInputsHash: inputs.inputsHash,
-      }),
-    )
-    .digest("hex");
+  const normalized = {
+    spaceId: inputs.spaceId,
+    participantId: inputs.participantId,
+    participantDisplayName: inputs.participantDisplayName ?? null,
+    cohortResultId: inputs.cohortResultId,
+    cohortInputsHash: inputs.cohortInputsHash,
+    cohortSummary: inputs.cohortSummary ?? null,
+    participantNotes: [...inputs.participantNotes].sort((a, b) => a.id.localeCompare(b.id)),
+    participantVotes: [...inputs.participantVotes].sort((a, b) =>
+      (a.winnerNoteId + a.loserNoteId).localeCompare(b.winnerNoteId + b.loserNoteId),
+    ),
+    participantRankings: [...inputs.participantRankings].sort((a, b) => a.noteId.localeCompare(b.noteId)),
+    participantAllocations: [...inputs.participantAllocations].sort((a, b) => a.noteId.localeCompare(b.noteId)),
+    noteImpacts: [...inputs.noteImpacts].sort((a, b) => a.noteId.localeCompare(b.noteId)),
+  };
+  return createHash("sha256").update(stableStringify(normalized)).digest("hex");
 }
 
 export async function findCachedPersonalizedResult(

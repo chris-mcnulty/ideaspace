@@ -334,11 +334,14 @@ export async function generateCohortResults(
     return (a.id || '').localeCompare(b.id || '');
   });
 
-  // FTS query from workspace purpose + top-ranked notes.
-  const queryTerms = [
-    space.purpose || '',
-    ...notesWithScores.slice(0, 12).map((n: any) => n.content || ''),
-  ].join(' ').slice(0, 4000);
+  // FTS query from workspace purpose + a deterministic sample of notes
+  // (sorted by id) so the KB grounding inputs hash is reproducible by
+  // getCurrentCohortInputsHash without re-deriving combined scores.
+  const kbQueryNotes = [...allNotes]
+    .sort((a: any, b: any) => a.id.localeCompare(b.id))
+    .slice(0, 12)
+    .map((n: any) => n.content || '');
+  const queryTerms = [space.purpose || '', ...kbQueryNotes].join(' ').slice(0, 4000);
 
   const kbChunks = queryTerms.trim().length > 0
     ? await storage.searchKnowledgeBaseChunks({
@@ -602,13 +605,53 @@ export async function generatePersonalizedResults(
     cohortResult = result || null;
   }
 
-  // Cache short-circuit for single-participant regenerations.
+  // Fetch participant inputs first so the cache key reflects every
+  // prompt-affecting input (notes/votes/rankings/allocations + cohort
+  // alignment), not just identity + cohort hash.
+  const [participantNotes, participantVotes, participantRankings, participantAllocations, allCategories, allVotes] =
+    await Promise.all([
+      db.select().from(notes).where(and(eq(notes.spaceId, spaceId), eq(notes.participantId, participantId))),
+      db.select().from(votes).where(and(eq(votes.spaceId, spaceId), eq(votes.participantId, participantId))),
+      db.select().from(rankings).where(and(eq(rankings.spaceId, spaceId), eq(rankings.participantId, participantId))),
+      db.select().from(marketplaceAllocations).where(and(eq(marketplaceAllocations.spaceId, spaceId), eq(marketplaceAllocations.participantId, participantId))),
+      db.select().from(categories).where(eq(categories.spaceId, spaceId)),
+      db.select().from(votes).where(eq(votes.spaceId, spaceId)),
+    ]);
+  const categoryNameById = new Map<string, string>();
+  for (const c of allCategories) categoryNameById.set(c.id, c.name);
+
+  const winsByNote = new Map<string, number>();
+  const comparisonsByNote = new Map<string, number>();
+  for (const v of allVotes) {
+    winsByNote.set(v.winnerNoteId, (winsByNote.get(v.winnerNoteId) ?? 0) + 1);
+    comparisonsByNote.set(v.winnerNoteId, (comparisonsByNote.get(v.winnerNoteId) ?? 0) + 1);
+    comparisonsByNote.set(v.loserNoteId, (comparisonsByNote.get(v.loserNoteId) ?? 0) + 1);
+  }
+  const noteImpact = participantNotes.map((note: any) => {
+    const wins = winsByNote.get(note.id) ?? 0;
+    const totalComparisons = comparisonsByNote.get(note.id) ?? 0;
+    return {
+      noteId: note.id,
+      content: note.content,
+      wins,
+      totalComparisons,
+      winRate: totalComparisons > 0 ? wins / totalComparisons : 0,
+    };
+  });
+  noteImpact.sort((a: any, b: any) => b.winRate - a.winRate);
+
   const personalHash = computePersonalizedInputsHash({
     spaceId,
     participantId,
     participantDisplayName: participant.displayName ?? null,
     cohortResultId: cohortResultId || null,
-    inputsHash: cohortResult?.inputsHash || cohortResultId || '',
+    cohortInputsHash: cohortResult?.inputsHash || cohortResultId || '',
+    cohortSummary: cohortResult?.summary ?? null,
+    participantNotes: participantNotes.map((n: any) => ({ id: n.id, content: n.content, manualCategoryId: n.manualCategoryId ?? null })),
+    participantVotes: participantVotes.map((v: any) => ({ winnerNoteId: v.winnerNoteId, loserNoteId: v.loserNoteId })),
+    participantRankings: participantRankings.map((r: any) => ({ noteId: r.noteId, rank: r.rank })),
+    participantAllocations: participantAllocations.map((a: any) => ({ noteId: a.noteId, coinsAllocated: a.coinsAllocated })),
+    noteImpacts: noteImpact.map((n) => ({ noteId: n.noteId, wins: n.wins, totalComparisons: n.totalComparisons })),
   });
   const cachedSingle = await findCachedPersonalizedResult(spaceId, participantId, personalHash);
   if (cachedSingle) {
@@ -621,55 +664,6 @@ export async function generatePersonalizedResults(
     });
     return cachedSingle;
   }
-
-  // Fetch participant's contributions
-  const participantNotes = await db
-    .select()
-    .from(notes)
-    .where(and(eq(notes.spaceId, spaceId), eq(notes.participantId, participantId)));
-
-  // Fetch participant's votes
-  const participantVotes = await db
-    .select()
-    .from(votes)
-    .where(and(eq(votes.spaceId, spaceId), eq(votes.participantId, participantId)));
-
-  // Fetch participant's rankings
-  const participantRankings = await db
-    .select()
-    .from(rankings)
-    .where(and(eq(rankings.spaceId, spaceId), eq(rankings.participantId, participantId)));
-
-  // Fetch participant's marketplace allocations
-  const participantAllocations = await db
-    .select()
-    .from(marketplaceAllocations)
-    .where(and(eq(marketplaceAllocations.spaceId, spaceId), eq(marketplaceAllocations.participantId, participantId)));
-
-  // Pre-fetch workspace categories so manualCategoryId can be resolved to a
-  // human-readable category name (kept consistent with the cached batch path).
-  const allCategories = await db
-    .select()
-    .from(categories)
-    .where(eq(categories.spaceId, spaceId));
-  const categoryNameById = new Map<string, string>();
-  for (const c of allCategories) categoryNameById.set(c.id, c.name);
-
-  // Calculate impact scores for participant's notes
-  const allVotes = await db.select().from(votes).where(eq(votes.spaceId, spaceId));
-  const noteImpact = participantNotes.map((note: any) => {
-    const wins = allVotes.filter((v: any) => v.winnerNoteId === note.id).length;
-    const totalComparisons = allVotes.filter((v: any) => v.winnerNoteId === note.id || v.loserNoteId === note.id).length;
-    return {
-      noteId: note.id,
-      content: note.content,
-      wins,
-      totalComparisons,
-      winRate: totalComparisons > 0 ? wins / totalComparisons : 0,
-    };
-  });
-
-  noteImpact.sort((a: any, b: any) => b.winRate - a.winRate);
 
   // Build personalized context
   const personalContext = `
@@ -909,28 +903,6 @@ async function generatePersonalizedResultsFromCache(params: {
     winsByNote, comparisonsByNote, categoryNameById,
   } = params;
 
-  // Personalized results are deterministic per (cohort, participant, cohort
-  // inputs hash). If the cohort result was served from cache and we already
-  // have a personalized row matching it, skip the OpenAI round-trip.
-  const personalHash = computePersonalizedInputsHash({
-    spaceId,
-    participantId: participant.id,
-    participantDisplayName: participant.displayName ?? null,
-    cohortResultId: cohortResultId || null,
-    inputsHash: cohortResult?.inputsHash || cohortResultId || '',
-  });
-  const cachedPersonal = await findCachedPersonalizedResult(spaceId, participant.id, personalHash);
-  if (cachedPersonal) {
-    await logAiUsage({
-      spaceId,
-      modelName: 'gpt-4o',
-      operation: 'personalized-results-cache-hit',
-      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      metadata: { cacheHit: true, personalizedResultId: cachedPersonal.id, personalHash },
-    });
-    return cachedPersonal;
-  }
-
   const noteImpact = participantNotes.map((note) => {
     const wins = winsByNote.get(note.id) ?? 0;
     const totalComparisons = comparisonsByNote.get(note.id) ?? 0;
@@ -944,6 +916,33 @@ async function generatePersonalizedResultsFromCache(params: {
   });
 
   noteImpact.sort((a, b) => b.winRate - a.winRate);
+
+  // Personalized hash includes participant prompt inputs so per-participant
+  // edits invalidate cache even when cohort hash is unchanged.
+  const personalHash = computePersonalizedInputsHash({
+    spaceId,
+    participantId: participant.id,
+    participantDisplayName: participant.displayName ?? null,
+    cohortResultId: cohortResultId || null,
+    cohortInputsHash: cohortResult?.inputsHash || cohortResultId || '',
+    cohortSummary: cohortResult?.summary ?? null,
+    participantNotes: participantNotes.map((n) => ({ id: n.id, content: n.content, manualCategoryId: n.manualCategoryId ?? null })),
+    participantVotes: participantVotes.map((v) => ({ winnerNoteId: v.winnerNoteId, loserNoteId: v.loserNoteId })),
+    participantRankings: participantRankings.map((r) => ({ noteId: r.noteId, rank: r.rank })),
+    participantAllocations: participantAllocations.map((a) => ({ noteId: a.noteId, coinsAllocated: a.coinsAllocated })),
+    noteImpacts: noteImpact.map((n) => ({ noteId: n.noteId, wins: n.wins, totalComparisons: n.totalComparisons })),
+  });
+  const cachedPersonal = await findCachedPersonalizedResult(spaceId, participant.id, personalHash);
+  if (cachedPersonal) {
+    await logAiUsage({
+      spaceId,
+      modelName: 'gpt-4o',
+      operation: 'personalized-results-cache-hit',
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      metadata: { cacheHit: true, personalizedResultId: cachedPersonal.id, personalHash },
+    });
+    return cachedPersonal;
+  }
 
   const personalContext = `
 Participant: ${participant.displayName}
@@ -1048,4 +1047,152 @@ Include their top 3 contributions in topContributions array.`,
     .returning();
 
   return personalResult;
+}
+
+/**
+ * Recompute the canonical CohortInputs hash for the workspace's *current*
+ * state. GET endpoints compare this against the persisted row's `inputsHash`
+ * to detect stale cached results.
+ */
+export async function getCurrentCohortInputsHash(spaceId: string): Promise<string | null> {
+  const [space] = await db.select().from(spaces).where(eq(spaces.id, spaceId)).limit(1);
+  if (!space) return null;
+
+  const [enabled, allNotes, allCategories, pairwiseVotes, rankingData, marketplaceData] =
+    await Promise.all([
+      db.select().from(workspaceModules).where(and(eq(workspaceModules.spaceId, spaceId), eq(workspaceModules.enabled, true))),
+      db.select().from(notes).where(eq(notes.spaceId, spaceId)),
+      db.select().from(categories).where(eq(categories.spaceId, spaceId)),
+      db.select().from(votes).where(eq(votes.spaceId, spaceId)),
+      db.select().from(rankings).where(eq(rankings.spaceId, spaceId)),
+      db.select().from(marketplaceAllocations).where(eq(marketplaceAllocations.spaceId, spaceId)),
+    ]);
+  const enabledModuleTypes = enabled.map((m) => m.moduleType);
+  const hasSurvey = enabledModuleTypes.includes('survey');
+  const hasPriorityMatrix = enabledModuleTypes.includes('priority-matrix');
+  const hasStaircase = enabledModuleTypes.includes('staircase');
+
+  const matrixPositionsByNote = new Map<string, { x: number; y: number }>();
+  let matrixXLabel = 'Impact', matrixYLabel = 'Effort';
+  if (hasPriorityMatrix) {
+    const [matrix] = await db.select().from(priorityMatrices).where(eq(priorityMatrices.spaceId, spaceId)).limit(1);
+    if (matrix) {
+      matrixXLabel = matrix.xAxisLabel; matrixYLabel = matrix.yAxisLabel;
+      const pos = await db.select().from(priorityMatrixPositions).where(eq(priorityMatrixPositions.matrixId, matrix.id));
+      pos.forEach((p) => matrixPositionsByNote.set(p.noteId, { x: Math.round(p.xCoord * 100), y: Math.round(p.yCoord * 100) }));
+    }
+  }
+
+  const staircaseScoresByNote = new Map<string, number>();
+  let staircaseMinLabel = 'Lowest', staircaseMaxLabel = 'Highest';
+  let staircaseMinScore = 0, staircaseMaxScore = 10;
+  if (hasStaircase) {
+    const [s] = await db.select().from(staircaseModules).where(eq(staircaseModules.spaceId, spaceId)).limit(1);
+    if (s) {
+      staircaseMinLabel = s.minLabel; staircaseMaxLabel = s.maxLabel;
+      staircaseMinScore = s.minScore; staircaseMaxScore = s.maxScore;
+      const pos = await db.select().from(staircasePositions).where(eq(staircasePositions.staircaseId, s.id));
+      pos.forEach((p) => staircaseScoresByNote.set(p.noteId, p.score));
+    }
+  }
+
+  let surveyQuestionsList: { id: string; questionText: string; sortOrder: number }[] = [];
+  let surveyResponseRows: Array<{ noteId: string; questionId: string; participantId: string; score: number }> = [];
+  if (hasSurvey) {
+    const qs = await db.select().from(surveyQuestions).where(eq(surveyQuestions.spaceId, spaceId));
+    surveyQuestionsList = qs.map((q) => ({ id: q.id, questionText: q.questionText, sortOrder: q.sortOrder }));
+    surveyQuestionsList.sort((a, b) => a.sortOrder - b.sortOrder);
+    const rs = await db.select().from(surveyResponses).where(eq(surveyResponses.spaceId, spaceId));
+    surveyResponseRows = rs.map((r) => ({ noteId: r.noteId, questionId: r.questionId, participantId: r.participantId, score: r.score }));
+  }
+
+  const kbQueryNotes = [...allNotes]
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .slice(0, 12)
+    .map((n) => n.content || '');
+  const queryTerms = [space.purpose || '', ...kbQueryNotes].join(' ').slice(0, 4000);
+  const kbChunks = queryTerms.trim().length > 0
+    ? await storage.searchKnowledgeBaseChunks({
+        query: queryTerms, spaceId,
+        organizationId: space.organizationId ?? undefined,
+        includeSystem: true, limit: 8,
+      })
+    : [];
+
+  const inputs: CohortInputs = {
+    spaceId,
+    workspaceName: space.name ?? null,
+    workspacePurpose: space.purpose ?? null,
+    enabledModules: enabledModuleTypes,
+    matrixAxes: hasPriorityMatrix ? { xLabel: matrixXLabel, yLabel: matrixYLabel } : null,
+    staircaseConfig: hasStaircase
+      ? { label: `${staircaseMinLabel}|${staircaseMaxLabel}`, minScore: staircaseMinScore, maxScore: staircaseMaxScore }
+      : null,
+    surveyQuestions: surveyQuestionsList.map((q) => ({ id: q.id, text: q.questionText, order: q.sortOrder })),
+    categories: allCategories.map((c) => ({ id: c.id, name: c.name })),
+    notes: allNotes.map((n) => ({ id: n.id, content: n.content, manualCategoryId: n.manualCategoryId ?? null })),
+    votes: pairwiseVotes.map((v) => ({ winnerNoteId: v.winnerNoteId, loserNoteId: v.loserNoteId })),
+    rankings: rankingData.map((r) => ({ noteId: r.noteId, rank: r.rank, participantId: r.participantId })),
+    marketplaceAllocations: marketplaceData.map((a) => ({ noteId: a.noteId, participantId: a.participantId, coinsAllocated: a.coinsAllocated })),
+    matrixPositions: Array.from(matrixPositionsByNote.entries()).map(([noteId, p]) => ({ noteId, xCoord: p.x, yCoord: p.y })),
+    staircasePositions: Array.from(staircaseScoresByNote.entries()).map(([noteId, score]) => ({ noteId, score })),
+    surveyResponses: surveyResponseRows,
+    kbChunkIds: kbChunks.map((c) => c.id),
+    kbContentHash: hashKbChunkContents(kbChunks.map((c) => ({ id: c.id, content: c.content }))),
+  };
+  return computeCohortInputsHash(inputs);
+}
+
+/**
+ * Recompute the canonical PersonalizedInputs hash for a participant against
+ * the workspace's most recent cohort result.
+ */
+export async function getCurrentPersonalizedInputsHash(
+  spaceId: string,
+  participantId: string,
+): Promise<string | null> {
+  const [participant] = await db.select().from(participants).where(eq(participants.id, participantId)).limit(1);
+  if (!participant) return null;
+
+  const [latestCohort] = await db
+    .select()
+    .from(cohortResults)
+    .where(eq(cohortResults.spaceId, spaceId))
+    .orderBy(sql`${cohortResults.createdAt} DESC`)
+    .limit(1);
+
+  const [pNotes, pVotes, pRankings, pAllocs, allVotes] = await Promise.all([
+    db.select().from(notes).where(and(eq(notes.spaceId, spaceId), eq(notes.participantId, participantId))),
+    db.select().from(votes).where(and(eq(votes.spaceId, spaceId), eq(votes.participantId, participantId))),
+    db.select().from(rankings).where(and(eq(rankings.spaceId, spaceId), eq(rankings.participantId, participantId))),
+    db.select().from(marketplaceAllocations).where(and(eq(marketplaceAllocations.spaceId, spaceId), eq(marketplaceAllocations.participantId, participantId))),
+    db.select().from(votes).where(eq(votes.spaceId, spaceId)),
+  ]);
+
+  const winsByNote = new Map<string, number>();
+  const cmpByNote = new Map<string, number>();
+  for (const v of allVotes) {
+    winsByNote.set(v.winnerNoteId, (winsByNote.get(v.winnerNoteId) ?? 0) + 1);
+    cmpByNote.set(v.winnerNoteId, (cmpByNote.get(v.winnerNoteId) ?? 0) + 1);
+    cmpByNote.set(v.loserNoteId, (cmpByNote.get(v.loserNoteId) ?? 0) + 1);
+  }
+  const noteImpacts = pNotes.map((n) => ({
+    noteId: n.id,
+    wins: winsByNote.get(n.id) ?? 0,
+    totalComparisons: cmpByNote.get(n.id) ?? 0,
+  }));
+
+  return computePersonalizedInputsHash({
+    spaceId,
+    participantId,
+    participantDisplayName: participant.displayName ?? null,
+    cohortResultId: latestCohort?.id ?? null,
+    cohortInputsHash: latestCohort?.inputsHash ?? '',
+    cohortSummary: latestCohort?.summary ?? null,
+    participantNotes: pNotes.map((n) => ({ id: n.id, content: n.content, manualCategoryId: n.manualCategoryId ?? null })),
+    participantVotes: pVotes.map((v) => ({ winnerNoteId: v.winnerNoteId, loserNoteId: v.loserNoteId })),
+    participantRankings: pRankings.map((r) => ({ noteId: r.noteId, rank: r.rank })),
+    participantAllocations: pAllocs.map((a) => ({ noteId: a.noteId, coinsAllocated: a.coinsAllocated })),
+    noteImpacts,
+  });
 }
