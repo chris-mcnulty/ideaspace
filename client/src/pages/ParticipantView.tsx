@@ -510,7 +510,7 @@ export default function ParticipantView() {
               </span>
             </div>
             <Badge variant={isConnected ? "default" : "secondary"} data-testid="status-connection">
-              <div className={`mr-1 h-2 w-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
+              <div className={`mr-1 h-2 w-2 rounded-full ${isConnected ? 'bg-green-500 motion-safe:animate-pulse' : 'bg-gray-500'}`} />
               {isConnected ? "Connected" : "Disconnected"}
             </Badge>
           </div>

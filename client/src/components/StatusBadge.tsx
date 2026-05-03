@@ -16,7 +16,7 @@ export default function StatusBadge({ status, className }: StatusBadgeProps) {
     draft: { label: "Draft", color: "bg-muted text-muted-foreground" },
     open: { label: "Open", color: "bg-green-500 text-white" },
     closed: { label: "Closed", color: "bg-gray-500 text-white" },
-    processing: { label: "Processing", color: "bg-blue-500 text-white animate-pulse" },
+    processing: { label: "Processing", color: "bg-blue-500 text-white motion-safe:animate-pulse" },
     archived: { label: "Archived", color: "bg-gray-400 text-white" },
     ideation: { label: "Ideation", color: "bg-yellow-500 text-white" },
     ideate: { label: "Ideation", color: "bg-yellow-500 text-white" },

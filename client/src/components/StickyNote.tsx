@@ -68,7 +68,7 @@ export default function StickyNote({
         "group relative flex min-h-[200px] w-full cursor-pointer flex-col rounded-xl border-2 p-5 shadow-lg transition-all hover:shadow-xl hover:-translate-y-0.5",
         noteColor,
         selected && "ring-2 ring-primary ring-offset-2",
-        isNew && "animate-pulse ring-2 ring-primary/50",
+        isNew && "ring-2 ring-primary/50 motion-safe:animate-pulse",
         isSeedIdea && "ring-1 ring-indigo-400/50",
         className
       )}

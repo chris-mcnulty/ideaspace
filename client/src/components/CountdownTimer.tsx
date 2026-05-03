@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Clock, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 
 interface CountdownTimerProps {
   endTime: Date | string | null;
@@ -20,6 +21,7 @@ export function CountdownTimer({
 }: CountdownTimerProps) {
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
   const [isExpired, setIsExpired] = useState(false);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     if (!endTime) {
@@ -103,7 +105,7 @@ export function CountdownTimer({
     return (
       <Badge
         variant="destructive"
-        className={cn(sizeClasses[size], "gap-1.5 animate-pulse", className)}
+        className={cn(sizeClasses[size], "gap-1.5", !reducedMotion && "animate-pulse", className)}
         data-testid="timer-expired"
       >
         {showIcon && <AlertTriangle className={iconSizes[size]} />}
@@ -118,7 +120,7 @@ export function CountdownTimer({
       className={cn(
         sizeClasses[size],
         "gap-1.5 transition-colors duration-300",
-        isUrgent && "animate-pulse",
+        isUrgent && !reducedMotion && "animate-pulse",
         isCritical && "bg-red-600 hover:bg-red-600 text-white border-red-600",
         isWarning && "bg-yellow-500/20 hover:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-500",
         className

@@ -30,7 +30,7 @@ export default function TimerBar({
       <div className="px-6 py-3">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <Clock className={cn("h-5 w-5", isLowTime && "text-destructive animate-pulse")} />
+            <Clock className={cn("h-5 w-5", isLowTime && "text-destructive motion-safe:animate-pulse")} />
             <div
               className={cn(
                 "font-mono text-4xl font-bold tabular-nums",

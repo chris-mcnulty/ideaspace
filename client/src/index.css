@@ -324,3 +324,43 @@
     background-clip: text;
   }
 }
+
+/*
+ * Respect users' reduced-motion preference (WCAG 2.3.3).
+ * Disables non-essential motion across the app: pulses, ping, bounce,
+ * decorative transitions, scale/translate hovers, and Radix open/close
+ * flourishes. Loading spinners (animate-spin) are intentionally preserved
+ * because they convey ongoing progress and are considered essential
+ * feedback rather than decorative motion.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-spin {
+    animation-duration: 1.5s !important;
+    animation-iteration-count: infinite !important;
+  }
+
+  .animate-pulse,
+  .animate-ping,
+  .animate-bounce {
+    animation: none !important;
+  }
+
+  .hover\:-translate-y-0\.5:hover,
+  .hover\:-translate-y-1:hover,
+  .hover\:translate-y-0\.5:hover,
+  .hover\:translate-y-1:hover,
+  .hover\:scale-105:hover,
+  .hover\:scale-110:hover,
+  .hover\:scale-95:hover {
+    transform: none !important;
+  }
+}
