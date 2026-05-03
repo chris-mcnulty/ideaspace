@@ -1663,16 +1663,19 @@ export class DbStorage implements IStorage {
 
     // ts_headline emits private markers; route layer escapes the snippet
     // and replaces markers with controlled <b>/</b> tags (XSS-safe).
+    // NOTE: do not alias knowledge_base_documents — scopeSql references the
+    // unaliased table via drizzle's ${knowledgeBaseDocuments.column}, so an
+    // alias would make those references invalid in Postgres.
     const rows = await db.execute(sql`
       SELECT
         c.id, c.document_id AS "documentId", c.chunk_index AS "chunkIndex",
         c.content, c.created_at AS "createdAt",
-        d.title AS "documentTitle",
+        ${knowledgeBaseDocuments.title} AS "documentTitle",
         ts_rank_cd(c.search_vector, to_tsquery('english', ${tsqueryString})) AS rank,
         ts_headline('english', c.content, to_tsquery('english', ${tsqueryString}),
           'StartSel=__KB_HL_START__, StopSel=__KB_HL_END__, MaxWords=35, MinWords=15, ShortWord=3, MaxFragments=2') AS snippet
       FROM ${knowledgeBaseChunks} c
-      INNER JOIN ${knowledgeBaseDocuments} d ON d.id = c.document_id
+      INNER JOIN ${knowledgeBaseDocuments} ON ${knowledgeBaseDocuments.id} = c.document_id
       WHERE c.search_vector @@ to_tsquery('english', ${tsqueryString})
         AND (${scopeSql})
       ORDER BY rank DESC
