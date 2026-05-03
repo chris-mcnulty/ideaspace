@@ -8,7 +8,7 @@ import { getUserIdFromUpgradeRequest } from "./session";
 import oauthRoutes from "./routes/auth-oauth";
 import entraRoutes from "./routes/auth-entra";
 import { db } from "./db";
-import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, type Space, type InsertSpace, organizations, users, companyAdmins, knowledgeBaseDocuments, workspaceTemplates, workspaceTemplateNotes, aiUsageLog, insertIdeaSchema, insertWorkspaceModuleSchema, insertWorkspaceModuleRunSchema, insertPriorityMatrixSchema, insertPriorityMatrixPositionSchema, insertStaircaseModuleSchema, insertStaircasePositionSchema, projectMembers, categories, notes, participants, projects, spaces } from "@shared/schema";
+import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, type Space, type InsertSpace, organizations, users, companyAdmins as companyAdminsTable, knowledgeBaseDocuments, workspaceTemplates, workspaceTemplateNotes, aiUsageLog, insertIdeaSchema, insertWorkspaceModuleSchema, insertWorkspaceModuleRunSchema, insertPriorityMatrixSchema, insertPriorityMatrixPositionSchema, insertStaircaseModuleSchema, insertStaircasePositionSchema, projectMembers, categories, notes, participants, projects, spaces } from "@shared/schema";
 import { CSV_IMPORT_TYPES, csvConfirmTemplatesBodySchema, csvConfirmUsersBodySchema, csvConfirmIdeasBodySchema, type CsvImportType } from "@shared/csvImport";
 import { buildCsvPreview, buildErrorReportCsv } from "./services/csvImport";
 import { uploadImage, validateImageFile, cleanupTempFile } from "./middleware/uploadMiddleware";
@@ -3272,6 +3272,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 userId: user.id,
                 role: row.role === "company_admin" ? "admin" : "member",
               }).onConflictDoNothing();
+            }
+            // company_admin role requires a row in the company_admins
+            // association table — without it, downstream authz checks
+            // (org-scoped permissions, notifications) skip the user.
+            if (row.role === "company_admin") {
+              await tx.insert(companyAdminsTable).values({
+                userId: user.id,
+                organizationId: user.organizationId,
+              });
             }
           }
           out.push({ id: user.id, email: user.email, organizationId: user.organizationId });

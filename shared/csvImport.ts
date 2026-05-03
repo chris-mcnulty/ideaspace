@@ -46,7 +46,11 @@ export type UserCsvRow = z.infer<typeof userCsvRowSchema>;
 export const ideaCsvRowSchema = z.object({
   workspaceCode: trimmed.regex(/^\d{4}-\d{4}$/, "workspaceCode must look like nnnn-nnnn"),
   text: trimmed.min(1, "text is required").max(2000),
-  category: optionalText,
+  // Normalize the exporter's "Uncategorized" sentinel back to undefined so
+  // re-importing a per-workspace export does not create a real category.
+  category: optionalText.transform((v) =>
+    v && v.trim().toLowerCase() === "uncategorized" ? undefined : v,
+  ),
 });
 export type IdeaCsvRow = z.infer<typeof ideaCsvRowSchema>;
 

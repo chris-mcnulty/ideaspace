@@ -18,7 +18,26 @@ import {
   buildCsvPreview,
   type CsvImportType,
   type CsvPreviewResponse,
+  type TemplateCsvRow,
+  type UserCsvRow,
+  type IdeaCsvRow,
 } from "@shared/csvImport";
+
+type ImportRow = TemplateCsvRow | UserCsvRow | IdeaCsvRow;
+type ImportPreview = CsvPreviewResponse<ImportRow>;
+
+interface UsersConfirmResult { created?: number; invites?: { sent?: number; failed?: number } }
+interface IdeasConfirmResult { notes?: number; spaces?: number }
+interface TemplatesConfirmResult { templates?: { id: string }[] }
+type ConfirmResult = UsersConfirmResult | IdeasConfirmResult | TemplatesConfirmResult;
+
+interface ConfirmFailure { row: number; message: string }
+interface ConfirmDuplicate { email: string }
+interface ConfirmErrorBody {
+  failures?: ConfirmFailure[];
+  duplicates?: ConfirmDuplicate[];
+  error?: string | Record<string, unknown>;
+}
 
 const TEMPLATES_SAMPLE = `${TEMPLATE_CSV_HEADERS.join(",")}
 "Q1 Strategy","Quarterly planning template","Increase ARR by 20%|Goals
@@ -52,7 +71,7 @@ export function ImportsTab() {
   const [type, setType] = useState<CsvImportType>("templates");
   const [file, setFile] = useState<File | null>(null);
   const [csvText, setCsvText] = useState<string>("");
-  const [serverPreview, setServerPreview] = useState<CsvPreviewResponse<any> | null>(null);
+  const [serverPreview, setServerPreview] = useState<ImportPreview | null>(null);
   const [sendInvites, setSendInvites] = useState(true);
   const [defaultWorkspaceCode, setDefaultWorkspaceCode] = useState<string>("");
 
@@ -68,10 +87,10 @@ export function ImportsTab() {
   // Client-side parse + Zod validation using the shared schema. Provides
   // instant feedback before the server round-trip; the server preview
   // remains the authoritative source for DB-aware checks.
-  const localPreview = useMemo<CsvPreviewResponse<any> | null>(() => {
+  const localPreview = useMemo<ImportPreview | null>(() => {
     if (!csvText) return null;
     try {
-      return buildCsvPreview<any>(type, csvText, {
+      return buildCsvPreview<ImportRow>(type, csvText, {
         defaultWorkspaceCode: type === "ideas" && defaultWorkspaceCode.trim() ? defaultWorkspaceCode.trim() : undefined,
       });
     } catch {
@@ -95,15 +114,16 @@ export function ImportsTab() {
         const text = await res.text();
         throw new Error(text || `Preview failed: ${res.status}`);
       }
-      return (await res.json()) as CsvPreviewResponse<any>;
+      return (await res.json()) as ImportPreview;
     },
     onSuccess: (data) => {
       setServerPreview(data);
       toast({ title: "Server preview ready", description: `${data.validRows.length} valid / ${data.errors.length} errors (DB-checked)` });
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       setServerPreview(null);
-      toast({ title: "Preview failed", description: err?.message ?? "Unknown error", variant: "destructive" });
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      toast({ title: "Preview failed", description: msg, variant: "destructive" });
     },
   });
 
@@ -117,13 +137,13 @@ export function ImportsTab() {
       const body: Record<string, unknown> = { rows: serverPreview.validRows };
       if (type === "users") body.sendInvites = sendInvites;
       const res = await apiRequest("POST", url, body);
-      return res.json();
+      return (await res.json()) as ConfirmResult;
     },
-    onSuccess: (data: any) => {
+    onSuccess: (data) => {
       const summary =
-        type === "templates" ? `Imported ${data.templates?.length ?? 0} templates`
-          : type === "users" ? `Created ${data.created ?? 0} users (invites: ${data.invites?.sent ?? 0} sent, ${data.invites?.failed ?? 0} failed)`
-          : `Imported ${data.notes ?? 0} ideas across ${data.spaces ?? 0} workspace(s)`;
+        type === "templates" ? `Imported ${(data as TemplatesConfirmResult).templates?.length ?? 0} templates`
+          : type === "users" ? `Created ${(data as UsersConfirmResult).created ?? 0} users (invites: ${(data as UsersConfirmResult).invites?.sent ?? 0} sent, ${(data as UsersConfirmResult).invites?.failed ?? 0} failed)`
+          : `Imported ${(data as IdeasConfirmResult).notes ?? 0} ideas across ${(data as IdeasConfirmResult).spaces ?? 0} workspace(s)`;
       toast({ title: "Import successful", description: summary });
       setServerPreview(null);
       setFile(null);
@@ -135,15 +155,15 @@ export function ImportsTab() {
         queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       }
     },
-    onError: (err: any) => {
-      let msg = err?.message ?? "Unknown error";
+    onError: (err: unknown) => {
+      let msg = err instanceof Error ? err.message : "Unknown error";
       try {
-        const parsed = JSON.parse(msg.replace(/^\d+:\s*/, ""));
-        if (parsed?.failures?.length) {
-          msg = parsed.failures.map((f: any) => `Row ${f.row}: ${f.message}`).join("\n");
-        } else if (parsed?.duplicates?.length) {
-          msg = "Already registered: " + parsed.duplicates.map((d: any) => d.email).join(", ");
-        } else if (parsed?.error) {
+        const parsed = JSON.parse(msg.replace(/^\d+:\s*/, "")) as ConfirmErrorBody;
+        if (parsed.failures?.length) {
+          msg = parsed.failures.map((f) => `Row ${f.row}: ${f.message}`).join("\n");
+        } else if (parsed.duplicates?.length) {
+          msg = "Already registered: " + parsed.duplicates.map((d) => d.email).join(", ");
+        } else if (parsed.error) {
           msg = typeof parsed.error === "string" ? parsed.error : JSON.stringify(parsed.error);
         }
       } catch {
@@ -185,32 +205,35 @@ export function ImportsTab() {
     URL.revokeObjectURL(url);
   };
 
-  const renderPreviewRow = (row: any, idx: number) => {
+  const renderPreviewRow = (row: ImportRow, idx: number) => {
     if (type === "templates") {
+      const t = row as TemplateCsvRow;
       return (
         <TableRow key={idx} data-testid={`row-preview-${idx}`}>
-          <TableCell>{row.name}</TableCell>
-          <TableCell className="text-muted-foreground text-xs">{row.description ?? ""}</TableCell>
-          <TableCell>{row.ideas?.length ?? 0}</TableCell>
-          <TableCell>{row.categories?.length ?? 0}</TableCell>
+          <TableCell>{t.name}</TableCell>
+          <TableCell className="text-muted-foreground text-xs">{t.description ?? ""}</TableCell>
+          <TableCell>{t.ideas?.length ?? 0}</TableCell>
+          <TableCell>{t.categories?.length ?? 0}</TableCell>
         </TableRow>
       );
     }
     if (type === "users") {
+      const u = row as UserCsvRow;
       return (
         <TableRow key={idx} data-testid={`row-preview-${idx}`}>
-          <TableCell>{row.email}</TableCell>
-          <TableCell>{row.displayName}</TableCell>
-          <TableCell><Badge variant="secondary">{row.role}</Badge></TableCell>
-          <TableCell className="text-muted-foreground text-xs">{row.organization ?? ""}</TableCell>
+          <TableCell>{u.email}</TableCell>
+          <TableCell>{u.displayName}</TableCell>
+          <TableCell><Badge variant="secondary">{u.role}</Badge></TableCell>
+          <TableCell className="text-muted-foreground text-xs">{u.organization ?? ""}</TableCell>
         </TableRow>
       );
     }
+    const i = row as IdeaCsvRow;
     return (
       <TableRow key={idx} data-testid={`row-preview-${idx}`}>
-        <TableCell><code className="text-xs">{row.workspaceCode}</code></TableCell>
-        <TableCell>{row.text}</TableCell>
-        <TableCell className="text-muted-foreground text-xs">{row.category ?? ""}</TableCell>
+        <TableCell><code className="text-xs">{i.workspaceCode}</code></TableCell>
+        <TableCell>{i.text}</TableCell>
+        <TableCell className="text-muted-foreground text-xs">{i.category ?? ""}</TableCell>
       </TableRow>
     );
   };
