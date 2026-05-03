@@ -271,6 +271,25 @@ export interface IStorage {
   deleteNote(id: string): Promise<boolean>;
   deleteNotes(ids: string[]): Promise<boolean>;
 
+  // Pulse aggregates (cheap counts/distincts for the live dashboard)
+  getPulseAggregates(
+    spaceId: string,
+    options?: { matrixId?: string | null; staircaseId?: string | null; recentSinceMs?: number },
+  ): Promise<{
+    noteCount: number;
+    voteCount: number;
+    distinctNoteParticipants: string[];
+    distinctVoteParticipants: string[];
+    distinctRankingParticipants: string[];
+    distinctMarketplaceParticipants: string[];
+    distinctSurveyParticipants: string[];
+    distinctMatrixParticipants: string[];
+    distinctStaircaseParticipants: string[];
+    noteCountsByParticipant: Array<{ participantId: string; count: number }>;
+    voteCountsByParticipant: Array<{ participantId: string; count: number }>;
+    recentNoteTimestamps: number[];
+  }>;
+
   // Categories
   getCategory(id: string): Promise<Category | undefined>;
   getCategoriesBySpace(spaceId: string): Promise<Category[]>;
@@ -1338,6 +1357,141 @@ export class DbStorage implements IStorage {
       ids.map(id => eq(notes.id, id)).reduce((a, b) => and(a, b) as any)
     );
     return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async getPulseAggregates(
+    spaceId: string,
+    options?: { matrixId?: string | null; staircaseId?: string | null; recentSinceMs?: number },
+  ): Promise<{
+    noteCount: number;
+    voteCount: number;
+    distinctNoteParticipants: string[];
+    distinctVoteParticipants: string[];
+    distinctRankingParticipants: string[];
+    distinctMarketplaceParticipants: string[];
+    distinctSurveyParticipants: string[];
+    distinctMatrixParticipants: string[];
+    distinctStaircaseParticipants: string[];
+    noteCountsByParticipant: Array<{ participantId: string; count: number }>;
+    voteCountsByParticipant: Array<{ participantId: string; count: number }>;
+    recentNoteTimestamps: number[];
+  }> {
+    const matrixId = options?.matrixId ?? null;
+    const staircaseId = options?.staircaseId ?? null;
+    const recentSinceMs = options?.recentSinceMs ?? 10 * 60 * 1000;
+    const cutoff = new Date(Date.now() - recentSinceMs);
+
+    const dedupe = (rows: Array<{ participantId: string | null }>): string[] => {
+      const out: string[] = [];
+      for (const r of rows) if (r.participantId) out.push(r.participantId);
+      return out;
+    };
+
+    const [
+      noteCountRow,
+      voteCountRow,
+      distinctNoteRows,
+      distinctVoteRows,
+      distinctRankingRows,
+      distinctMarketplaceRows,
+      distinctSurveyRows,
+      distinctMatrixRows,
+      distinctStaircaseRows,
+      noteCountsByParticipantRows,
+      voteCountsByParticipantRows,
+      recentNoteRows,
+    ] = await Promise.all([
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(notes)
+        .where(eq(notes.spaceId, spaceId)),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(votes)
+        .where(eq(votes.spaceId, spaceId)),
+      db
+        .selectDistinct({ participantId: notes.participantId })
+        .from(notes)
+        .where(eq(notes.spaceId, spaceId)),
+      db
+        .selectDistinct({ participantId: votes.participantId })
+        .from(votes)
+        .where(eq(votes.spaceId, spaceId)),
+      db
+        .selectDistinct({ participantId: rankings.participantId })
+        .from(rankings)
+        .where(eq(rankings.spaceId, spaceId)),
+      db
+        .selectDistinct({ participantId: marketplaceAllocations.participantId })
+        .from(marketplaceAllocations)
+        .where(eq(marketplaceAllocations.spaceId, spaceId)),
+      db
+        .selectDistinct({ participantId: surveyResponses.participantId })
+        .from(surveyResponses)
+        .where(eq(surveyResponses.spaceId, spaceId)),
+      matrixId
+        ? db
+            .selectDistinct({ participantId: priorityMatrixPositions.participantId })
+            .from(priorityMatrixPositions)
+            .where(eq(priorityMatrixPositions.matrixId, matrixId))
+        : Promise.resolve([] as Array<{ participantId: string | null }>),
+      staircaseId
+        ? db
+            .selectDistinct({ participantId: staircasePositions.participantId })
+            .from(staircasePositions)
+            .where(eq(staircasePositions.staircaseId, staircaseId))
+        : Promise.resolve([] as Array<{ participantId: string | null }>),
+      db
+        .select({
+          participantId: notes.participantId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(notes)
+        .where(eq(notes.spaceId, spaceId))
+        .groupBy(notes.participantId),
+      db
+        .select({
+          participantId: votes.participantId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(votes)
+        .where(eq(votes.spaceId, spaceId))
+        .groupBy(votes.participantId),
+      db
+        .select({ createdAt: notes.createdAt })
+        .from(notes)
+        .where(and(eq(notes.spaceId, spaceId), gte(notes.createdAt, cutoff))),
+    ]);
+
+    const recentNoteTimestamps = recentNoteRows
+      .map(r => (r.createdAt instanceof Date ? r.createdAt.getTime() : new Date(String(r.createdAt)).getTime()))
+      .filter(t => Number.isFinite(t))
+      .sort((a, b) => a - b);
+
+    const filterCounts = (
+      rows: Array<{ participantId: string | null; count: number }>,
+    ): Array<{ participantId: string; count: number }> => {
+      const out: Array<{ participantId: string; count: number }> = [];
+      for (const r of rows) {
+        if (r.participantId) out.push({ participantId: r.participantId, count: Number(r.count) || 0 });
+      }
+      return out;
+    };
+
+    return {
+      noteCount: Number(noteCountRow[0]?.count) || 0,
+      voteCount: Number(voteCountRow[0]?.count) || 0,
+      distinctNoteParticipants: dedupe(distinctNoteRows),
+      distinctVoteParticipants: dedupe(distinctVoteRows),
+      distinctRankingParticipants: dedupe(distinctRankingRows),
+      distinctMarketplaceParticipants: dedupe(distinctMarketplaceRows),
+      distinctSurveyParticipants: dedupe(distinctSurveyRows),
+      distinctMatrixParticipants: dedupe(distinctMatrixRows),
+      distinctStaircaseParticipants: dedupe(distinctStaircaseRows),
+      noteCountsByParticipant: filterCounts(noteCountsByParticipantRows),
+      voteCountsByParticipant: filterCounts(voteCountsByParticipantRows),
+      recentNoteTimestamps,
+    };
   }
 
   // Categories

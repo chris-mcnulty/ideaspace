@@ -4622,79 +4622,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Fetch everything in parallel. For 100 participants the per-table row
-      // counts are small (rankings/votes/allocations bounded by N×ideas) and
-      // these tables are all FK-indexed on space_id, so this stays cheap.
-      const [
-        participants,
-        notesList,
-        votesList,
-        rankingsList,
-        marketplaceList,
-        surveyResponsesList,
-        modules,
-        priorityMatrix,
-        staircaseModule,
-      ] = await Promise.all([
+      // Fetch lightweight metadata first so we can pass matrix/staircase IDs
+      // into the aggregate query.
+      const [participants, modules, priorityMatrix, staircaseModule] = await Promise.all([
         storage.getParticipantsBySpace(spaceId),
-        storage.getNotesBySpace(spaceId),
-        storage.getVotesBySpace(spaceId),
-        storage.getRankingsBySpace(spaceId),
-        storage.getMarketplaceAllocationsBySpace(spaceId),
-        storage.getSurveyResponsesBySpace(spaceId),
         storage.getWorkspaceModules(spaceId),
         storage.getPriorityMatrix(spaceId),
         storage.getStaircaseModule(spaceId),
       ]);
 
-      const [matrixPositions, staircasePositions] = await Promise.all([
-        priorityMatrix ? storage.getPriorityMatrixPositions(priorityMatrix.id) : Promise.resolve([]),
-        staircaseModule ? storage.getStaircasePositions(staircaseModule.id) : Promise.resolve([]),
-      ]);
+      // Aggregated counts/distincts replace the previous full row fetches.
+      // Each underlying query is a COUNT / COUNT(DISTINCT) / GROUP BY that
+      // scales with cohort size rather than total activity, keeping payloads
+      // and DB work bounded as cohorts grow past the 100-participant scope.
+      const pulseStart = Date.now();
+      const aggregates = await storage.getPulseAggregates(spaceId, {
+        matrixId: priorityMatrix?.id ?? null,
+        staircaseId: staircaseModule?.id ?? null,
+        recentSinceMs: 10 * 60 * 1000,
+      });
+      const pulseDurationMs = Date.now() - pulseStart;
 
       const joined = participants.length;
       const online = participants.filter(p => p.isOnline).length;
 
-      // Build per-module participant ID arrays (distinct participants who
-      // engaged with each module). Ranking/marketplace/survey/matrix/staircase
-      // are upsert-style flows, so distinct participants — not raw row counts —
-      // are the right tile semantics.
-      const distinctPids = (rows: { participantId: string | null }[]) => {
-        const s = new Set<string>();
-        for (const r of rows) if (r.participantId) s.add(r.participantId);
-        return Array.from(s);
-      };
       const engagedByModule: Record<string, string[]> = {
-        ideation: distinctPids(notesList),
-        'pairwise-voting': distinctPids(votesList),
-        'stack-ranking': distinctPids(rankingsList),
-        marketplace: distinctPids(marketplaceList),
-        survey: distinctPids(surveyResponsesList),
-        'priority-matrix': distinctPids(matrixPositions),
-        staircase: distinctPids(staircasePositions),
+        ideation: aggregates.distinctNoteParticipants,
+        'pairwise-voting': aggregates.distinctVoteParticipants,
+        'stack-ranking': aggregates.distinctRankingParticipants,
+        marketplace: aggregates.distinctMarketplaceParticipants,
+        survey: aggregates.distinctSurveyParticipants,
+        'priority-matrix': aggregates.distinctMatrixParticipants,
+        staircase: aggregates.distinctStaircaseParticipants,
       };
       const enabledModules = modules.filter(m => m.enabled).map(m => m.moduleType);
 
-      // Full contributor stats (notes + votes per participant). The client
-      // derives the top-N leaderboard so it can promote previously-unseen
-      // contributors live without needing a refetch.
+      // Contributor stats (notes + votes per participant) come from GROUP BY
+      // aggregates so the client can render the leaderboard without us shipping
+      // raw rows.
       const contributorStats: Record<string, { notes: number; votes: number }> = {};
-      const bump = (pid: string | null, key: 'notes' | 'votes') => {
-        if (!pid) return;
-        const cur = contributorStats[pid] || { notes: 0, votes: 0 };
-        cur[key] += 1;
-        contributorStats[pid] = cur;
-      };
-      for (const n of notesList) bump(n.participantId, 'notes');
-      for (const v of votesList) bump(v.participantId, 'votes');
+      for (const r of aggregates.noteCountsByParticipant) {
+        const cur = contributorStats[r.participantId] || { notes: 0, votes: 0 };
+        cur.notes = r.count;
+        contributorStats[r.participantId] = cur;
+      }
+      for (const r of aggregates.voteCountsByParticipant) {
+        const cur = contributorStats[r.participantId] || { notes: 0, votes: 0 };
+        cur.votes = r.count;
+        contributorStats[r.participantId] = cur;
+      }
       const participantNames: Record<string, string> = {};
       for (const p of participants) participantNames[p.id] = p.displayName;
 
-      const cutoff = Date.now() - 10 * 60 * 1000;
-      const recentNoteTimestamps = notesList
-        .map(n => (n.createdAt instanceof Date ? n.createdAt.getTime() : new Date(String(n.createdAt)).getTime()))
-        .filter(t => Number.isFinite(t) && t >= cutoff)
-        .sort((a, b) => a - b);
+      // Lightweight benchmark logging so growth past the documented scope is
+      // observable. Useful when validating with 500-participant test cohorts.
+      if (joined >= 200 || pulseDurationMs > 250) {
+        console.log(
+          `[pulse] spaceId=${spaceId} participants=${joined} aggregateMs=${pulseDurationMs}`,
+        );
+      }
 
       // Per-minute activity heatmap across the full session, sourced from the
       // append-only `pulse_activity_events` log. We read from the event log
@@ -4707,14 +4693,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         participants: { joined, online },
         totals: {
-          ideas: notesList.length,
-          votes: votesList.length,
+          ideas: aggregates.noteCount,
+          votes: aggregates.voteCount,
         },
         engagedByModule,
         enabledModules,
         contributorStats,
         participantNames,
-        recentNoteTimestamps,
+        recentNoteTimestamps: aggregates.recentNoteTimestamps,
         activitySeries,
         generatedAt: new Date().toISOString(),
       });
