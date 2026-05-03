@@ -32,6 +32,7 @@ interface Note {
   author: string;
   category?: string;
   isAiCategory?: boolean;
+  aiGenerated?: boolean;
 }
 
 interface FacilitatorWorkspaceProps {
@@ -370,6 +371,7 @@ export default function FacilitatorWorkspace({
                             author={note.author}
                             category={note.category}
                             isAiCategory={note.isAiCategory}
+                            aiGenerated={note.aiGenerated}
                             selected={selectedNotes.has(note.id)}
                             onClick={() => toggleNoteSelection(note.id)}
                           />
@@ -443,6 +445,7 @@ export default function FacilitatorWorkspace({
                         author={note.author}
                         category={note.category}
                         isAiCategory={note.isAiCategory}
+                        aiGenerated={note.aiGenerated}
                         selected={selectedNotes.has(note.id)}
                         onClick={() => toggleNoteSelection(note.id)}
                       />

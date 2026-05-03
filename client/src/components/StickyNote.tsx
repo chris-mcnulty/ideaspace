@@ -19,6 +19,7 @@ interface StickyNoteProps {
   canDelete?: boolean;
   isNew?: boolean;
   isSeedIdea?: boolean;
+  aiGenerated?: boolean;
 }
 
 export default function StickyNote({
@@ -37,6 +38,7 @@ export default function StickyNote({
   canDelete = false,
   isNew = false,
   isSeedIdea = false,
+  aiGenerated = false,
 }: StickyNoteProps) {
   // High-contrast, vibrant colors for maximum visibility in both light and dark modes
   const colors = [
@@ -79,6 +81,20 @@ export default function StickyNote({
           <Badge className="bg-indigo-600 text-white border-0 gap-1 text-xs shadow-md">
             <Sparkles className="h-3 w-3" />
             Seed Idea
+          </Badge>
+        </div>
+      )}
+
+      {/* AI-Generated Badge */}
+      {aiGenerated && !isSeedIdea && (
+        <div
+          className="absolute -top-2 -left-2 z-10"
+          title="This idea was generated with AI assistance"
+          data-testid={`badge-ai-generated-${id}`}
+        >
+          <Badge className="bg-violet-600 text-white border-0 gap-1 text-xs shadow-md">
+            <Sparkles className="h-3 w-3" />
+            AI
           </Badge>
         </div>
       )}

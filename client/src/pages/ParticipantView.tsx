@@ -341,6 +341,7 @@ export default function ParticipantView() {
     isSeedIdea: boolean;
     isOwner: boolean;
     participantId?: string | null;
+    aiGenerated?: boolean;
   };
 
   const displayItems: DisplayItem[] = [
@@ -354,6 +355,7 @@ export default function ParticipantView() {
       isSeedIdea: false,
       isOwner: note.participantId === participantId,
       participantId: note.participantId,
+      aiGenerated: note.aiGenerated,
     })),
     // Add seed ideas from facilitator
     ...seedIdeas.map(idea => ({
@@ -656,6 +658,7 @@ export default function ParticipantView() {
                             }}
                             isNew={recentNoteIds.has(item.id)}
                             isSeedIdea={item.isSeedIdea}
+                            aiGenerated={item.aiGenerated}
                           />
                         );
                       })}
