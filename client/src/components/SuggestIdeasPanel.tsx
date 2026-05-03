@@ -189,7 +189,7 @@ export default function SuggestIdeasPanel({ spaceId }: SuggestIdeasPanelProps) {
                       <Button
                         size="sm"
                         onClick={() => handleAccept(s)}
-                        disabled={!(editDraft[s.id] ?? "").trim() || s.status === "accepting" as any}
+                        disabled={!(editDraft[s.id] ?? "").trim() || acceptMutation.isPending}
                         data-testid={`button-suggestion-save-${s.id}`}
                       >
                         <Check className="h-4 w-4" aria-hidden="true" />

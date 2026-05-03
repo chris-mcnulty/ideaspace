@@ -3772,6 +3772,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Workspace not found" });
       }
 
+      // Workspace-scoped authorization: global_admin OR company_admin of the
+      // owning org OR an explicit facilitator on this space.
+      const reqUser = req.user as User;
+      if (reqUser.role !== 'global_admin') {
+        const isCompanyAdminForOrg = reqUser.role === 'company_admin' && reqUser.organizationId === space.organizationId;
+        if (!isCompanyAdminForOrg) {
+          const facilitators = await storage.getSpaceFacilitatorsBySpace(spaceId);
+          if (!facilitators.some(f => f.userId === reqUser.id)) {
+            return res.status(403).json({ error: "Not authorized for this workspace" });
+          }
+        }
+      }
+
       const requestedCount = typeof req.body?.count === 'number' ? req.body.count : 8;
 
       // Build the existing-ideas list from BOTH session notes (participant
@@ -3842,6 +3855,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const spaceId = await resolveWorkspaceId(req.params.spaceId);
       if (!spaceId) {
         return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      const acceptSpace = await storage.getSpace(spaceId);
+      if (!acceptSpace) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      const reqUser2 = req.user as User;
+      if (reqUser2.role !== 'global_admin') {
+        const isCompanyAdminForOrg = reqUser2.role === 'company_admin' && reqUser2.organizationId === acceptSpace.organizationId;
+        if (!isCompanyAdminForOrg) {
+          const facilitators = await storage.getSpaceFacilitatorsBySpace(spaceId);
+          if (!facilitators.some(f => f.userId === reqUser2.id)) {
+            return res.status(403).json({ error: "Not authorized for this workspace" });
+          }
+        }
       }
 
       const acceptSchema = z.object({
