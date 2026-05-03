@@ -6324,9 +6324,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "No participant session found. Please rejoin the workspace." });
       }
 
-      // Get the most recent cohort result
+      // Get the most recent cohort result. Refuse to generate personalized
+      // results when the latest cohort row is stale relative to the
+      // workspace's current inputs, so we never seed personalized cache
+      // entries from outdated cohort grounding.
       const cohortResults = await storage.getCohortResultsBySpace(spaceId);
       const cohortResultId = cohortResults.length > 0 ? cohortResults[0].id : undefined;
+      if (cohortResults.length > 0) {
+        const stored = cohortResults[0];
+        const currentHash = await getCurrentCohortInputsHash(spaceId);
+        if (currentHash && (!stored.inputsHash || currentHash !== stored.inputsHash)) {
+          return res.status(409).json({
+            error: "Cohort results are stale; regenerate cohort results before personalizing.",
+            stale: true,
+          });
+        }
+      }
 
       // Generate personalized results
       const personalResult = await generatePersonalizedResults(
