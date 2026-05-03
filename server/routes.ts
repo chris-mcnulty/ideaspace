@@ -864,9 +864,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Hash the new password
       const hashedPassword = await hashPassword(newPassword);
       
-      // Update user's password
-      await storage.updateUser(resetToken.userId, { password: hashedPassword });
-      
+      // Update user's password and mark email as verified (covers both
+      // forgot-password resets and admin-imported users completing setup).
+      await storage.updateUser(resetToken.userId, { password: hashedPassword, emailVerified: true });
+
       // Mark token as used
       await storage.markPasswordResetTokenAsUsed(token);
       
@@ -3275,7 +3276,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return out;
       });
 
-      // After commit, fire off invite emails (best-effort; do not roll back).
+      // After commit, generate a password-setup token per imported user and
+      // fire off invite emails (best-effort; do not roll back). Reusing the
+      // password-reset flow lets imported users set a password and become
+      // emailVerified in one click — without that they cannot log in.
       const inviteResults = { sent: 0, failed: 0 };
       if (body.sendInvites) {
         const protocol = req.protocol;
@@ -3285,6 +3289,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const user = created[i];
           const row = resolvedRows[i];
           try {
+            const token = randomBytes(32).toString("hex");
+            const expiresAt = new Date();
+            expiresAt.setDate(expiresAt.getDate() + 7); // 7-day acceptance window
+            await storage.createPasswordResetToken({
+              userId: user.id,
+              token,
+              expiresAt,
+              used: false,
+            });
+
             const orgName = row.organizationId
               ? (allOrgs.find((o) => o.id === row.organizationId)?.name ?? "Your Organization")
               : "Nebula";
@@ -3293,10 +3307,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
               role: row.role === "facilitator" || row.role === "company_admin" || row.role === "global_admin" ? "facilitator" : "participant",
               organizationName: orgName,
               workspaceName: "Nebula Account",
-              workspaceCode: "----", // Placeholder; not workspace-specific
-              joinUrl: `${baseUrl}/forgot-password?email=${encodeURIComponent(user.email)}`,
+              workspaceCode: "----",
+              joinUrl: `${baseUrl}/reset-password?token=${token}`,
               facilitatorName: currentUser.displayName ?? currentUser.email,
-              personalMessage: "An admin has created a Nebula account for you. Click the link to set your password and sign in.",
+              personalMessage: "An admin has created a Nebula account for you. Click the link to set your password and sign in. The link is valid for 7 days.",
             });
             inviteResults.sent++;
           } catch (emailErr) {
