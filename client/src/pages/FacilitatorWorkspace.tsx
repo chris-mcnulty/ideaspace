@@ -339,11 +339,12 @@ export default function FacilitatorWorkspace() {
   ]), []);
 
   // WebSocket connection for real-time updates
-  const handleWebSocketMessage = useCallback((message: { type: string; data: any }) => {
+  const handleWebSocketMessage = useCallback((message: { type: string; data: unknown }) => {
     if (PULSE_EVENTS.has(message.type)) {
       pulseSeqRef.current += 1;
       setLastPulseEvent({ type: message.type, data: message.data, seq: pulseSeqRef.current });
     }
+    const d = (message.data && typeof message.data === 'object' ? message.data : {}) as Record<string, unknown>;
     switch (message.type) {
       case 'note_created':
       case 'note_updated':
@@ -358,7 +359,7 @@ export default function FacilitatorWorkspace() {
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/categories`] });
         toast({
           title: "AI Categorization Complete",
-          description: message.data?.summary || "Notes have been organized into categories",
+          description: (typeof d.summary === 'string' ? d.summary : null) || "Notes have been organized into categories",
         });
         break;
       case 'category_created':
@@ -411,7 +412,7 @@ export default function FacilitatorWorkspace() {
         });
         break;
       case 'presence_changed':
-        setPresenceCount(typeof message.data?.count === 'number' ? message.data.count : null);
+        setPresenceCount(typeof d.count === 'number' ? d.count : null);
         break;
     }
   }, [params.space, toast, PULSE_EVENTS]);

@@ -3974,35 +3974,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const joined = participants.length;
       const online = participants.filter(p => p.isOnline).length;
 
-      const distinctIds = (rows: { participantId: string | null }[]) => {
+      // Build per-module participant ID arrays (distinct participants who
+      // engaged with each module). Ranking/marketplace/survey/matrix/staircase
+      // are upsert-style flows, so distinct participants — not raw row counts —
+      // are the right tile semantics.
+      const distinctPids = (rows: { participantId: string | null }[]) => {
         const s = new Set<string>();
         for (const r of rows) if (r.participantId) s.add(r.participantId);
-        return s.size;
+        return Array.from(s);
       };
-      const pct = (count: number) => (joined > 0 ? Math.round((count / joined) * 100) : 0);
-
-      const participantNotes = distinctIds(notesList);
-      const participantVoters = distinctIds(votesList);
-      const participantRankers = distinctIds(rankingsList);
-      const participantMarket = distinctIds(marketplaceList);
-      const participantSurvey = distinctIds(surveyResponsesList);
-      const participantMatrix = distinctIds(matrixPositions);
-      const participantStaircase = distinctIds(staircasePositions);
-
-      // Per-module participation: include only modules the workspace has
-      // configured + enabled, so the UI doesn't show 0% for unused modules.
-      const enabledTypes = new Set(modules.filter(m => m.enabled).map(m => m.moduleType));
-      const perModuleParticipation: Record<string, { engaged: number; total: number; percent: number }> = {};
-      const addPm = (key: string, engaged: number) => {
-        perModuleParticipation[key] = { engaged, total: joined, percent: pct(engaged) };
+      const engagedByModule: Record<string, string[]> = {
+        ideation: distinctPids(notesList),
+        'pairwise-voting': distinctPids(votesList),
+        'stack-ranking': distinctPids(rankingsList),
+        marketplace: distinctPids(marketplaceList),
+        survey: distinctPids(surveyResponsesList),
+        'priority-matrix': distinctPids(matrixPositions),
+        staircase: distinctPids(staircasePositions),
       };
-      if (enabledTypes.has('ideation')) addPm('ideation', participantNotes);
-      if (enabledTypes.has('pairwise-voting')) addPm('pairwise-voting', participantVoters);
-      if (enabledTypes.has('stack-ranking')) addPm('stack-ranking', participantRankers);
-      if (enabledTypes.has('marketplace')) addPm('marketplace', participantMarket);
-      if (enabledTypes.has('survey')) addPm('survey', participantSurvey);
-      if (enabledTypes.has('priority-matrix')) addPm('priority-matrix', participantMatrix);
-      if (enabledTypes.has('staircase')) addPm('staircase', participantStaircase);
+      const enabledModules = modules.filter(m => m.enabled).map(m => m.moduleType);
 
       // Top contributors leaderboard (notes authored + votes cast).
       const noteCountByPid = new Map<string, number>();
@@ -4038,16 +4028,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({
         participants: { joined, online },
-        counts: {
+        // Total ideas and total pairwise votes are append-only and meaningful
+        // as raw counts. Other tile values are derived client-side from
+        // engagedByModule (distinct participant sets) so re-submissions don't
+        // overcount.
+        totals: {
           ideas: notesList.length,
           votes: votesList.length,
-          rankings: rankingsList.length,
-          marketplaceAllocations: marketplaceList.length,
-          surveyResponses: surveyResponsesList.length,
-          matrixPlacements: matrixPositions.length,
-          staircasePlacements: staircasePositions.length,
         },
-        perModuleParticipation,
+        engagedByModule,
+        enabledModules,
         topContributors,
         recentNoteTimestamps,
         generatedAt: new Date().toISOString(),
@@ -4055,7 +4045,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error("[pulse] failed:", errorMessage);
-      res.status(500).json({ error: "Failed to load pulse snapshot", details: errorMessage });
+      res.status(500).json({ error: "Failed to load pulse snapshot" });
     }
   });
 
