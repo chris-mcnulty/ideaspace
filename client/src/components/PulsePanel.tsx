@@ -18,6 +18,7 @@ import {
   Trophy,
   Activity,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 interface PulseSnapshot {
   participants: { joined: number; online: number };
@@ -44,7 +45,7 @@ interface PulseSnapshot {
   generatedAt: string;
 }
 
-const MODULE_LABELS: Record<string, { label: string; icon: any }> = {
+const MODULE_LABELS: Record<string, { label: string; icon: LucideIcon }> = {
   ideation: { label: "Ideation", icon: StickyNote },
   "pairwise-voting": { label: "Pairwise Voting", icon: Vote },
   "stack-ranking": { label: "Stack Ranking", icon: ListOrdered },
@@ -61,7 +62,7 @@ function Tile({
   hint,
   testId,
 }: {
-  icon: any;
+  icon: LucideIcon;
   label: string;
   value: number | string;
   hint?: string;
@@ -149,45 +150,153 @@ function VelocitySparkline({ timestamps }: { timestamps: number[] }) {
   );
 }
 
+export interface PulseLiveEvent {
+  type: string;
+  data: unknown;
+  seq: number;
+}
+
 export interface PulsePanelProps {
   spaceId: string;
   /**
-   * Bumped by the parent whenever an event handled by the existing facilitator
-   * WS subscription arrives. The Pulse panel uses it to decide when to
-   * invalidate its snapshot query — that way every relevant live update
-   * (note_created, vote_recorded, ranking_submitted, etc.) drives the panel
-   * without spinning up a second WebSocket connection.
+   * The most recent Pulse-relevant WebSocket event observed by the parent.
+   * `seq` increments on every event so PulsePanel can react to the same `type`
+   * arriving repeatedly. PulsePanel applies an incremental delta to its local
+   * view for simple counter events (ideas/votes/rankings/etc.) and only falls
+   * back to a debounced snapshot refetch for events whose effect on counts is
+   * ambiguous (matrix/staircase position upserts, bulk note operations,
+   * module configuration changes).
    */
-  liveTick: number;
+  liveEvent?: PulseLiveEvent | null;
+  /**
+   * Authoritative live online-participant count surfaced by the existing
+   * facilitator WebSocket presence system. When provided, it replaces the
+   * snapshot's `participants.online` (which is derived from the persisted
+   * `participants.isOnline` flag and can lag the live presence map).
+   */
+  presenceCount?: number | null;
 }
 
-export default function PulsePanel({ spaceId, liveTick }: PulsePanelProps) {
-  const queryKey = [`/api/spaces/${spaceId}/pulse`];
+// Pulse-relevant event types whose payloads cannot be safely diffed into the
+// local view (bulk operations, position upserts that may or may not be net-new,
+// module config changes that alter which modules are active). For these we
+// trigger a debounced snapshot refetch rather than guessing.
+const REFETCH_EVENTS = new Set<string>([
+  "matrix_position_updated",
+  "staircase_position_updated",
+  "notes_deleted",
+  "notes_updated",
+  "notes_bulk_imported",
+  "module_configured",
+  "module_updated",
+  "categories_updated",
+]);
+
+function applyDelta(prev: PulseSnapshot, ev: PulseLiveEvent): PulseSnapshot {
+  const next: PulseSnapshot = {
+    ...prev,
+    participants: { ...prev.participants },
+    counts: { ...prev.counts },
+    recentNoteTimestamps: prev.recentNoteTimestamps,
+    topContributors: prev.topContributors,
+    perModuleParticipation: prev.perModuleParticipation,
+  };
+  const data = (ev.data && typeof ev.data === "object" ? ev.data : {}) as Record<string, unknown>;
+  const participantId = typeof data.participantId === "string" ? data.participantId : null;
+  const authorName = typeof data.authorName === "string" ? data.authorName : null;
+
+  switch (ev.type) {
+    case "note_created":
+      next.counts.ideas += 1;
+      next.recentNoteTimestamps = [...prev.recentNoteTimestamps, Date.now()];
+      if (participantId) {
+        const idx = prev.topContributors.findIndex(c => c.participantId === participantId);
+        if (idx >= 0) {
+          const updated = { ...prev.topContributors[idx], notes: prev.topContributors[idx].notes + 1 };
+          next.topContributors = [
+            ...prev.topContributors.slice(0, idx),
+            updated,
+            ...prev.topContributors.slice(idx + 1),
+          ].sort((a, b) => (b.notes + b.votes) - (a.notes + a.votes));
+        } else if (authorName) {
+          // New contributor — append; will be re-ordered on next snapshot.
+          next.topContributors = [
+            ...prev.topContributors,
+            { participantId, displayName: authorName, notes: 1, votes: 0 },
+          ]
+            .sort((a, b) => (b.notes + b.votes) - (a.notes + a.votes))
+            .slice(0, 5);
+        }
+      }
+      break;
+    case "note_deleted":
+      next.counts.ideas = Math.max(0, prev.counts.ideas - 1);
+      break;
+    case "vote_recorded":
+      next.counts.votes += 1;
+      if (participantId) {
+        const idx = prev.topContributors.findIndex(c => c.participantId === participantId);
+        if (idx >= 0) {
+          const updated = { ...prev.topContributors[idx], votes: prev.topContributors[idx].votes + 1 };
+          next.topContributors = [
+            ...prev.topContributors.slice(0, idx),
+            updated,
+            ...prev.topContributors.slice(idx + 1),
+          ].sort((a, b) => (b.notes + b.votes) - (a.notes + a.votes));
+        }
+      }
+      break;
+    case "ranking_submitted":
+      next.counts.rankings += 1;
+      break;
+    case "marketplace_allocation_submitted":
+      next.counts.marketplaceAllocations += 1;
+      break;
+    case "survey_response_submitted":
+      next.counts.surveyResponses += 1;
+      break;
+    case "participant_joined":
+      next.participants.joined += 1;
+      break;
+    case "participant_left":
+      next.participants.joined = Math.max(0, prev.participants.joined - 1);
+      break;
+    default:
+      // Unknown / non-incremental event — caller decides whether to refetch.
+      return prev;
+  }
+  return next;
+}
+
+export default function PulsePanel({ spaceId, liveEvent, presenceCount }: PulsePanelProps) {
+  const queryKey = useMemo(() => [`/api/spaces/${spaceId}/pulse`], [spaceId]);
   const { data, isLoading, error, refetch } = useQuery<PulseSnapshot>({
     queryKey,
     enabled: !!spaceId,
   });
 
-  // Local rolling buffer so the sparkline ticks instantly on each note_created
-  // without waiting for the snapshot refetch round-trip. We seed it from the
-  // server snapshot and append `Date.now()` whenever the parent's liveTick
-  // bumps for an idea event.
-  const [recentTs, setRecentTs] = useState<number[]>([]);
-  const lastIdeaTickRef = useRef<{ tick: number; spaceId: string } | null>(null);
-
+  // Local "view" derived from the snapshot but mutated incrementally on each
+  // live event. Replaced wholesale whenever the snapshot refetches.
+  const [view, setView] = useState<PulseSnapshot | null>(null);
   useEffect(() => {
-    if (data?.recentNoteTimestamps) {
-      setRecentTs(data.recentNoteTimestamps);
-    }
-  }, [data?.recentNoteTimestamps]);
+    if (data) setView(data);
+  }, [data]);
 
-  // Coalesce + debounce snapshot invalidations so a burst of WS events doesn't
-  // hammer the server. Up to one refetch per second.
+  // Apply incremental deltas from the parent's live WS feed.
+  const lastSeqRef = useRef<number>(-1);
+  useEffect(() => {
+    if (!liveEvent || liveEvent.seq === lastSeqRef.current) return;
+    lastSeqRef.current = liveEvent.seq;
+    setView(prev => (prev ? applyDelta(prev, liveEvent) : prev));
+  }, [liveEvent]);
+
+  // For events whose net effect on counts is ambiguous, fall back to a
+  // debounced snapshot refetch (≤1/sec).
   const lastInvalidatedAt = useRef<number>(0);
   const invalidateTimer = useRef<number | null>(null);
   useEffect(() => {
-    if (!spaceId) return;
-    if (liveTick === 0) return;
+    if (!spaceId || !liveEvent) return;
+    if (!REFETCH_EVENTS.has(liveEvent.type)) return;
     const since = Date.now() - lastInvalidatedAt.current;
     const fire = () => {
       lastInvalidatedAt.current = Date.now();
@@ -207,23 +316,23 @@ export default function PulsePanel({ spaceId, liveTick }: PulsePanelProps) {
         invalidateTimer.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveTick, spaceId]);
+  }, [liveEvent, spaceId, queryKey]);
 
-  // Trim the rolling buffer to the last 10 minutes whenever it changes or when
-  // a new tick fires. This keeps the sparkline accurate without polling.
+  // Periodically prune the rolling sparkline buffer to the last 10 minutes.
   useEffect(() => {
     const id = window.setInterval(() => {
-      setRecentTs(prev => {
+      setView(prev => {
+        if (!prev) return prev;
         const cutoff = Date.now() - 10 * 60 * 1000;
-        const next = prev.filter(t => t >= cutoff);
-        return next.length === prev.length ? prev : next;
+        const trimmed = prev.recentNoteTimestamps.filter(t => t >= cutoff);
+        if (trimmed.length === prev.recentNoteTimestamps.length) return prev;
+        return { ...prev, recentNoteTimestamps: trimmed };
       });
     }, 30_000);
     return () => clearInterval(id);
   }, []);
 
-  if (isLoading) {
+  if (isLoading && !view) {
     return (
       <div className="space-y-4" data-testid="pulse-loading">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -252,7 +361,7 @@ export default function PulsePanel({ spaceId, liveTick }: PulsePanelProps) {
     );
   }
 
-  if (error) {
+  if (error && !view) {
     return (
       <QueryErrorState
         title="Couldn't load Pulse"
@@ -262,9 +371,12 @@ export default function PulsePanel({ spaceId, liveTick }: PulsePanelProps) {
     );
   }
 
-  if (!data) return null;
+  if (!view) return null;
 
-  const { participants, counts, perModuleParticipation, topContributors } = data;
+  const { participants, counts, perModuleParticipation, topContributors, recentNoteTimestamps } = view;
+  // Prefer the live presence-map count from the existing WS handler over the
+  // persisted isOnline flag in the snapshot.
+  const onlineNow = typeof presenceCount === "number" ? presenceCount : participants.online;
   const moduleEntries = Object.entries(perModuleParticipation);
 
   return (
@@ -274,7 +386,7 @@ export default function PulsePanel({ spaceId, liveTick }: PulsePanelProps) {
           icon={Users}
           label="Participants"
           value={participants.joined}
-          hint={`${participants.online} online now`}
+          hint={`${onlineNow} online now`}
           testId="tile-participants"
         />
         <Tile
@@ -338,10 +450,10 @@ export default function PulsePanel({ spaceId, liveTick }: PulsePanelProps) {
                 className="text-3xl font-semibold"
                 data-testid="text-velocity-count"
               >
-                {recentTs.length}
+                {recentNoteTimestamps.length}
               </div>
               <div className="flex-1">
-                <VelocitySparkline timestamps={recentTs} />
+                <VelocitySparkline timestamps={recentNoteTimestamps} />
               </div>
             </div>
           </CardContent>

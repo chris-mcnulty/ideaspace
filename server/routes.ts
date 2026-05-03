@@ -4032,7 +4032,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Recent note timestamps (last 10 minutes) for the velocity sparkline.
       const cutoff = Date.now() - 10 * 60 * 1000;
       const recentNoteTimestamps = notesList
-        .map(n => (n.createdAt instanceof Date ? n.createdAt.getTime() : new Date(n.createdAt as any).getTime()))
+        .map(n => (n.createdAt instanceof Date ? n.createdAt.getTime() : new Date(String(n.createdAt)).getTime()))
         .filter(t => Number.isFinite(t) && t >= cutoff)
         .sort((a, b) => a - b);
 

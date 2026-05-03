@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -319,7 +319,10 @@ export default function FacilitatorWorkspace() {
   const [isDataManagementDialogOpen, setIsDataManagementDialogOpen] = useState(false);
   const [dataManagementTab, setDataManagementTab] = useState<"export" | "import">("export");
 
-  // Pulse-tab WS event types — every metric that should drive a live refresh.
+  // Pulse-tab WS event types — every event the Pulse panel cares about. Some
+  // (note_created, vote_recorded, etc.) are applied incrementally inside
+  // PulsePanel; others (matrix/staircase position upserts, bulk note ops,
+  // module enable/disable) trigger a debounced snapshot refetch there.
   const PULSE_EVENTS = useMemo(() => new Set([
     'note_created', 'note_updated', 'note_deleted', 'notes_deleted',
     'notes_updated', 'notes_bulk_imported',
@@ -329,14 +332,17 @@ export default function FacilitatorWorkspace() {
     'matrix_position_updated',
     'staircase_position_updated',
     'survey_response_submitted',
+    'survey_questions_updated',
     'participant_joined', 'participant_left',
-    'presence_changed',
+    'module_configured', 'module_updated',
+    'categories_updated',
   ]), []);
 
   // WebSocket connection for real-time updates
   const handleWebSocketMessage = useCallback((message: { type: string; data: any }) => {
     if (PULSE_EVENTS.has(message.type)) {
-      setPulseTick(t => t + 1);
+      pulseSeqRef.current += 1;
+      setLastPulseEvent({ type: message.type, data: message.data, seq: pulseSeqRef.current });
     }
     switch (message.type) {
       case 'note_created':
@@ -413,10 +419,11 @@ export default function FacilitatorWorkspace() {
   // Live presence count surfaced from WS `presence_changed` events.
   const [presenceCount, setPresenceCount] = useState<number | null>(null);
 
-  // Monotonic tick bumped whenever a Pulse-relevant WS event arrives. Lets
-  // PulsePanel piggy-back on the existing WebSocket subscription and refetch
-  // its snapshot without opening a second connection.
-  const [pulseTick, setPulseTick] = useState(0);
+  // Last Pulse-relevant WS event observed. Each new event gets a unique `seq`
+  // so PulsePanel can react to repeats and apply incremental deltas to its
+  // local view rather than full-refetching on every tick.
+  const [lastPulseEvent, setLastPulseEvent] = useState<{ type: string; data: unknown; seq: number } | null>(null);
+  const pulseSeqRef = useRef(0);
 
   // On (re)connect, re-sync any cached state for this workspace by invalidating
   // every query whose key references the space. This makes the client
@@ -1931,7 +1938,11 @@ export default function FacilitatorWorkspace() {
           Live cohort engagement — tiles, idea velocity, and top contributors update as events arrive.
         </p>
       </div>
-      <PulsePanel spaceId={params.space} liveTick={pulseTick} />
+      <PulsePanel
+        spaceId={params.space}
+        liveEvent={lastPulseEvent}
+        presenceCount={presenceCount}
+      />
     </div>
   );
 
