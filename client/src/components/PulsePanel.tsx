@@ -172,6 +172,9 @@ export interface PulsePanelProps {
 }
 
 const REFETCH_EVENTS = new Set<string>([
+  // Single-note delete: refetch so contributorStats / ideation engagement /
+  // velocity are reconciled (we don't know the deleted note's author here).
+  "note_deleted",
   "notes_deleted",
   "notes_updated",
   "notes_bulk_imported",
@@ -216,9 +219,9 @@ function applyDelta(prev: PulseView, ev: PulseLiveEvent): PulseView {
       contributorStats: nextStats,
     };
   }
-  if (ev.type === "note_deleted") {
-    return { ...prev, totals: { ...prev.totals, ideas: Math.max(0, prev.totals.ideas - 1) } };
-  }
+  // note_deleted is intentionally handled via REFETCH_EVENTS instead of a
+  // local decrement: we don't know the deleted note's author, so we can't
+  // keep contributorStats / ideation engagement consistent locally.
   if (ev.type === "vote_recorded") {
     const nextEngaged = { ...prev.engagedByModule };
     const nextStats = { ...prev.contributorStats };

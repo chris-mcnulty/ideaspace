@@ -336,6 +336,7 @@ export default function FacilitatorWorkspace() {
     'participant_joined', 'participant_left',
     'module_configured', 'module_updated',
     'categories_updated',
+    'note_deleted',
   ]), []);
 
   // WebSocket connection for real-time updates

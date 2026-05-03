@@ -6992,12 +6992,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   wss.on("connection", async (ws, req) => {
     const url = new URL(req.url!, `http://${req.headers.host}`);
-    const spaceId = url.searchParams.get("spaceId");
+    const rawSpaceParam = url.searchParams.get("spaceId");
     const requestedUserId = url.searchParams.get("userId");
 
-    if (!spaceId && !requestedUserId) {
+    if (!rawSpaceParam && !requestedUserId) {
       ws.close(1008, "Missing spaceId or userId");
       return;
+    }
+
+    // Clients may connect with either the workspace UUID or the 8-digit code
+    // (the URL slug). Server broadcasts use the canonical UUID, so resolve
+    // here and register the socket under BOTH keys when they differ. This
+    // ensures real-time events reach every subscriber regardless of which
+    // identifier they connected with.
+    let spaceId: string | null = rawSpaceParam;
+    let spaceIdAlias: string | null = null;
+    if (rawSpaceParam) {
+      try {
+        const resolved = await resolveWorkspaceIdentifier(rawSpaceParam);
+        if (resolved && resolved !== rawSpaceParam) {
+          spaceId = resolved;
+          spaceIdAlias = rawSpaceParam;
+        }
+      } catch (e) {
+        // Fall through with the raw param; the socket will still receive
+        // any broadcast that targets the same string the client supplied.
+      }
     }
 
     // Authenticate userId-scoped channels against the express session.
@@ -7025,6 +7045,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!clients.has(spaceId)) clients.set(spaceId, new Set());
       clients.get(spaceId)!.add(ws);
     }
+    if (spaceIdAlias) {
+      if (!clients.has(spaceIdAlias)) clients.set(spaceIdAlias, new Set());
+      clients.get(spaceIdAlias)!.add(ws);
+    }
 
     if (userId) {
       if (!userClients.has(userId)) userClients.set(userId, new Set());
@@ -7050,6 +7074,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (spaceClients.size === 0) clients.delete(spaceId);
         }
         broadcastPresence(spaceId);
+      }
+      if (spaceIdAlias) {
+        const aliasClients = clients.get(spaceIdAlias);
+        if (aliasClients) {
+          aliasClients.delete(ws);
+          if (aliasClients.size === 0) clients.delete(spaceIdAlias);
+        }
       }
       if (userId) {
         const uc = userClients.get(userId);
