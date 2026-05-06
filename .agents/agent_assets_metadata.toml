@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "sIR5lnLgELBfZi-83WLOc"
+uri = "file://galaxy-integration-prompt.md"
+type = "text"
+title = "Galaxy × Nebula Integration — Agent Build Prompt"
