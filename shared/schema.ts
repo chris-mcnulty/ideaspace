@@ -699,6 +699,20 @@ export const pulseActivityEvents = pgTable("pulse_activity_events", {
   spaceTimeIdx: index("idx_pulse_events_space_time").on(table.spaceId, table.occurredAt),
 }));
 
+// Organisation API Keys: Per-org machine-to-machine keys for Galaxy integration
+export const organisationApiKeys = pgTable("organisation_api_keys", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organisationId: varchar("organisation_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  keyHash: text("key_hash").notNull(), // SHA-256 hex of the plaintext key; plaintext shown once on creation
+  label: text("label").notNull(), // Human-readable label set by admin
+  lastUsedAt: timestamp("last_used_at"), // Updated on each successful auth
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  revokedAt: timestamp("revoked_at"), // null means active
+}, (table) => ({
+  organisationIdx: index("idx_org_api_keys_organisation").on(table.organisationId),
+  keyHashIdx: index("idx_org_api_keys_key_hash").on(table.keyHash),
+}));
+
 // In-app notifications - persistent, per-user notification feed
 export const clientErrors = pgTable("client_errors", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1178,6 +1192,15 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, { label: string;
     description: "When a long-running AI generation finishes.",
   },
 };
+
+export const insertOrganisationApiKeySchema = createInsertSchema(organisationApiKeys).omit({
+  id: true,
+  createdAt: true,
+  lastUsedAt: true,
+  revokedAt: true,
+});
+export type OrganisationApiKey = typeof organisationApiKeys.$inferSelect;
+export type InsertOrganisationApiKey = z.infer<typeof insertOrganisationApiKeySchema>;
 
 export const insertNotificationPreferenceSchema = createInsertSchema(notificationPreferences).omit({
   id: true,

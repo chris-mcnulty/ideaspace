@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Building2, Plus, LogOut, Loader2, Mail, Clock, Check, X, BookOpen, FileStack, Activity, Users, Edit, Trash2, FolderKanban, Upload } from "lucide-react";
+import { Building2, Plus, LogOut, Loader2, Mail, Clock, Check, X, BookOpen, FileStack, Activity, Users, Edit, Trash2, FolderKanban, Upload, KeyRound, Copy, Eye, EyeOff } from "lucide-react";
 import { ImportsTab } from "@/components/ImportsTab";
 import type { Organization, Space, User, AccessRequest, WorkspaceTemplate, SystemSetting, Project, ProjectMember } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -29,6 +29,16 @@ import { NewWorkspaceDialog } from "@/components/NewWorkspaceDialog";
 import { z } from "zod";
 import { Key, UserPlus } from "lucide-react";
 import { SynozurAppSwitcher } from "@/components/SynozurAppSwitcher";
+
+// Stripped-down API key type (hash never sent to client)
+interface ApiKey {
+  id: string;
+  organisationId: string;
+  label: string;
+  lastUsedAt: string | null;
+  createdAt: string;
+  revokedAt: string | null;
+}
 
 export default function AdminPanel() {
   const [, setLocation] = useLocation();
@@ -166,6 +176,10 @@ export default function AdminPanel() {
               <Activity className="h-4 w-4 mr-2" />
               AI Usage
             </TabsTrigger>
+            <TabsTrigger value="api-keys" data-testid="tab-api-keys">
+              <KeyRound className="h-4 w-4 mr-2" />
+              API Keys
+            </TabsTrigger>
             {currentUser.role === "global_admin" && (
               <TabsTrigger value="system-settings" data-testid="tab-system-settings">
                 <Activity className="h-4 w-4 mr-2" />
@@ -259,6 +273,13 @@ export default function AdminPanel() {
 
           <TabsContent value="ai-usage">
             <AiUsageTab 
+              currentUser={currentUser}
+              organizations={displayOrgs}
+            />
+          </TabsContent>
+
+          <TabsContent value="api-keys">
+            <ApiKeysTab
               currentUser={currentUser}
               organizations={displayOrgs}
             />
@@ -3844,5 +3865,299 @@ function ProjectMembersDialog({ open, onOpenChange, project, organizationId }: P
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─── API Keys Tab ─────────────────────────────────────────────────────────────
+
+function ApiKeysTab({
+  currentUser,
+  organizations,
+}: {
+  currentUser: User;
+  organizations: Organization[];
+}) {
+  const { toast } = useToast();
+  const [selectedOrgId, setSelectedOrgId] = useState<string>(
+    currentUser.organizationId || organizations[0]?.id || ""
+  );
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [newKeyPlaintext, setNewKeyPlaintext] = useState<string | null>(null);
+  const [showPlaintext, setShowPlaintext] = useState(false);
+
+  const queryKey = ["/api/admin/api-keys", selectedOrgId];
+
+  const { data: apiKeys = [], isLoading } = useQuery<ApiKey[]>({
+    queryKey,
+    queryFn: async () => {
+      const url = currentUser.role === "global_admin" && selectedOrgId
+        ? `/api/admin/api-keys?organisationId=${selectedOrgId}`
+        : "/api/admin/api-keys";
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch API keys");
+      return res.json();
+    },
+    enabled: !!selectedOrgId,
+  });
+
+  const createKeySchema = z.object({ label: z.string().min(1, "Label is required").max(100) });
+  const form = useForm<z.infer<typeof createKeySchema>>({
+    resolver: zodResolver(createKeySchema),
+    defaultValues: { label: "" },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: { label: string }) => {
+      const body: Record<string, string> = { label: data.label };
+      if (currentUser.role === "global_admin" && selectedOrgId) {
+        body.organisationId = selectedOrgId;
+      }
+      const res = await apiRequest("POST", "/api/admin/api-keys", body);
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to create API key");
+      }
+      return res.json() as Promise<ApiKey & { plaintext: string }>;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey });
+      setCreateDialogOpen(false);
+      form.reset();
+      setNewKeyPlaintext(data.plaintext);
+      setShowPlaintext(false);
+      toast({ title: "API key created", description: "Copy the key now — it will not be shown again." });
+    },
+    onError: (err: Error) => {
+      toast({ variant: "destructive", title: "Failed to create key", description: err.message });
+    },
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/admin/api-keys/${id}`);
+      if (!res.ok && res.status !== 204) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to revoke key");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey });
+      toast({ title: "API key revoked" });
+    },
+    onError: (err: Error) => {
+      toast({ variant: "destructive", title: "Failed to revoke key", description: err.message });
+    },
+  });
+
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      toast({ title: "Copied to clipboard" });
+    });
+  };
+
+  const handleRevoke = (key: ApiKey) => {
+    if (confirm(`Revoke the key "${key.label}"? Any Galaxy integration using it will stop working immediately.`)) {
+      revokeMutation.mutate(key.id);
+    }
+  };
+
+  const orgName = organizations.find(o => o.id === selectedOrgId)?.name;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-xl font-semibold">Galaxy API Keys</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Machine-to-machine keys for the Galaxy client portal integration. Each key is tied to one organisation.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {currentUser.role === "global_admin" && organizations.length > 0 && (
+            <Select value={selectedOrgId} onValueChange={setSelectedOrgId}>
+              <SelectTrigger className="w-52" data-testid="select-api-keys-org">
+                <SelectValue placeholder="Select organisation" />
+              </SelectTrigger>
+              <SelectContent>
+                {organizations.map(org => (
+                  <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-create-api-key" disabled={!selectedOrgId}>
+                <Plus className="h-4 w-4 mr-2" />
+                Generate Key
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Generate API Key{orgName ? ` for ${orgName}` : ""}</DialogTitle>
+                <DialogDescription>
+                  Give this key a label so you can identify it later. The secret will be shown once after generation.
+                </DialogDescription>
+              </DialogHeader>
+              <Form {...form}>
+                <form
+                  onSubmit={form.handleSubmit(data => createMutation.mutate(data))}
+                  className="space-y-4 mt-2"
+                >
+                  <FormField
+                    control={form.control}
+                    name="label"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Label</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="e.g. Galaxy Production"
+                            data-testid="input-api-key-label"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="outline" onClick={() => setCreateDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={createMutation.isPending} data-testid="button-confirm-create-api-key">
+                      {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                      Generate
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+
+      {newKeyPlaintext && (
+        <Card className="border-green-500/30 bg-green-500/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Check className="h-4 w-4 text-green-500" />
+              New API Key Generated
+            </CardTitle>
+            <CardDescription>
+              Copy this key now. It will not be shown again.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              <code
+                className="flex-1 font-mono text-sm bg-muted rounded-md px-3 py-2 break-all"
+                data-testid="text-new-api-key"
+              >
+                {showPlaintext ? newKeyPlaintext : "•".repeat(Math.min(newKeyPlaintext.length, 48))}
+              </code>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => setShowPlaintext(p => !p)}
+                data-testid="button-toggle-api-key-visibility"
+              >
+                {showPlaintext ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => handleCopy(newKeyPlaintext)}
+                data-testid="button-copy-api-key"
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => setNewKeyPlaintext(null)}
+                data-testid="button-dismiss-api-key"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-10">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : apiKeys.length === 0 ? (
+        <Card>
+          <CardContent className="pt-6 text-center text-muted-foreground">
+            <KeyRound className="h-12 w-12 mx-auto mb-4 opacity-30" />
+            <p className="font-medium mb-1">No API keys</p>
+            <p className="text-sm">Generate a key to allow Galaxy to pull reports and workspaces from this organisation.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <div className="divide-y">
+              {apiKeys.map((key) => (
+                <div
+                  key={key.id}
+                  className="flex items-center gap-3 px-4 py-3 flex-wrap"
+                  data-testid={`row-api-key-${key.id}`}
+                >
+                  <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <KeyRound className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate" data-testid={`text-api-key-label-${key.id}`}>
+                      {key.label}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Created {new Date(key.createdAt).toLocaleDateString()}
+                      {key.lastUsedAt
+                        ? ` · Last used ${new Date(key.lastUsedAt).toLocaleDateString()}`
+                        : " · Never used"}
+                    </p>
+                  </div>
+                  <Badge variant="secondary" className="flex-shrink-0">Active</Badge>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleRevoke(key)}
+                    disabled={revokeMutation.isPending}
+                    data-testid={`button-revoke-api-key-${key.id}`}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="border-border/50">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium">Usage</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>Include the key as a Bearer token in every request:</p>
+          <code className="block bg-muted rounded-md px-3 py-2 font-mono text-xs">
+            Authorization: Bearer nebula_&lt;your-key&gt;
+          </code>
+          <p className="pt-1">Available endpoints:</p>
+          <ul className="space-y-1 list-disc list-inside text-xs font-mono">
+            <li>GET /api/galaxy/workspaces</li>
+            <li>GET /api/galaxy/reports</li>
+            <li>GET /api/galaxy/reports/:spaceId</li>
+          </ul>
+          <p className="text-xs pt-1">
+            Both list endpoints accept an optional <code className="bg-muted px-1 rounded">?domain=acme.com</code> filter.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

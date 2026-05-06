@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { createHash } from "crypto";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { storage } from "./storage";
@@ -99,3 +100,54 @@ export const requireCompanyAdmin = requireRole("global_admin", "company_admin");
 
 // Middleware: require facilitator, company admin, or global admin
 export const requireFacilitator = requireRole("global_admin", "company_admin", "facilitator");
+
+/**
+ * Hash a plaintext API key using SHA-256 so we never store the raw secret.
+ */
+export function hashApiKey(plaintext: string): string {
+  return createHash("sha256").update(plaintext).digest("hex");
+}
+
+/**
+ * Generate a cryptographically random API key in the format nebula_<48 hex chars>.
+ * Returns { plaintext, hash } — the plaintext is shown once; only the hash is persisted.
+ */
+export function generateApiKey(): { plaintext: string; hash: string } {
+  const { randomBytes } = require("crypto");
+  const plaintext = "nebula_" + randomBytes(24).toString("hex");
+  return { plaintext, hash: hashApiKey(plaintext) };
+}
+
+/**
+ * Express middleware that authenticates a request using an Organisation API key.
+ * Reads the Bearer token from Authorization header, hashes it, looks up the
+ * matching active key row, and attaches { organisationId, apiKeyId } to req for
+ * downstream use.  Returns 401 on any failure.
+ */
+export function requireApiKey(req: any, res: any, next: any) {
+  const authHeader = req.headers?.authorization as string | undefined;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Missing or invalid Authorization header" });
+  }
+
+  const plaintext = authHeader.slice("Bearer ".length).trim();
+  if (!plaintext) {
+    return res.status(401).json({ error: "Empty API key" });
+  }
+
+  const keyHash = hashApiKey(plaintext);
+
+  storage.getOrganisationApiKeyByHash(keyHash).then(async (keyRow) => {
+    if (!keyRow) {
+      return res.status(401).json({ error: "Invalid or revoked API key" });
+    }
+    req.apiOrganisationId = keyRow.organisationId;
+    req.apiKeyId = keyRow.id;
+    // Update lastUsedAt asynchronously (fire-and-forget)
+    storage.touchOrganisationApiKey(keyRow.id).catch(() => {});
+    next();
+  }).catch((err: unknown) => {
+    console.error("[requireApiKey] DB lookup failed:", err);
+    res.status(500).json({ error: "Internal server error" });
+  });
+}

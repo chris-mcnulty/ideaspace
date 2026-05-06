@@ -80,6 +80,8 @@ import {
   type InsertSystemSetting,
   type ServicePlan,
   type InsertServicePlan,
+  type OrganisationApiKey,
+  type InsertOrganisationApiKey,
   organizations,
   projects,
   projectMembers,
@@ -121,6 +123,7 @@ import {
   notificationPreferences,
   clientErrors,
   pulseActivityEvents,
+  organisationApiKeys,
 } from "@shared/schema";
 import { eq, and, desc, or, isNull, gte, lte, sql, inArray } from "drizzle-orm";
 
@@ -509,6 +512,13 @@ export interface IStorage {
 
   // Client errors (telemetry)
   createClientError(record: InsertClientError): Promise<ClientError>;
+
+  // Organisation API Keys (Galaxy integration)
+  createOrganisationApiKey(key: InsertOrganisationApiKey): Promise<OrganisationApiKey>;
+  getOrganisationApiKeyByHash(keyHash: string): Promise<OrganisationApiKey | undefined>;
+  getOrganisationApiKeysByOrg(organisationId: string): Promise<OrganisationApiKey[]>;
+  revokeOrganisationApiKey(id: string): Promise<boolean>;
+  touchOrganisationApiKey(id: string): Promise<void>;
 }
 
 export class DbStorage implements IStorage {
@@ -2851,6 +2861,38 @@ export class DbStorage implements IStorage {
   async createClientError(record: InsertClientError): Promise<ClientError> {
     const [created] = await db.insert(clientErrors).values(record).returning();
     return created;
+  }
+
+  // Organisation API Keys (Galaxy integration)
+  async createOrganisationApiKey(key: InsertOrganisationApiKey): Promise<OrganisationApiKey> {
+    const [created] = await db.insert(organisationApiKeys).values(key).returning();
+    return created;
+  }
+
+  async getOrganisationApiKeyByHash(keyHash: string): Promise<OrganisationApiKey | undefined> {
+    const [key] = await db.select().from(organisationApiKeys)
+      .where(and(eq(organisationApiKeys.keyHash, keyHash), isNull(organisationApiKeys.revokedAt)))
+      .limit(1);
+    return key;
+  }
+
+  async getOrganisationApiKeysByOrg(organisationId: string): Promise<OrganisationApiKey[]> {
+    return db.select().from(organisationApiKeys)
+      .where(and(eq(organisationApiKeys.organisationId, organisationId), isNull(organisationApiKeys.revokedAt)))
+      .orderBy(desc(organisationApiKeys.createdAt));
+  }
+
+  async revokeOrganisationApiKey(id: string): Promise<boolean> {
+    const result = await db.update(organisationApiKeys)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(organisationApiKeys.id, id), isNull(organisationApiKeys.revokedAt)));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async touchOrganisationApiKey(id: string): Promise<void> {
+    await db.update(organisationApiKeys)
+      .set({ lastUsedAt: new Date() })
+      .where(eq(organisationApiKeys.id, id));
   }
 }
 

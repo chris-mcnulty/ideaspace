@@ -21,7 +21,7 @@ import { validateRanking, calculateBordaScores, calculateBordaScoresFromAggregat
 import { validateAllocation, calculateMarketplaceScores, calculateMarketplaceScoresFromTallies, calculateAllocationProgress, calculateAllocationProgressFromTotals, hasParticipantCompleted as hasParticipantCompletedAllocation, getParticipantRemainingBudget, DEFAULT_COIN_BUDGET } from "./services/marketplace";
 import { generatePairwiseExport, generateStackRankingExport, generateMarketplaceExport } from "./services/export";
 import { generateCohortResults, generatePersonalizedResults, generateAllPersonalizedResults, getCurrentCohortInputsHash, getCurrentPersonalizedInputsHash } from "./services/results";
-import { hashPassword, requireAuth, requireRole, requireGlobalAdmin, requireCompanyAdmin, requireFacilitator } from "./auth";
+import { hashPassword, requireAuth, requireRole, requireGlobalAdmin, requireCompanyAdmin, requireFacilitator, requireApiKey, generateApiKey } from "./auth";
 import { generateWorkspaceCode, isValidWorkspaceCode } from "./services/workspace-code";
 import { sendAccessRequestEmail, sendEmailVerification, sendPasswordReset, sendSessionInviteEmail, sendPhaseChangeNotificationEmail, sendResultsAvailableEmail, sendBulkNotifications, type SessionInviteEmailData, type PhaseChangeEmailData, type ResultsReadyEmailData } from "./services/email";
 import { createImportJob, getImportJob, markJobRunning, recordJobSuccess, recordJobFailure, finishJob } from "./services/importJobs";
@@ -7845,6 +7845,281 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     },
   );
+
+  // ─── Admin: Organisation API Keys ─────────────────────────────────────────
+
+  // GET /api/admin/api-keys  — list active keys for the calling admin's org
+  app.get("/api/admin/api-keys", requireCompanyAdmin, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const organisationId = currentUser.organizationId;
+      if (!organisationId && currentUser.role !== "global_admin") {
+        return res.status(400).json({ error: "No organisation associated with this account" });
+      }
+      // Global admins must supply ?organisationId= query param
+      const orgId = currentUser.role === "global_admin"
+        ? (req.query.organisationId as string | undefined) || organisationId
+        : organisationId;
+      if (!orgId) {
+        return res.status(400).json({ error: "organisationId is required" });
+      }
+      const keys = await storage.getOrganisationApiKeysByOrg(orgId);
+      // Never expose the hash; return id, label, lastUsedAt, createdAt only
+      const safe = keys.map(({ keyHash: _h, ...rest }) => rest);
+      res.json(safe);
+    } catch (err) {
+      console.error("[GET /api/admin/api-keys]", err);
+      res.status(500).json({ error: "Failed to list API keys" });
+    }
+  });
+
+  // POST /api/admin/api-keys  — generate a new key; returns plaintext ONCE
+  app.post("/api/admin/api-keys", requireCompanyAdmin, async (req, res) => {
+    try {
+      const schema = z.object({
+        label: z.string().min(1).max(100),
+        organisationId: z.string().optional(),
+      });
+      const body = schema.parse(req.body);
+      const currentUser = req.user as User;
+
+      let orgId = currentUser.organizationId;
+      if (currentUser.role === "global_admin" && body.organisationId) {
+        orgId = body.organisationId;
+      }
+      if (!orgId) {
+        return res.status(400).json({ error: "No organisation associated with this account" });
+      }
+
+      const { plaintext, hash } = generateApiKey();
+      const keyRow = await storage.createOrganisationApiKey({
+        organisationId: orgId,
+        keyHash: hash,
+        label: body.label,
+      });
+      const { keyHash: _h, ...safe } = keyRow;
+      res.status(201).json({ ...safe, plaintext }); // plaintext shown only here
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors });
+      console.error("[POST /api/admin/api-keys]", err);
+      res.status(500).json({ error: "Failed to create API key" });
+    }
+  });
+
+  // DELETE /api/admin/api-keys/:id  — revoke a key
+  app.delete("/api/admin/api-keys/:id", requireCompanyAdmin, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const { id } = req.params;
+      // Verify ownership: fetch the org's keys and confirm this key belongs there
+      const orgId = currentUser.organizationId;
+      if (!orgId && currentUser.role !== "global_admin") {
+        return res.status(400).json({ error: "No organisation associated with this account" });
+      }
+      // For company admins, restrict to their org (global admins can revoke any)
+      if (currentUser.role !== "global_admin" && orgId) {
+        const orgKeys = await storage.getOrganisationApiKeysByOrg(orgId);
+        if (!orgKeys.some(k => k.id === id)) {
+          return res.status(403).json({ error: "Key not found or not owned by your organisation" });
+        }
+      }
+      const revoked = await storage.revokeOrganisationApiKey(id);
+      if (!revoked) return res.status(404).json({ error: "Key not found or already revoked" });
+      res.status(204).send();
+    } catch (err) {
+      console.error("[DELETE /api/admin/api-keys]", err);
+      res.status(500).json({ error: "Failed to revoke API key" });
+    }
+  });
+
+  // ─── Galaxy Integration API ────────────────────────────────────────────────
+
+  /**
+   * Validate an optional ?domain= query parameter.
+   * Returns the sanitised domain string or null.  Sends 400 if the value looks
+   * obviously wrong (empty string after trim, includes a slash, etc.).
+   */
+  function parseGalaxyDomainParam(req: ExpressRequest, res: ExpressResponse): string | null | false {
+    const raw = req.query.domain as string | undefined;
+    if (!raw) return null; // Not supplied — OK
+    const domain = raw.trim().toLowerCase();
+    if (!domain || domain.includes("/") || domain.includes("@") || domain.length > 253) {
+      res.status(400).json({ error: "Invalid domain parameter" });
+      return false;
+    }
+    return domain;
+  }
+
+  /**
+   * Validate that a ?domain= query param matches the org's Entra/corporate email
+   * domain mapping.  The `domain` and `allowedDomains` fields on the organisations
+   * table are set from Microsoft Entra tenant discovery and corporate email domain
+   * registration; they represent the same domains used for Entra SSO sign-in.
+   * When OAuth client-credentials is implemented it should be an additional option,
+   * but domain-based filtering will remain supported for backwards compatibility.
+   */
+  function orgMatchesDomain(org: { domain: string | null; allowedDomains: string[] | null }, domain: string): boolean {
+    const orgDomains = [org.domain, ...(org.allowedDomains || [])].filter(Boolean) as string[];
+    return orgDomains.includes(domain);
+  }
+
+  // GET /api/galaxy/reports  — paginated list of CLOSED workspaces that have a cohort result
+  app.get("/api/galaxy/reports", requireApiKey, async (req, res) => {
+    try {
+      const organisationId: string = (req as any).apiOrganisationId;
+      const domain = parseGalaxyDomainParam(req, res);
+      if (domain === false) return; // 400 already sent
+
+      const page = Math.max(1, parseInt(req.query.page as string || "1", 10));
+      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string || "20", 10)));
+
+      // ?domain= further restricts to orgs whose Entra/corporate email domains include it
+      if (domain) {
+        const org = await storage.getOrganization(organisationId);
+        if (!org) return res.status(401).json({ error: "Organisation not found" });
+        if (!orgMatchesDomain(org, domain)) {
+          return res.json({ data: [], page, limit, total: 0 });
+        }
+      }
+
+      // Only closed, non-template spaces are part of the completed reports feed
+      const spaces = await storage.getSpacesByOrganization(organisationId);
+      const closedSpaces = spaces.filter(s => !s.isTemplate && s.status === "closed");
+
+      // Collect the latest cohort result per closed space
+      const results: Array<{
+        spaceId: string; name: string; code: string; closedAt: Date;
+        reportGeneratedAt: Date; summarySnippet: string;
+      }> = [];
+
+      for (const space of closedSpaces) {
+        const cohortResultRows = await storage.getCohortResultsBySpace(space.id);
+        if (cohortResultRows.length === 0) continue;
+        const latest = cohortResultRows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+        results.push({
+          spaceId: space.id,
+          name: space.name,
+          code: space.code,
+          closedAt: space.updatedAt, // updatedAt is set when status transitions to closed
+          reportGeneratedAt: latest.createdAt,
+          summarySnippet: latest.summary.slice(0, 200),
+        });
+      }
+
+      // Sort by reportGeneratedAt descending, then paginate
+      results.sort((a, b) => b.reportGeneratedAt.getTime() - a.reportGeneratedAt.getTime());
+      const total = results.length;
+      const paged = results.slice((page - 1) * limit, page * limit);
+
+      res.json({ data: paged, page, limit, total });
+    } catch (err) {
+      console.error("[GET /api/galaxy/reports]", err);
+      res.status(500).json({ error: "Failed to fetch reports" });
+    }
+  });
+
+  // GET /api/galaxy/reports/:spaceId  — full cohort result for one closed workspace
+  app.get("/api/galaxy/reports/:spaceId", requireApiKey, async (req, res) => {
+    try {
+      const organisationId: string = (req as any).apiOrganisationId;
+      const { spaceId } = req.params;
+
+      const space = await storage.getSpace(spaceId);
+      if (!space || space.isTemplate) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      // Enforce org scoping — key from org A cannot read data for org B
+      if (space.organizationId !== organisationId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const cohortResultRows = await storage.getCohortResultsBySpace(spaceId);
+      if (cohortResultRows.length === 0) {
+        return res.status(404).json({ error: "No cohort result found for this workspace" });
+      }
+      const latest = cohortResultRows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+
+      // Build a category breakdown: each category with its note count and
+      // the list of notes (ideas) assigned to it — mirrors the facilitator Results tab.
+      const [categories, notes] = await Promise.all([
+        storage.getCategoriesBySpace(spaceId),
+        storage.getNotesBySpace(spaceId),
+      ]);
+
+      const categoryBreakdown = categories.map(cat => {
+        const catNotes = notes.filter(n => n.manualCategoryId === cat.id);
+        return {
+          id: cat.id,
+          name: cat.name,
+          color: cat.color,
+          noteCount: catNotes.length,
+          notes: catNotes.map(n => ({ id: n.id, content: n.content })),
+        };
+      });
+
+      // Uncategorised notes
+      const uncategorised = notes.filter(n => !n.manualCategoryId);
+
+      res.json({
+        spaceId: space.id,
+        name: space.name,
+        code: space.code,
+        status: space.status,
+        closedAt: space.status === "closed" ? space.updatedAt : null,
+        summary: latest.summary,
+        keyThemes: latest.keyThemes,
+        topIdeas: latest.topIdeas,
+        insights: latest.insights,
+        recommendations: latest.recommendations,
+        categoryBreakdown,
+        uncategorisedNoteCount: uncategorised.length,
+        generatedAt: latest.createdAt,
+      });
+    } catch (err) {
+      console.error("[GET /api/galaxy/reports/:spaceId]", err);
+      res.status(500).json({ error: "Failed to fetch report" });
+    }
+  });
+
+  // GET /api/galaxy/workspaces  — list all non-template workspaces for the org
+  app.get("/api/galaxy/workspaces", requireApiKey, async (req, res) => {
+    try {
+      const organisationId: string = (req as any).apiOrganisationId;
+      const domain = parseGalaxyDomainParam(req, res);
+      if (domain === false) return;
+
+      if (domain) {
+        // Restrict to orgs that have this domain
+        const org = await storage.getOrganization(organisationId);
+        if (!org) return res.status(401).json({ error: "Organisation not found" });
+        const orgDomains = [org.domain, ...(org.allowedDomains || [])].filter(Boolean) as string[];
+        if (!orgDomains.includes(domain)) {
+          return res.json({ data: [] });
+        }
+      }
+
+      const spaces = await storage.getSpacesByOrganization(organisationId);
+      const host = req.get("host") || "localhost";
+      const protocol = req.get("x-forwarded-proto") || req.protocol || "https";
+
+      const data = spaces
+        .filter(s => !s.isTemplate)
+        .map(s => ({
+          id: s.id,
+          name: s.name,
+          code: s.code,
+          status: s.status,
+          url: `${protocol}://${host}/workspace/${s.code}`,
+          createdAt: s.createdAt,
+        }))
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+      res.json({ data });
+    } catch (err) {
+      console.error("[GET /api/galaxy/workspaces]", err);
+      res.status(500).json({ error: "Failed to fetch workspaces" });
+    }
+  });
 
   function broadcastToUser(userId: string, message: any) {
     const payload = JSON.stringify(message);

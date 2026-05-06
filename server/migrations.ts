@@ -235,10 +235,37 @@ export async function ensureNotificationPreferencesTable(): Promise<void> {
   `);
 }
 
+/**
+ * Ensure the organisation_api_keys table exists for Galaxy integration.
+ * Idempotent; safe to run on every startup.
+ */
+export async function ensureOrganisationApiKeysTable(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS organisation_api_keys (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      organisation_id varchar NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      key_hash text NOT NULL,
+      label text NOT NULL,
+      last_used_at timestamp,
+      created_at timestamp NOT NULL DEFAULT now(),
+      revoked_at timestamp
+    );
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_org_api_keys_organisation
+    ON organisation_api_keys(organisation_id);
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_org_api_keys_key_hash
+    ON organisation_api_keys(key_hash);
+  `);
+}
+
 export async function runStartupMigrations(): Promise<void> {
   await ensureNotificationsTable();
   await ensureClientErrorsTable();
   await ensurePulseActivityEventsTable();
   await ensureParticipantsSpaceUserUniqueIndex();
   await ensureNotificationPreferencesTable();
+  await ensureOrganisationApiKeysTable();
 }
