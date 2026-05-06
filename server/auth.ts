@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { createHash } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { storage } from "./storage";
@@ -113,7 +113,6 @@ export function hashApiKey(plaintext: string): string {
  * Returns { plaintext, hash } — the plaintext is shown once; only the hash is persisted.
  */
 export function generateApiKey(): { plaintext: string; hash: string } {
-  const { randomBytes } = require("crypto");
   const plaintext = "nebula_" + randomBytes(24).toString("hex");
   return { plaintext, hash: hashApiKey(plaintext) };
 }
