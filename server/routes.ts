@@ -1626,6 +1626,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Move a workspace to a different project (company admin only)
+  app.patch("/api/spaces/:spaceId/move-to-project", requireCompanyAdmin, async (req, res) => {
+    try {
+      const { projectId } = req.body;
+      if (!projectId) {
+        return res.status(400).json({ error: "projectId is required" });
+      }
+
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      const space = await storage.getSpace(spaceId);
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      // Validate project belongs to the same organization as the workspace
+      if (project.organizationId !== space.organizationId) {
+        return res.status(400).json({ error: "Project and workspace must belong to the same organization" });
+      }
+
+      const updated = await storage.updateSpace(spaceId, { projectId });
+      if (!updated) {
+        return res.status(500).json({ error: "Failed to update workspace" });
+      }
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Failed to move workspace to project:", error);
+      res.status(500).json({ error: "Failed to move workspace to project" });
+    }
+  });
+
   // Get organizations accessible to current user
   app.get("/api/my-organizations", requireAuth, async (req, res) => {
     try {
