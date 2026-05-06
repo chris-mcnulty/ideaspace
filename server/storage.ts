@@ -2891,7 +2891,10 @@ export class DbStorage implements IStorage {
 
   async touchOrganisationApiKey(id: string): Promise<void> {
     await db.update(organisationApiKeys)
-      .set({ lastUsedAt: new Date() })
+      .set({
+        lastUsedAt: new Date(),
+        requestCount: sql`${organisationApiKeys.requestCount} + 1`,
+      })
       .where(eq(organisationApiKeys.id, id));
   }
 }

@@ -35,6 +35,7 @@ interface ApiKey {
   id: string;
   organisationId: string;
   label: string;
+  requestCount: number;
   lastUsedAt: string | null;
   createdAt: string;
   revokedAt: string | null;
@@ -4119,6 +4120,7 @@ function ApiKeysTab({
                       {key.lastUsedAt
                         ? ` · Last used ${new Date(key.lastUsedAt).toLocaleDateString()}`
                         : " · Never used"}
+                      {` · ${key.requestCount.toLocaleString()} request${key.requestCount === 1 ? "" : "s"}`}
                     </p>
                   </div>
                   <Badge variant="secondary" className="flex-shrink-0">Active</Badge>

@@ -705,6 +705,7 @@ export const organisationApiKeys = pgTable("organisation_api_keys", {
   organisationId: varchar("organisation_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
   keyHash: text("key_hash").notNull(), // SHA-256 hex of the plaintext key; plaintext shown once on creation
   label: text("label").notNull(), // Human-readable label set by admin
+  requestCount: integer("request_count").notNull().default(0), // Cumulative count of authenticated requests
   lastUsedAt: timestamp("last_used_at"), // Updated on each successful auth
   createdAt: timestamp("created_at").defaultNow().notNull(),
   revokedAt: timestamp("revoked_at"), // null means active
