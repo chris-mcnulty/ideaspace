@@ -1855,21 +1855,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/my-workspaces", requireAuth, async (req, res) => {
     try {
       const currentUser = req.user as User;
+      const showArchived = req.query.showArchived === "true";
+      const opts = { showArchived };
       let spaces: any[] = [];
 
       // Global admins can see all workspaces
       if (currentUser.role === "global_admin") {
-        spaces = await storage.getAllSpaces();
+        spaces = await storage.getAllSpaces(opts);
       } 
       // Company admins can see all workspaces in their organization
       else if (currentUser.role === "company_admin" && currentUser.organizationId) {
-        spaces = await storage.getSpacesByOrganization(currentUser.organizationId);
+        spaces = await storage.getSpacesByOrganization(currentUser.organizationId, opts);
       } 
       // Facilitators can only see workspaces they're assigned to
       else if (currentUser.role === "facilitator") {
         const facilitatorAssignments = await storage.getSpaceFacilitatorsByUser(currentUser.id);
         const assignedSpaceIds = facilitatorAssignments.map((a) => a.spaceId);
-        spaces = await storage.getSpacesByIds(assignedSpaceIds);
+        spaces = await storage.getSpacesByIds(assignedSpaceIds, opts);
       }
       // Regular users don't have access to any workspaces as facilitators
       else {

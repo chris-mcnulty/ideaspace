@@ -213,10 +213,10 @@ export interface IStorage {
   // Spaces
   getSpace(id: string): Promise<Space | undefined>;
   getSpaceByCode(code: string): Promise<Space | undefined>;
-  getAllSpaces(): Promise<Space[]>;
-  getSpacesByOrganization(organizationId: string): Promise<Space[]>;
-  getSpacesByOrganizations(organizationIds: string[]): Promise<Space[]>;
-  getSpacesByIds(ids: string[]): Promise<Space[]>;
+  getAllSpaces(options?: { showArchived?: boolean }): Promise<Space[]>;
+  getSpacesByOrganization(organizationId: string, options?: { showArchived?: boolean }): Promise<Space[]>;
+  getSpacesByOrganizations(organizationIds: string[], options?: { showArchived?: boolean }): Promise<Space[]>;
+  getSpacesByIds(ids: string[], options?: { showArchived?: boolean }): Promise<Space[]>;
   getSpacesByProject(projectId: string): Promise<Space[]>;
   getSpacesByProjects(projectIds: string[]): Promise<Space[]>;
   getNoteCountsBySpaces(spaceIds: string[]): Promise<Map<string, number>>;
@@ -841,18 +841,22 @@ export class DbStorage implements IStorage {
     return space;
   }
 
-  async getAllSpaces(): Promise<Space[]> {
-    return db.select().from(spaces).orderBy(desc(spaces.createdAt));
+  async getAllSpaces(options?: { showArchived?: boolean }): Promise<Space[]> {
+    const conditions = options?.showArchived ? [] : [eq(spaces.hidden, false)];
+    if (conditions.length === 0) {
+      return db.select().from(spaces).orderBy(desc(spaces.createdAt));
+    }
+    return db.select().from(spaces).where(and(...conditions)).orderBy(desc(spaces.createdAt));
   }
 
-  async getSpacesByOrganization(organizationId: string): Promise<Space[]> {
+  async getSpacesByOrganization(organizationId: string, options?: { showArchived?: boolean }): Promise<Space[]> {
     // Exclude templates from workspace listings (templates appear in Templates tab only)
-    return db.select().from(spaces).where(
-      and(
-        eq(spaces.organizationId, organizationId),
-        eq(spaces.isTemplate, false)
-      )
-    ).orderBy(desc(spaces.createdAt));
+    const conditions: any[] = [
+      eq(spaces.organizationId, organizationId),
+      eq(spaces.isTemplate, false),
+    ];
+    if (!options?.showArchived) conditions.push(eq(spaces.hidden, false));
+    return db.select().from(spaces).where(and(...conditions)).orderBy(desc(spaces.createdAt));
   }
 
   async getSpacesByProject(projectId: string): Promise<Space[]> {
@@ -864,19 +868,21 @@ export class DbStorage implements IStorage {
     ).orderBy(desc(spaces.createdAt));
   }
 
-  async getSpacesByOrganizations(organizationIds: string[]): Promise<Space[]> {
+  async getSpacesByOrganizations(organizationIds: string[], options?: { showArchived?: boolean }): Promise<Space[]> {
     if (organizationIds.length === 0) return [];
-    return db.select().from(spaces).where(
-      and(
-        inArray(spaces.organizationId, organizationIds),
-        eq(spaces.isTemplate, false)
-      )
-    ).orderBy(desc(spaces.createdAt));
+    const conditions: any[] = [
+      inArray(spaces.organizationId, organizationIds),
+      eq(spaces.isTemplate, false),
+    ];
+    if (!options?.showArchived) conditions.push(eq(spaces.hidden, false));
+    return db.select().from(spaces).where(and(...conditions)).orderBy(desc(spaces.createdAt));
   }
 
-  async getSpacesByIds(ids: string[]): Promise<Space[]> {
+  async getSpacesByIds(ids: string[], options?: { showArchived?: boolean }): Promise<Space[]> {
     if (ids.length === 0) return [];
-    return db.select().from(spaces).where(inArray(spaces.id, ids)).orderBy(desc(spaces.createdAt));
+    const conditions: any[] = [inArray(spaces.id, ids)];
+    if (!options?.showArchived) conditions.push(eq(spaces.hidden, false));
+    return db.select().from(spaces).where(and(...conditions)).orderBy(desc(spaces.createdAt));
   }
 
   async getSpacesByProjects(projectIds: string[]): Promise<Space[]> {

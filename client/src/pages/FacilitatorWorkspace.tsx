@@ -69,6 +69,8 @@ import {
   ExternalLink,
   Target,
   Activity,
+  UserCheck,
+  UserX,
 } from "lucide-react";
 import type { Organization, Space, Note, Participant, Category, User, Idea, WorkspaceModule, Project } from "@shared/schema";
 import { Leaderboard } from "@/components/Leaderboard";
@@ -748,7 +750,7 @@ export default function FacilitatorWorkspace() {
 
   // Update workspace settings mutation
   const updateWorkspaceSettings = useMutation({
-    mutationFn: async (settings: { aiResultsEnabled?: boolean; marketplaceCoinBudget?: number; resultsPublicAfterClose?: boolean }) => {
+    mutationFn: async (settings: { aiResultsEnabled?: boolean; marketplaceCoinBudget?: number; resultsPublicAfterClose?: boolean; guestAllowed?: boolean }) => {
       const response = await apiRequest("PATCH", `/api/spaces/${params.space}`, settings);
       return await response.json();
     },
@@ -765,6 +767,10 @@ export default function FacilitatorWorkspace() {
         description = variables.resultsPublicAfterClose
           ? "Results will remain accessible after workspace is closed"
           : "Results will be hidden once workspace is closed";
+      } else if (variables.guestAllowed !== undefined) {
+        description = variables.guestAllowed
+          ? "Anyone with the join code can now participate anonymously"
+          : "Only registered users can now join this workspace";
       }
       toast({
         title: "Settings Updated",
@@ -2316,6 +2322,50 @@ export default function FacilitatorWorkspace() {
                       </>
                     ) : (
                       <>{space.resultsPublicAfterClose ? "Restrict Access" : "Allow Access"}</>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Guest / Anonymous Access Toggle */}
+            <Card className="bg-muted/30">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  {space.guestAllowed ? (
+                    <UserCheck className="h-4 w-4 text-primary" />
+                  ) : (
+                    <UserX className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  Anonymous Guest Access
+                </CardTitle>
+                <CardDescription>
+                  When enabled, anyone with the join code can participate without creating an account. When disabled, only registered and verified users may join.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-muted-foreground">
+                    Status: {space.guestAllowed ? (
+                      <Badge variant="default" className="ml-2">Allowed</Badge>
+                    ) : (
+                      <Badge variant="secondary" className="ml-2">Disabled</Badge>
+                    )}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => updateWorkspaceSettings.mutate({ guestAllowed: !space.guestAllowed })}
+                    disabled={updateWorkspaceSettings.isPending}
+                    data-testid="button-toggle-guest-allowed"
+                  >
+                    {updateWorkspaceSettings.isPending ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                        {space.guestAllowed ? "Disabling..." : "Enabling..."}
+                      </>
+                    ) : (
+                      <>{space.guestAllowed ? "Disable Guest Access" : "Enable Guest Access"}</>
                     )}
                   </Button>
                 </div>

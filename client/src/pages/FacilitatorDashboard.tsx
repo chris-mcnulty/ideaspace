@@ -1,9 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Users, StickyNote, ArrowRight, Plus, FolderKanban, ChevronDown, ChevronRight, Building2, User } from "lucide-react";
+import { Users, StickyNote, ArrowRight, Plus, FolderKanban, ChevronDown, ChevronRight, Building2, User, Archive, ArchiveRestore, UserCheck, UserX } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
@@ -16,6 +16,9 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { NewWorkspaceDialog } from "@/components/NewWorkspaceDialog";
 import { SynozurAppSwitcher } from "@/components/SynozurAppSwitcher";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface WorkspaceWithStats {
   id: string;
@@ -23,6 +26,8 @@ interface WorkspaceWithStats {
   description: string | null;
   code: string;
   status: string;
+  hidden: boolean;
+  guestAllowed: boolean;
   organizationId: string;
   projectId: string | null;
   createdBy: string | null;
@@ -76,9 +81,11 @@ interface Project {
 
 export default function FacilitatorDashboard() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
   const [showOnlyMine, setShowOnlyMine] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
     document.title = "Nebula - Dashboard | The Synozur Alliance";
@@ -89,9 +96,31 @@ export default function FacilitatorDashboard() {
     enabled: !!user,
   });
 
+  const workspacesQueryKey = `/api/my-workspaces${showArchived ? "?showArchived=true" : ""}`;
   const { data: workspaces, isLoading, error: workspacesError, refetch: refetchWorkspaces, isFetching: isRefetchingWorkspaces } = useQuery<WorkspaceWithStats[]>({
-    queryKey: ["/api/my-workspaces"],
+    queryKey: [workspacesQueryKey],
     enabled: !!user,
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: ({ workspaceId, hidden }: { workspaceId: string; hidden: boolean }) =>
+      apiRequest("PATCH", `/api/spaces/${workspaceId}`, { hidden }),
+    onSuccess: (_data, { hidden }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/my-workspaces"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/my-workspaces?showArchived=true"] });
+      toast({ title: hidden ? "Workspace archived" : "Workspace restored", description: hidden ? "It's hidden from the default view." : "It's visible again in your dashboard." });
+    },
+    onError: () => toast({ variant: "destructive", title: "Failed to update workspace" }),
+  });
+
+  const guestToggleMutation = useMutation({
+    mutationFn: ({ workspaceId, guestAllowed }: { workspaceId: string; guestAllowed: boolean }) =>
+      apiRequest("PATCH", `/api/spaces/${workspaceId}`, { guestAllowed }),
+    onSuccess: (_data, { guestAllowed }) => {
+      queryClient.invalidateQueries({ queryKey: [workspacesQueryKey] });
+      toast({ title: guestAllowed ? "Guest access enabled" : "Guest access disabled", description: guestAllowed ? "Anyone with the code can join anonymously." : "Only registered participants can join." });
+    },
+    onError: () => toast({ variant: "destructive", title: "Failed to update guest access" }),
   });
 
   const { data: allProjects } = useQuery<Project[]>({
@@ -273,7 +302,7 @@ export default function FacilitatorDashboard() {
                 Manage your envisioning sessions
               </p>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 flex-wrap">
               <div className="flex items-center gap-2">
                 <Switch
                   id="show-only-mine"
@@ -284,6 +313,18 @@ export default function FacilitatorDashboard() {
                 <Label htmlFor="show-only-mine" className="text-sm text-muted-foreground cursor-pointer">
                   <User className="w-4 h-4 inline mr-1" />
                   Created by me
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="show-archived"
+                  checked={showArchived}
+                  onCheckedChange={setShowArchived}
+                  data-testid="switch-show-archived"
+                />
+                <Label htmlFor="show-archived" className="text-sm text-muted-foreground cursor-pointer">
+                  <Archive className="w-4 h-4 inline mr-1" />
+                  Show archived
                 </Label>
               </div>
               {(user.role === "global_admin" || user.role === "company_admin" || user.role === "facilitator") && (() => {
@@ -451,19 +492,27 @@ export default function FacilitatorDashboard() {
                               data-testid={`card-workspace-${workspace.id}`}
                             >
                               <CardHeader className="space-y-3">
-                                <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-start justify-between gap-2 flex-wrap">
                                   <div className="flex-1 min-w-0">
                                     <CardTitle className="text-lg truncate" data-testid={`text-workspace-name-${workspace.id}`}>
                                       {workspace.name}
                                     </CardTitle>
                                   </div>
-                                  <Badge
-                                    variant="outline"
-                                    className={getStatusColor(workspace.status)}
-                                    data-testid={`badge-status-${workspace.id}`}
-                                  >
-                                    {getStatusLabel(workspace.status)}
-                                  </Badge>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    {workspace.hidden && (
+                                      <Badge variant="secondary" className="text-xs" data-testid={`badge-archived-${workspace.id}`}>
+                                        <Archive className="h-3 w-3 mr-1" />
+                                        Archived
+                                      </Badge>
+                                    )}
+                                    <Badge
+                                      variant="outline"
+                                      className={getStatusColor(workspace.status)}
+                                      data-testid={`badge-status-${workspace.id}`}
+                                    >
+                                      {getStatusLabel(workspace.status)}
+                                    </Badge>
+                                  </div>
                                 </div>
 
                                 {workspace.description && (
@@ -508,6 +557,48 @@ export default function FacilitatorDashboard() {
                                       Join as Participant
                                     </Link>
                                   </Button>
+
+                                  {/* Guest access toggle — facilitators and admins */}
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="icon"
+                                        variant="outline"
+                                        disabled={guestToggleMutation.isPending}
+                                        onClick={() => guestToggleMutation.mutate({ workspaceId: workspace.id, guestAllowed: !workspace.guestAllowed })}
+                                        data-testid={`button-toggle-guest-${workspace.id}`}
+                                      >
+                                        {workspace.guestAllowed
+                                          ? <UserCheck className="h-4 w-4 text-green-500" />
+                                          : <UserX className="h-4 w-4 text-muted-foreground" />}
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      {workspace.guestAllowed ? "Guest access on — click to disable" : "Guest access off — click to enable"}
+                                    </TooltipContent>
+                                  </Tooltip>
+
+                                  {/* Archive / restore — admins only */}
+                                  {(user.role === "global_admin" || user.role === "company_admin") && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          size="icon"
+                                          variant="outline"
+                                          disabled={archiveMutation.isPending}
+                                          onClick={() => archiveMutation.mutate({ workspaceId: workspace.id, hidden: !workspace.hidden })}
+                                          data-testid={`button-archive-${workspace.id}`}
+                                        >
+                                          {workspace.hidden
+                                            ? <ArchiveRestore className="h-4 w-4 text-primary" />
+                                            : <Archive className="h-4 w-4 text-muted-foreground" />}
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        {workspace.hidden ? "Restore workspace" : "Archive workspace"}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
                                 </div>
 
                                 <p className="text-xs text-center text-muted-foreground" data-testid={`text-code-${workspace.id}`}>
