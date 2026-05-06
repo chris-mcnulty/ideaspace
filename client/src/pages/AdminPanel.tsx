@@ -2108,19 +2108,33 @@ function EditOrganizationDialog({
 }) {
   const { toast } = useToast();
   
-  const form = useForm<z.infer<typeof insertOrganizationSchema>>({
-    resolver: zodResolver(insertOrganizationSchema),
+  const editOrgSchema = insertOrganizationSchema.extend({
+    allowedDomainsText: z.string().optional(),
+  });
+
+  const form = useForm<z.infer<typeof editOrgSchema>>({
+    resolver: zodResolver(editOrgSchema),
     defaultValues: {
       name: organization.name,
       slug: organization.slug,
       logoUrl: organization.logoUrl || "",
       primaryColor: organization.primaryColor || "",
+      domain: organization.domain || "",
+      allowedDomainsText: (organization.allowedDomains ?? []).join(", "),
     },
   });
 
   const updateOrgMutation = useMutation({
-    mutationFn: async (data: z.infer<typeof insertOrganizationSchema>) => {
-      const response = await apiRequest("PATCH", `/api/organizations/${organization.id}`, data);
+    mutationFn: async (data: z.infer<typeof editOrgSchema>) => {
+      const { allowedDomainsText, ...rest } = data;
+      const allowedDomains = allowedDomainsText
+        ? allowedDomainsText.split(",").map((d) => d.trim()).filter(Boolean)
+        : [];
+      const response = await apiRequest("PATCH", `/api/organizations/${organization.id}`, {
+        ...rest,
+        domain: rest.domain || null,
+        allowedDomains: allowedDomains.length ? allowedDomains : null,
+      });
       return await response.json();
     },
     onSuccess: () => {
@@ -2217,6 +2231,48 @@ function EditOrganizationDialog({
                       data-testid="input-edit-org-color"
                     />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="domain"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Primary Domain (optional)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="e.g., acme.com" 
+                      {...field} 
+                      value={field.value || ""}
+                      data-testid="input-edit-org-domain"
+                    />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">
+                    Used by Galaxy umbrella API to resolve this organisation by email domain.
+                  </p>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="allowedDomainsText"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Additional Allowed Domains (optional)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="e.g., acme.co.uk, acme.eu" 
+                      {...field} 
+                      value={field.value || ""}
+                      data-testid="input-edit-org-allowed-domains"
+                    />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">
+                    Comma-separated list of extra domains that map to this organisation.
+                  </p>
                   <FormMessage />
                 </FormItem>
               )}
