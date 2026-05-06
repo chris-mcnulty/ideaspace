@@ -30,6 +30,14 @@ import { fileUploadService } from "./services/file-upload";
 import { extractAndChunk } from "./services/kbExtraction";
 import { getPresenceForSpace, buildPresenceChangedMessage, type PresenceWsMeta } from "./presence";
 import { registerPulseRoute } from "./routes/pulse";
+import {
+  buildSessionKey,
+  detectDeviceType,
+  detectBrowser,
+  detectOS,
+  enqueuePageview,
+  enqueueSession,
+} from "./services/trafficWorker";
 
 // Extend express-session types to include participantId
 declare module "express-session" {
@@ -3804,7 +3812,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
           spaceId,
         })));
       } catch (e) { console.error("[notify participant_joined]", e); }
-      
+
+      // ── Synozur traffic ingest ────────────────────────────────────────────
+      // Enqueue a session row + an initial workspace pageview.
+      // Never crashes the request — errors are silently discarded.
+      try {
+        const workspaceCode = space.code || spaceId;
+        const sessionKey    = buildSessionKey(workspaceCode, participant.id);
+        const ua            = (req.headers["user-agent"] as string) || "";
+        const deviceType    = detectDeviceType(ua);
+        const browser       = detectBrowser(ua);
+        const os            = detectOS(ua);
+        const now           = new Date().toISOString();
+
+        // Cloudflare geo headers (present in Replit production deployments)
+        const country = (req.headers["cf-ipcountry"] as string) || undefined;
+        const region  = (req.headers["cf-region"]    as string) || undefined;
+        const city    = (req.headers["cf-ipcity"]    as string) || undefined;
+
+        // Referrer
+        const referrerUrl  = (req.headers["referer"] as string) || undefined;
+        const referrerHost = referrerUrl
+          ? (() => { try { return new URL(referrerUrl).host; } catch { return undefined; } })()
+          : undefined;
+
+        enqueueSession({ sessionKey, startedAt: now, country, deviceType });
+
+        enqueuePageview({
+          sessionKey,
+          path:         `/workspace/${workspaceCode}`,
+          title:        space.name,
+          viewedAt:     now,
+          pageType:     "workspace",
+          trafficSource: referrerHost ? "referral" : "direct",
+          referrerUrl,
+          referrerHost,
+          country,
+          region,
+          city,
+          deviceType,
+          browserName:    browser?.name,
+          browserVersion: browser?.version,
+          osName:         os ?? undefined,
+        });
+      } catch {
+        // best-effort — never block the response
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       res.status(201).json(participant);
     } catch (error) {
       if (error instanceof z.ZodError) {

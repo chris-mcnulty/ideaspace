@@ -79,3 +79,24 @@ Override credentials with the `A11Y_TEST_EMAIL` / `A11Y_TEST_PASSWORD` env vars;
 - **State Management/Data Fetching**: TanStack Query
 - **Styling**: Tailwind CSS, Shadcn UI
 - **WebSocket**: `ws` library
+
+## Synozur Traffic Ingest Worker
+Nebula pushes workspace pageview/session data to the Synozur parent-site traffic registry.
+
+**Required Replit Secrets** (both must be set; missing → worker no-ops with a single startup warning):
+
+| Secret | Value |
+|---|---|
+| `SYNOZUR_TRAFFIC_BASE_URL` | `https://www.synozur.com` (no trailing slash) |
+| `SYNOZUR_TRAFFIC_API_KEY` | `tp_…` key from Synozur Admin → Traffic Properties → property slug `nebula` |
+
+**Optional:**
+- `SYNOZUR_TRAFFIC_FLUSH_INTERVAL_MS` — flush cadence in ms (default `30000`)
+
+**How it works** (`server/services/trafficWorker.ts`):
+- In-process buffer (max 10 000 rows); drops oldest on overflow with a WARN log.
+- Timer worker flushes up to 2 000 rows every 30 s to `POST /api/traffic/ingest`.
+- Retry: 429 → 30 s back-off; 5xx/network → exponential (1 s→…→60 s, max 10 attempts); 401 → pause until restart.
+- sessionKey: `neb_<workspaceCode>_<sha256(participantId).slice(0,16)>` — deterministic, no PII.
+- Only workspace page-loads are tracked (path `/workspace/<code>`); admin/API/facilitator routes are not enqueued.
+- Graceful shutdown: SIGTERM/SIGINT calls `flushNow()` with a 5 s timeout before `process.exit`.

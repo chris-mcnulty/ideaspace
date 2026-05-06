@@ -1,0 +1,128 @@
+Nebula → Synozur Traffic Ingest Worker
+Context
+The Synozur parent site (www.synozur.com) runs a multi-property web-traffic registry. Sister Synozur-owned apps (Nebula, plus the other five) are expected to push their pageview/session data to a single authenticated ingest endpoint on the parent site. We do not want a separate analytics stack per app — the parent already aggregates everything.
+
+This task: build the Nebula side of that push.
+
+What Synozur will provide
+Before you start, confirm that an admin has done this on the Synozur side and given you these two values as Replit Secrets:
+
+Secret	Description
+SYNOZUR_TRAFFIC_BASE_URL	Always https://www.synozur.com (no trailing slash)
+SYNOZUR_TRAFFIC_API_KEY	A tp_… key issued from Synozur Admin → Traffic Properties → "Create property" with slug nebula
+If either secret is missing or empty, the worker must log a single warning at startup and silently no-op — never crash the app, never retry forever.
+
+Endpoint contract
+POST {SYNOZUR_TRAFFIC_BASE_URL}/api/traffic/ingest
+Authorization: Bearer {SYNOZUR_TRAFFIC_API_KEY}
+Content-Type: application/json
+
+Body shape (send pageviews and optionally sessions; do not send propertySlug — the key already identifies it):
+
+{
+  "pageviews": [
+    {
+      "sessionKey": "neb_<workspaceCode>_<participantHash>",  // stable per visitor session, REQUIRED
+      "path": "/workspace/1234-5678",                          // REQUIRED
+      "title": "Q1 Strategy Session",                          // optional
+      "viewedAt": "2026-05-06T16:42:00.000Z",                  // ISO 8601, REQUIRED
+      "pageviewCount": 1,                                      // defaults to 1
+      "timeOnPageMs": 42000,                                   // optional
+      "pageType": "workspace",                                 // optional, free-form
+      "referrerUrl": "https://www.synozur.com/galaxy/reports", // optional
+      "referrerHost": "www.synozur.com",                       // optional
+      "trafficSource": "internal",                             // direct|organic|ai|referral|social|paid|internal
+      "utmSource": null, "utmMedium": null, "utmCampaign": null,
+      "country": "US", "region": "CA", "city": "San Francisco",
+      "deviceType": "desktop",                                 // desktop|mobile|tablet|bot
+      "browserName": "Chrome", "browserVersion": "120",
+      "osName": "macOS"
+    }
+    // … up to 5000 rows per batch
+  ],
+  "sessions": [
+    {
+      "sessionKey": "neb_<workspaceCode>_<participantHash>",
+      "startedAt": "2026-05-06T16:40:00.000Z",
+      "country": "US",
+      "deviceType": "desktop"
+      // optional — only needed for sessions that have NO pageview in this batch
+    }
+  ]
+}
+
+Required fields per pageview row: sessionKey, path, viewedAt. Everything else is optional but very welcome — the parent's traffic dashboard uses every field above.
+
+Idempotency rules (important)
+The Synozur ingest endpoint de-duplicates on (sourceSystem, legacy_session_key, path, viewedAt). So:
+
+Use a stable, deterministic sessionKey per visitor-session — e.g. neb_<workspaceCode>_<sha256(participantId).slice(0,16)>. Do not mint a new UUID per request, or every retry will double-count.
+A retry of an identical batch is safe; the parent will silently dedupe.
+pageviewCount lets you pre-aggregate if you prefer batching counts instead of one row per view.
+Response codes
+Status	Meaning	Worker action
+200	Accepted; body has { accepted, skipped, duplicates, errors }	Log counts at INFO. Mark batch sent.
+400	Bad row shape	Log batch payload at ERROR (truncated), drop it, do not retry.
+401	Missing/invalid key	Log once at ERROR with key prefix only. Pause worker until restart.
+403	propertySlug mismatch	Should never happen — log ERROR, drop batch.
+429	Rate limit (60 batches/min/key)	Back off ~30s, then retry.
+5xx / network	Transient	Exponential back-off (1s → 2s → 4s → 8s, cap 60s, max ~10 attempts). After max retries, log ERROR and drop.
+What to build in Nebula
+1. A pageview buffer
+Whenever Nebula serves a workspace page, a participant joins a session, the report viewer is opened, etc., enqueue an IngestPageviewRow to an in-process buffer. Keep the buffer simple — an array bounded at, say, 10 000 entries; if it overflows, log a WARN and drop the oldest.
+
+2. A flush worker
+A timer-driven worker that:
+
+Wakes every 30 seconds (configurable via SYNOZUR_TRAFFIC_FLUSH_INTERVAL_MS, default 30000).
+Drains up to 2 000 rows per flush (well under the 5 000 server cap, well within the 60 batches/min rate).
+POSTs them with the contract above.
+On success, drops the rows. On failure (per the table), follows the back-off + drop policy.
+Exposes a Promise<void> flushNow() for tests and graceful-shutdown.
+3. Session metadata
+When a participant first joins a Nebula workspace, also enqueue one sessions entry with startedAt, country (if known via Cloudflare/IP geo), deviceType. After that, just send pageviews — the parent links them by sessionKey.
+
+4. Data hygiene rules
+Never send PII. No participant names, no emails, no IP addresses, no auth tokens. The sessionKey must be a hash, not a raw user ID.
+Filter bots. If you can detect them (UA contains bot, crawler, spider, headless), set deviceType: "bot" so the parent's dashboard can filter them out — don't drop them entirely, the parent wants to know about them.
+Workspace paths only. Send /workspace/<code> for participant page-loads. Don't send /admin, /api, or facilitator-only routes — those aren't "web traffic" the marketing dashboard cares about.
+5. Observability
+Add structured logs (use the existing logger — never console.log):
+
+INFO at startup: "synozur traffic worker started" with intervalMs, bufferLimit.
+INFO per successful flush: "synozur traffic flush" with sent, accepted, duplicates, errors.
+WARN on buffer overflow: "synozur traffic buffer overflow — dropping oldest".
+ERROR on terminal failures (invalid key, max retries exceeded).
+6. Graceful shutdown
+On SIGTERM/SIGINT, call flushNow() once with a 5-second timeout so in-flight pageviews aren't lost on deploy.
+
+Out of scope
+No write API to Synozur. Only this one ingest endpoint.
+No backfill of historical data — start the meter from "now". (If you later want backfill, the parent has an admin CSV importer at /api/cms/traffic/properties/.../import-csv.)
+Do not change any existing Nebula response shapes or /api/galaxy/* endpoints.
+Acceptance criteria
+ SYNOZUR_TRAFFIC_BASE_URL and SYNOZUR_TRAFFIC_API_KEY documented as required Replit Secrets.
+ Worker registered in the same place existing background workers (e.g. cron, sync workers) are registered.
+ Workspace page-loads enqueue a row; participant joins enqueue a session row; admin/API routes do not enqueue rows.
+ sessionKey is deterministic and contains no PII.
+ Rate-limit, retry, and back-off behaviours match the table above.
+ Missing secrets → no-op + single startup warning, no crashes.
+ Smoke test: run the worker locally with a test key, hit a workspace, verify the batch arrives at Synozur and accepted >= 1 in the response.
+Smoke test
+Once secrets are set:
+
+curl -s -X POST \
+  -H "Authorization: Bearer tp_<your test key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "pageviews": [{
+      "sessionKey": "neb_test_abc",
+      "path": "/workspace/0000-0000",
+      "viewedAt": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'",
+      "pageType": "workspace",
+      "trafficSource": "direct",
+      "deviceType": "desktop"
+    }]
+  }' \
+  https://www.synozur.com/api/traffic/ingest
+# Expected: 200 { "accepted": 1, ... }

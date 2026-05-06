@@ -7,6 +7,7 @@ import { ensureUploadDirs } from "./middleware/uploadMiddleware";
 import { pool } from "./db";
 import { sessionMiddleware } from "./session";
 import { runStartupMigrations } from "./migrations";
+import { startTrafficWorker, stopTrafficWorker, flushNow } from "./services/trafficWorker";
 
 const app = express();
 
@@ -106,4 +107,28 @@ app.use((req, res, next) => {
   }, () => {
     log(`serving on port ${port}`);
   });
+
+  // Start Synozur traffic ingest worker after the server is up.
+  // Missing secrets → no-op + single warning (handled inside startTrafficWorker).
+  startTrafficWorker();
+
+  // Graceful shutdown: stop the timer, flush remaining rows (5 s budget).
+  const shutdown = async (signal: string) => {
+    log(`${signal} received — flushing traffic buffer before exit`);
+    stopTrafficWorker();
+    const flushTimeout = setTimeout(() => {
+      log("synozur traffic flush timed out on shutdown");
+    }, 5_000);
+    try {
+      await flushNow();
+    } catch {
+      // best-effort
+    } finally {
+      clearTimeout(flushTimeout);
+    }
+    process.exit(0);
+  };
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT",  () => shutdown("SIGINT"));
 })();
