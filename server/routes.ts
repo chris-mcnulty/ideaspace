@@ -7982,8 +7982,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Optional ?projectId= narrows results to a specific project
+      const projectId = req.query.projectId as string | undefined;
+
       // Only closed, non-template spaces are part of the completed reports feed
-      const spaces = await storage.getSpacesByOrganization(organisationId);
+      let spaces = projectId
+        ? (await storage.getSpacesByProject(projectId)).filter(s => s.organizationId === organisationId)
+        : await storage.getSpacesByOrganization(organisationId);
       const closedSpaces = spaces.filter(s => !s.isTemplate && s.status === "closed");
 
       // Collect the latest cohort result per closed space
@@ -8098,7 +8103,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const spaces = await storage.getSpacesByOrganization(organisationId);
+      // Optional ?projectId= narrows results to a specific project
+      const projectId = req.query.projectId as string | undefined;
+
+      const spaces = projectId
+        ? (await storage.getSpacesByProject(projectId)).filter(s => s.organizationId === organisationId)
+        : await storage.getSpacesByOrganization(organisationId);
+
       const host = req.get("host") || "localhost";
       const protocol = req.get("x-forwarded-proto") || req.protocol || "https";
 
