@@ -53,7 +53,7 @@ export default function PairwiseVoting() {
         title: "Session Required",
         description: "Please join the session first",
       });
-      navigate(`/o/${params.org}/s/${params.space}/join`);
+      navigate(`/o/${params.org}/s/${params.space}`);
       return;
     }
     setParticipantId(storedId);
