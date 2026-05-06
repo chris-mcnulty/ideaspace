@@ -1,0 +1,69 @@
+Nebula API Keys — Switch to Umbrella Model
+Context
+Nebula currently issues one API key per organisation for the /api/galaxy/* endpoints. We want to switch to an umbrella key model: one key per consuming app (Galaxy, plus 5 other Synozur-owned apps), scoped to the Synozur Alliance parent org, with per-tenant isolation enforced via the existing ?domain= query parameter.
+
+The consuming apps are all trusted, multi-tenant Synozur products that already authenticate the end user and know which client org each request is on behalf of. Per-org upstream keys add operational pain (N orgs × 6 apps = many secrets to rotate per onboarding) without raising the security floor, because the consumer already has to be trusted to identify the org from its session.
+
+What to build
+1. Key model
+Add a concept of an umbrella key to the API key table:
+
+New column on the API keys table: is_umbrella (boolean, default false).
+Umbrella keys are issued to the Synozur Alliance parent org only.
+Existing per-org keys keep working unchanged (do not break them — back-compat is required).
+2. Authorisation behaviour
+In the /api/galaxy/* middleware that resolves the key → org:
+
+If the key is is_umbrella = true:
+
+The key is allowed to see all organisations under the Synozur Alliance umbrella.
+The ?domain=<value> query parameter is now required on /reports and /workspaces (return 400 { error: "domain_required" } if missing).
+When domain is provided, look up the org whose primaryDomain or allowedEmailDomains contains that value, and scope the response to that org. If no org matches, return 200 { data: [] } (current empty-page behaviour).
+For /reports/:spaceId, no domain param is needed — instead, verify the workspace's owning org is any org under the umbrella, and return 403 if not.
+If the key is per-org (current behaviour, is_umbrella = false):
+
+Behaviour is unchanged. domain remains optional and only filters within the key's single org.
+3. Admin UI
+In Nebula Admin Panel → API Keys tab:
+
+Add an "Umbrella key" toggle when creating a key. Only Synozur company admins (not external client admins) may create umbrella keys.
+Show a clear badge on the keys list: Umbrella vs Org: <name>.
+Document in the UI helper text: "Umbrella keys can read data for all organisations under your tenant. Use this when issuing one key to a trusted Synozur-owned consumer app (Galaxy, etc.) instead of one key per client org."
+4. Documentation update
+Update the Galaxy integration spec doc (the markdown file describing /api/galaxy/*):
+
+New section: "Key types: per-org vs umbrella" explaining the two modes.
+Update ?domain= description: "Optional for per-org keys; required on /reports and /workspaces for umbrella keys."
+Update the recommendation: "If the consumer is a trusted Synozur-owned app serving multiple client orgs (e.g. Galaxy), use one umbrella key + ?domain= per request. If the consumer is an external integration scoped to a single client, use a per-org key."
+5. Smoke test / verification
+After implementing, verify:
+
+# Umbrella key, no domain → 400
+curl -s -H "Authorization: Bearer nebula_<umbrella>" \
+  https://nebula.synozur.com/api/galaxy/workspaces
+# → 400 { "error": "domain_required" }
+# Umbrella key + valid domain → data scoped to that org
+curl -s -H "Authorization: Bearer nebula_<umbrella>" \
+  "https://nebula.synozur.com/api/galaxy/workspaces?domain=acme.com"
+# → 200 { "data": [...] }
+# Umbrella key + unknown domain → empty
+curl -s -H "Authorization: Bearer nebula_<umbrella>" \
+  "https://nebula.synozur.com/api/galaxy/workspaces?domain=nobody.example"
+# → 200 { "data": [] }
+# Per-org key (existing) → unchanged behaviour
+curl -s -H "Authorization: Bearer nebula_<per-org>" \
+  https://nebula.synozur.com/api/galaxy/workspaces
+# → 200 { "data": [...] }   (no domain required)
+
+Out of scope
+Do not change the public response shapes.
+Do not deprecate per-org keys yet — both modes coexist.
+No changes to /api/galaxy/reports/:spaceId response payload, only its 403 logic.
+Acceptance criteria
+ is_umbrella column added with migration.
+ Admin UI lets a Synozur admin issue an umbrella key.
+ Umbrella key + ?domain= returns the correct org's data.
+ Umbrella key without ?domain= returns 400 domain_required on list endpoints.
+ Per-org keys continue to work exactly as before.
+ Spec doc updated.
+ Smoke-test curls above all behave as specified.

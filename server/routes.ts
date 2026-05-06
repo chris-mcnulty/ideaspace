@@ -7879,6 +7879,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const schema = z.object({
         label: z.string().min(1).max(100),
         organisationId: z.string().optional(),
+        isUmbrella: z.boolean().optional().default(false),
       });
       const body = schema.parse(req.body);
       const currentUser = req.user as User;
@@ -7891,11 +7892,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No organisation associated with this account" });
       }
 
+      // Only global_admin or company_admin may issue umbrella keys
+      if (body.isUmbrella && currentUser.role !== "global_admin" && currentUser.role !== "company_admin") {
+        return res.status(403).json({ error: "Only Synozur admins may issue umbrella keys" });
+      }
+
       const { plaintext, hash } = generateApiKey();
       const keyRow = await storage.createOrganisationApiKey({
         organisationId: orgId,
         keyHash: hash,
         label: body.label,
+        isUmbrella: body.isUmbrella ?? false,
       });
       const { keyHash: _h, ...safe } = keyRow;
       res.status(201).json({ ...safe, plaintext }); // plaintext shown only here
@@ -7963,33 +7970,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return orgDomains.includes(domain);
   }
 
+  /**
+   * Resolve the effective organisation ID for a Galaxy list endpoint
+   * (/reports, /workspaces).  Handles both per-org and umbrella key modes.
+   *
+   * Per-org key (isUmbrella = false):
+   *   - ?domain= is optional; if provided it must match the key's org or we
+   *     return an empty page (no 400).
+   *   - Returns the key's organisationId.
+   *
+   * Umbrella key (isUmbrella = true):
+   *   - ?domain= is REQUIRED → 400 { error: "domain_required" } if missing.
+   *   - Looks up the org by domain; if none matches returns null (caller sends
+   *     an empty response).
+   *   - Returns the matched org's id.
+   *
+   * Returns false if a response has already been sent (error path).
+   * Returns null  if domain lookup yielded no match → caller should return empty.
+   * Returns a string organisationId on success.
+   */
+  async function resolveGalaxyListOrg(
+    req: ExpressRequest,
+    res: ExpressResponse,
+  ): Promise<string | null | false> {
+    const isUmbrella: boolean = (req as any).apiKeyIsUmbrella === true;
+    const baseOrgId: string = (req as any).apiOrganisationId;
+
+    const domain = parseGalaxyDomainParam(req, res);
+    if (domain === false) return false; // 400 already sent
+
+    if (isUmbrella) {
+      // Umbrella key: domain is mandatory for list endpoints
+      if (!domain) {
+        res.status(400).json({ error: "domain_required" });
+        return false;
+      }
+      // Find the org that owns this domain across the whole tenant
+      const org = await storage.getOrganizationByDomain(domain);
+      if (!org) return null; // no match → empty response
+      return org.id;
+    }
+
+    // Per-org key: domain is optional, only filters within the key's single org
+    if (domain) {
+      const org = await storage.getOrganization(baseOrgId);
+      if (!org) return null;
+      if (!orgMatchesDomain(org, domain)) return null;
+    }
+    return baseOrgId;
+  }
+
   // GET /api/galaxy/reports  — paginated list of CLOSED workspaces that have a cohort result
   app.get("/api/galaxy/reports", requireApiKey, async (req, res) => {
     try {
-      const organisationId: string = (req as any).apiOrganisationId;
-      const domain = parseGalaxyDomainParam(req, res);
-      if (domain === false) return; // 400 already sent
-
       const page = Math.max(1, parseInt(req.query.page as string || "1", 10));
       const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string || "20", 10)));
 
-      // ?domain= further restricts to orgs whose Entra/corporate email domains include it
-      if (domain) {
-        const org = await storage.getOrganization(organisationId);
-        if (!org) return res.status(401).json({ error: "Organisation not found" });
-        if (!orgMatchesDomain(org, domain)) {
-          return res.json({ data: [], page, limit, total: 0 });
-        }
-      }
+      const organisationId = await resolveGalaxyListOrg(req, res);
+      if (organisationId === false) return; // error already sent
+      if (organisationId === null) return res.json({ data: [], page, limit, total: 0 }); // empty match
 
       // Optional ?projectId= narrows results to a specific project
       const projectId = req.query.projectId as string | undefined;
 
       // Only closed, non-template spaces are part of the completed reports feed
-      let spaces = projectId
+      let spaceList = projectId
         ? (await storage.getSpacesByProject(projectId)).filter(s => s.organizationId === organisationId)
         : await storage.getSpacesByOrganization(organisationId);
-      const closedSpaces = spaces.filter(s => !s.isTemplate && s.status === "closed");
+      const closedSpaces = spaceList.filter(s => !s.isTemplate && s.status === "closed");
 
       // Collect the latest cohort result per closed space
       const results: Array<{
@@ -8026,15 +8074,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/galaxy/reports/:spaceId  — full cohort result for one closed workspace
   app.get("/api/galaxy/reports/:spaceId", requireApiKey, async (req, res) => {
     try {
-      const organisationId: string = (req as any).apiOrganisationId;
+      const isUmbrella: boolean = (req as any).apiKeyIsUmbrella === true;
+      const keyOrgId: string = (req as any).apiOrganisationId;
       const { spaceId } = req.params;
 
       const space = await storage.getSpace(spaceId);
       if (!space || space.isTemplate) {
         return res.status(404).json({ error: "Workspace not found" });
       }
-      // Enforce org scoping — key from org A cannot read data for org B
-      if (space.organizationId !== organisationId) {
+
+      // Umbrella key: any org is accessible (the consumer already authenticated the end-user).
+      // Per-org key: workspace must belong to the key's org.
+      if (!isUmbrella && space.organizationId !== keyOrgId) {
         return res.status(403).json({ error: "Access denied" });
       }
 
@@ -8089,31 +8140,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/galaxy/workspaces  — list all non-template workspaces for the org
   app.get("/api/galaxy/workspaces", requireApiKey, async (req, res) => {
     try {
-      const organisationId: string = (req as any).apiOrganisationId;
-      const domain = parseGalaxyDomainParam(req, res);
-      if (domain === false) return;
-
-      if (domain) {
-        // Restrict to orgs that have this domain
-        const org = await storage.getOrganization(organisationId);
-        if (!org) return res.status(401).json({ error: "Organisation not found" });
-        const orgDomains = [org.domain, ...(org.allowedDomains || [])].filter(Boolean) as string[];
-        if (!orgDomains.includes(domain)) {
-          return res.json({ data: [] });
-        }
-      }
+      const organisationId = await resolveGalaxyListOrg(req, res);
+      if (organisationId === false) return; // error already sent
+      if (organisationId === null) return res.json({ data: [] }); // empty match
 
       // Optional ?projectId= narrows results to a specific project
       const projectId = req.query.projectId as string | undefined;
 
-      const spaces = projectId
+      const spaceList = projectId
         ? (await storage.getSpacesByProject(projectId)).filter(s => s.organizationId === organisationId)
         : await storage.getSpacesByOrganization(organisationId);
 
       const host = req.get("host") || "localhost";
       const protocol = req.get("x-forwarded-proto") || req.protocol || "https";
 
-      const data = spaces
+      const data = spaceList
         .filter(s => !s.isTemplate)
         .map(s => ({
           id: s.id,

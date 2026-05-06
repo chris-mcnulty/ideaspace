@@ -142,6 +142,7 @@ export function requireApiKey(req: any, res: any, next: any) {
     }
     req.apiOrganisationId = keyRow.organisationId;
     req.apiKeyId = keyRow.id;
+    req.apiKeyIsUmbrella = keyRow.isUmbrella;
     // Update lastUsedAt asynchronously (fire-and-forget)
     storage.touchOrganisationApiKey(keyRow.id).catch(() => {});
     next();

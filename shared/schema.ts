@@ -699,12 +699,13 @@ export const pulseActivityEvents = pgTable("pulse_activity_events", {
   spaceTimeIdx: index("idx_pulse_events_space_time").on(table.spaceId, table.occurredAt),
 }));
 
-// Organisation API Keys: Per-org machine-to-machine keys for Galaxy integration
+// Organisation API Keys: Per-org or umbrella machine-to-machine keys for Galaxy integration
 export const organisationApiKeys = pgTable("organisation_api_keys", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   organisationId: varchar("organisation_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
   keyHash: text("key_hash").notNull(), // SHA-256 hex of the plaintext key; plaintext shown once on creation
   label: text("label").notNull(), // Human-readable label set by admin
+  isUmbrella: boolean("is_umbrella").notNull().default(false), // true = cross-tenant umbrella key; requires ?domain= on list endpoints
   requestCount: integer("request_count").notNull().default(0), // Cumulative count of authenticated requests
   lastUsedAt: timestamp("last_used_at"), // Updated on each successful auth
   createdAt: timestamp("created_at").defaultNow().notNull(),

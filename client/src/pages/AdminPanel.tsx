@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Building2, Plus, LogOut, Loader2, Mail, Clock, Check, X, BookOpen, FileStack, Activity, Users, Edit, Trash2, FolderKanban, Upload, KeyRound, Copy, Eye, EyeOff } from "lucide-react";
+import { Building2, Plus, LogOut, Loader2, Mail, Clock, Check, X, BookOpen, FileStack, Activity, Users, Edit, Trash2, FolderKanban, Upload, KeyRound, Copy, Eye, EyeOff, Globe } from "lucide-react";
 import { ImportsTab } from "@/components/ImportsTab";
 import type { Organization, Space, User, AccessRequest, WorkspaceTemplate, SystemSetting, Project, ProjectMember } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -35,6 +35,7 @@ interface ApiKey {
   id: string;
   organisationId: string;
   label: string;
+  isUmbrella: boolean;
   requestCount: number;
   lastUsedAt: string | null;
   createdAt: string;
@@ -3901,15 +3902,18 @@ function ApiKeysTab({
     enabled: !!selectedOrgId,
   });
 
-  const createKeySchema = z.object({ label: z.string().min(1, "Label is required").max(100) });
+  const createKeySchema = z.object({
+    label: z.string().min(1, "Label is required").max(100),
+    isUmbrella: z.boolean().default(false),
+  });
   const form = useForm<z.infer<typeof createKeySchema>>({
     resolver: zodResolver(createKeySchema),
-    defaultValues: { label: "" },
+    defaultValues: { label: "", isUmbrella: false },
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { label: string }) => {
-      const body: Record<string, string> = { label: data.label };
+    mutationFn: async (data: { label: string; isUmbrella: boolean }) => {
+      const body: Record<string, string | boolean> = { label: data.label, isUmbrella: data.isUmbrella };
       if (currentUser.role === "global_admin" && selectedOrgId) {
         body.organisationId = selectedOrgId;
       }
@@ -4022,6 +4026,27 @@ function ApiKeysTab({
                       </FormItem>
                     )}
                   />
+                  <FormField
+                    control={form.control}
+                    name="isUmbrella"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start gap-3 rounded-md border p-3">
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            data-testid="switch-umbrella-key"
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>Umbrella key</FormLabel>
+                          <p className="text-xs text-muted-foreground">
+                            Umbrella keys can read data for all organisations under your tenant. Use this when issuing one key to a trusted Synozur-owned consumer app (Galaxy, etc.) instead of one key per client org. Requires <code className="bg-muted px-1 rounded">?domain=</code> on list endpoints.
+                          </p>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
                   <div className="flex justify-end gap-2">
                     <Button type="button" variant="outline" onClick={() => setCreateDialogOpen(false)}>
                       Cancel
@@ -4123,6 +4148,16 @@ function ApiKeysTab({
                       {` · ${key.requestCount.toLocaleString()} request${key.requestCount === 1 ? "" : "s"}`}
                     </p>
                   </div>
+                  {key.isUmbrella ? (
+                    <Badge variant="secondary" className="flex-shrink-0 gap-1" data-testid={`badge-umbrella-${key.id}`}>
+                      <Globe className="h-3 w-3" />
+                      Umbrella
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="flex-shrink-0" data-testid={`badge-org-${key.id}`}>
+                      Org
+                    </Badge>
+                  )}
                   <Badge variant="secondary" className="flex-shrink-0">Active</Badge>
                   <Button
                     variant="ghost"
@@ -4156,7 +4191,10 @@ function ApiKeysTab({
             <li>GET /api/galaxy/reports/:spaceId</li>
           </ul>
           <p className="text-xs pt-1">
-            Both list endpoints accept an optional <code className="bg-muted px-1 rounded">?domain=acme.com</code> filter.
+            <strong>Per-org keys</strong> — optional <code className="bg-muted px-1 rounded">?domain=acme.com</code> filter on list endpoints.
+          </p>
+          <p className="text-xs">
+            <strong>Umbrella keys</strong> — <code className="bg-muted px-1 rounded">?domain=</code> is <em>required</em> on <code className="bg-muted px-1 rounded">/workspaces</code> and <code className="bg-muted px-1 rounded">/reports</code>. Omitting it returns <code className="bg-muted px-1 rounded">400 domain_required</code>.
           </p>
         </CardContent>
       </Card>

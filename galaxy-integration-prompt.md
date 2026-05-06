@@ -17,8 +17,8 @@ Authorization: Bearer nebula_<48 hex characters>
 ```
 
 **Key facts:**
-- Keys are issued per-organisation by a Nebula company admin through the Nebula Admin Panel → API Keys tab.
-- A key is scoped to exactly one Nebula organisation. It cannot read data from any other organisation.
+- Keys are issued by a Nebula company admin through the Nebula Admin Panel → API Keys tab.
+- Two key types exist: **per-org** and **umbrella** (see section 1.1 below).
 - Keys are never rotated automatically; Galaxy should store the key securely as an environment secret (`NEBULA_API_KEY`).
 - If the key is missing, empty, or revoked, every endpoint returns `401`.
 
@@ -26,6 +26,28 @@ Authorization: Bearer nebula_<48 hex characters>
 - Store the key in an environment variable: `NEBULA_API_KEY`
 - Store the Nebula base URL: `NEBULA_BASE_URL` (e.g. `https://nebula.synozur.com`)
 - Create a single shared HTTP client/helper that injects `Authorization: Bearer ${NEBULA_API_KEY}` on every request to `NEBULA_BASE_URL/api/galaxy/*`.
+
+---
+
+### 1.1 Key types: per-org vs umbrella
+
+Nebula supports two key types, selectable when creating a key in the Admin Panel.
+
+| | Per-org key | Umbrella key |
+|---|---|---|
+| **Scope** | Exactly one Nebula organisation | All organisations under the Synozur Alliance tenant |
+| **`?domain=` on list endpoints** | Optional — further filters within the key's single org | **Required** — identifies which org's data to return |
+| **Who can create** | Company admin or global admin | Company admin or global admin (Synozur admins only) |
+| **Badge in Admin UI** | `Org` | `Umbrella` |
+| **Recommended for** | External integrations scoped to a single client org | Trusted Synozur-owned consumer apps (Galaxy, etc.) that serve multiple client orgs |
+
+**When to use umbrella keys:**
+If a single Galaxy instance serves multiple client accounts and makes requests on behalf of different orgs, use one umbrella key and pass `?domain=<client-domain>` on every list request. This eliminates the need to manage N separate API keys (one per client org).
+
+**When to use per-org keys:**
+If the consumer is an external integration or a single-client deployment, use a per-org key — no `?domain=` is needed.
+
+**Both types coexist and are backwards-compatible.** Existing per-org keys continue to work unchanged.
 
 ---
 
@@ -51,7 +73,7 @@ Returns a **paginated list** of closed workspaces that have a completed AI-gener
 |-------|------|---------|-------------|
 | `page` | integer | `1` | Page number (1-based) |
 | `limit` | integer | `20` | Results per page (max 100) |
-| `domain` | string | — | Optional. Filter to workspaces whose organisation's primary or allowed email domain matches this value (e.g. `acme.com`). Returns empty `data: []` if the key's org does not own that domain. |
+| `domain` | string | — | **Per-org keys:** Optional. Filter to workspaces whose organisation's primary or allowed email domain matches this value (e.g. `acme.com`). Returns empty `data: []` if the key's org does not own that domain. **Umbrella keys:** Required. Identifies the client org whose data to return. Returns `400 domain_required` if omitted; returns `200 { data: [] }` if the domain matches no known org. |
 
 #### Success response `200`
 
@@ -80,7 +102,7 @@ Results are sorted by `reportGeneratedAt` descending (most recent first).
 
 | Status | Meaning |
 |--------|---------|
-| `400` | `domain` query param is malformed |
+| `400` | `domain` param is malformed, or umbrella key used without `?domain=` (`{ "error": "domain_required" }`) |
 | `401` | Missing, invalid, or revoked API key |
 | `500` | Internal server error |
 
@@ -152,13 +174,13 @@ No query parameters.
 GET /api/galaxy/workspaces
 ```
 
-Returns all non-template workspaces for the key's organisation, sorted by `createdAt` descending.
+Returns all non-template workspaces for the key's organisation (per-org key) or the specified domain's organisation (umbrella key), sorted by `createdAt` descending.
 
 #### Query parameters
 
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
-| `domain` | string | — | Optional. Same domain-filter semantics as `/reports`. |
+| `domain` | string | — | **Per-org keys:** Optional. Same domain-filter semantics as `/reports`. **Umbrella keys:** Required. Returns `400 domain_required` if omitted. |
 
 #### Success response `200`
 

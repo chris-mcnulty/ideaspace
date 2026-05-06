@@ -246,16 +246,21 @@ export async function ensureOrganisationApiKeysTable(): Promise<void> {
       organisation_id varchar NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
       key_hash text NOT NULL,
       label text NOT NULL,
+      is_umbrella boolean NOT NULL DEFAULT false,
       request_count integer NOT NULL DEFAULT 0,
       last_used_at timestamp,
       created_at timestamp NOT NULL DEFAULT now(),
       revoked_at timestamp
     );
   `);
-  // Backfill: add request_count to tables created before this column existed
+  // Backfill: add columns to tables created before these columns existed
   await pool.query(`
     ALTER TABLE organisation_api_keys
     ADD COLUMN IF NOT EXISTS request_count integer NOT NULL DEFAULT 0;
+  `);
+  await pool.query(`
+    ALTER TABLE organisation_api_keys
+    ADD COLUMN IF NOT EXISTS is_umbrella boolean NOT NULL DEFAULT false;
   `);
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_org_api_keys_organisation
