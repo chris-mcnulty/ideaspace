@@ -8130,19 +8130,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Optional ?projectId= narrows results to a specific project
       const projectId = req.query.projectId as string | undefined;
 
-      // Only closed, non-template spaces are part of the completed reports feed
+      // All non-template, non-archived spaces are eligible — we include them if
+      // they have at least one generated cohort result, regardless of status.
       let spaceList = projectId
         ? (await storage.getSpacesByProject(projectId)).filter(s => s.organizationId === organisationId)
         : await storage.getSpacesByOrganization(organisationId);
-      const closedSpaces = spaceList.filter(s => !s.isTemplate && s.status === "closed");
+      const eligibleSpaces = spaceList.filter(s => !s.isTemplate && s.status !== "archived");
 
-      // Collect the latest cohort result per closed space
+      // Collect the latest cohort result per eligible space (skip spaces with none)
       const results: Array<{
-        spaceId: string; name: string; code: string; closedAt: Date;
-        reportGeneratedAt: Date; summarySnippet: string;
+        spaceId: string; name: string; code: string; status: string;
+        closedAt: Date | null; reportGeneratedAt: Date; summarySnippet: string;
       }> = [];
 
-      for (const space of closedSpaces) {
+      for (const space of eligibleSpaces) {
         const cohortResultRows = await storage.getCohortResultsBySpace(space.id);
         if (cohortResultRows.length === 0) continue;
         const latest = cohortResultRows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
@@ -8150,7 +8151,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           spaceId: space.id,
           name: space.name,
           code: space.code,
-          closedAt: space.updatedAt, // updatedAt is set when status transitions to closed
+          status: space.status,
+          closedAt: space.status === "closed" ? space.updatedAt : null,
           reportGeneratedAt: latest.createdAt,
           summarySnippet: latest.summary.slice(0, 200),
         });
@@ -8252,7 +8254,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const protocol = req.get("x-forwarded-proto") || req.protocol || "https";
 
       const data = spaceList
-        .filter(s => !s.isTemplate)
+        .filter(s => !s.isTemplate && s.status !== "archived")
         .map(s => ({
           id: s.id,
           name: s.name,
