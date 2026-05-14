@@ -127,6 +127,37 @@ This document tracks planned features, incomplete implementations, and technical
 
 ---
 
+## AI & LLM Safety
+
+### AI Prompt Injection Hardening (P1)
+**Location**: `server/services/openai.ts` (categorization prompt at lines 57-92, similar patterns elsewhere)
+**Description**: User-supplied note content is interpolated directly into LLM prompts (`${notes.map(... note.content ...)}` at line 62) with no delimiters, escaping, or input-length caps. A crafted note could redirect categorization, leak system instructions, or trigger jailbreaks.
+
+**Required**:
+- Wrap user content in clearly delimited blocks (e.g. `<note>...</note>`) and instruct the model to treat anything inside as untrusted data
+- Enforce per-note and per-batch input size limits before calling the API
+- Add a regression test suite of known injection payloads against `categorizeNotes` and any other prompt builders
+
+### AI Response Timeout & Fallback Handling (P2)
+**Location**: `server/services/openai.ts` (line 82 and other `openai.chat.completions.create` callsites)
+**Description**: OpenAI calls are made without an explicit `timeout`. If the model stalls, the request blocks until the client gives up, leaving facilitators with a spinning UI and no graceful degradation.
+
+**Required**:
+- Pass an explicit timeout (e.g. 30s) to every LLM call
+- Use the existing retry loop to fall back to a degraded response (empty categorization, generic summary) after exhausting attempts
+- Surface a user-visible "AI temporarily unavailable" state instead of a hang
+
+### AI Cost Attribution & Per-Organization Budget Caps (P2)
+**Location**: `server/services/aiUsageLogger.ts`, `server/services/openai.ts`
+**Description**: `aiUsageLogger` records usage but there is no enforcement layer that stops calls when an organization exceeds a configured budget. Without caps a single workspace can consume unbounded spend.
+
+**Required**:
+- Add monthly token/cost budgets at the organization level (schema + admin UI)
+- Middleware that checks remaining budget before issuing LLM calls and returns 429 with a clear message when exceeded
+- Admin dashboard view of usage vs. budget per org
+
+---
+
 ## Notifications & Communication
 
 ### In-App Notifications (P2)
@@ -182,6 +213,37 @@ This document tracks planned features, incomplete implementations, and technical
 
 ---
 
+## Security & Hardening
+
+### CSRF Protection & SameSite Cookie Hardening (P1)
+**Location**: `server/routes.ts` (session setup), `server/middleware/`
+**Description**: State-changing routes rely on session cookies but lack CSRF tokens or strict `SameSite`/`Secure` cookie attributes verified end-to-end. Cross-site requests against authenticated facilitators could trigger destructive actions (delete space, change roles).
+
+**Required**:
+- Add a CSRF middleware (e.g. `csurf` or double-submit cookie pattern) on all non-idempotent routes
+- Audit cookie config: `SameSite=Lax` minimum, `Secure` in production, `HttpOnly` on session cookies
+- Add tests asserting cross-origin POSTs without a CSRF token are rejected
+
+### Log Redaction & Sensitive Data Hygiene (P1)
+**Location**: `server/routes.ts` (numerous `console.error(err)` callsites), `server/services/email.ts`
+**Description**: Errors are logged with raw payloads that may include password-reset tokens, OAuth codes, session IDs, and PII (emails). Logs flow to hosting platforms without redaction.
+
+**Required**:
+- Central logger that redacts a known list of sensitive keys (`token`, `password`, `secret`, `authorization`, `cookie`, `email`)
+- Replace direct `console.error(err)` with the central logger
+- Add a lint rule or pre-commit check that flags new direct console usage in `server/`
+
+### Workspace Code Rotation & Audit Trail (P3)
+**Location**: `server/services/workspace-code.ts`
+**Description**: Workspace join codes are issued without expiration, rotation, or per-use audit logging. A leaked code grants indefinite access.
+
+**Required**:
+- Add `expiresAt` and `revokedAt` columns to workspace codes
+- Facilitator UI action to rotate a code (invalidates old, issues new)
+- Log each redemption (who, when, IP) for forensic review
+
+---
+
 ## Technical Debt
 
 ### Sidebar Rail Compatibility (P3)
@@ -203,6 +265,33 @@ This document tracks planned features, incomplete implementations, and technical
 - Unit tests for storage layer
 - Integration tests for API routes
 - E2E tests for critical user flows
+
+### Query Parameter Validation with Zod (P1)
+**Location**: `server/routes.ts` (pagination, listing, and export endpoints — e.g. lines ~2766-2776, ~7640-7641, ~8124)
+**Description**: Query params like `limit`, `page`, `offset`, `coinBudget` are coerced with bare `parseInt()` and minimal bounds checking. Missing or non-numeric values produce `NaN` that silently flows into storage calls.
+
+**Required**:
+- Define shared Zod schemas for common query shapes (pagination, range filters) in `shared/`
+- Replace inline parsing with `schema.parse(req.query)` and return 400 on validation failure
+- Add tests for negative numbers, overflow, and string injection in numeric params
+
+### Storage Layer N+1 Query Audit (P2)
+**Location**: `server/storage.ts` (e.g. `getNotesBySpace`, `getIdeasBySpace`, `getParticipantsBySpace` and their callers)
+**Description**: Several storage methods load full collections and filter in JS, and several routes call per-row lookups inside loops. As spaces grow this becomes the dominant latency cost.
+
+**Required**:
+- Audit `server/routes.ts` and `server/services/results.ts` for `for`/`map` loops that invoke storage methods
+- Push filtering and joins into Drizzle queries (single round-trip per request)
+- Add pagination to listing methods that currently return unbounded arrays
+
+### WebSocket Connection Limits & Per-Space Caps (P2)
+**Location**: `server/routes.ts` (WebSocket setup around lines 7793-7867)
+**Description**: Separate from the existing pooling item, the server has no max-connections-per-space cap, no global connection ceiling, and the heartbeat/stale-sweep interval is hard-coded. A misbehaving client can exhaust sockets for a workspace.
+
+**Required**:
+- Configurable global and per-space connection limits (reject with a clear close code when exceeded)
+- Environment-driven heartbeat and stale-cleanup intervals
+- Metrics endpoint exposing current connection counts per space
 
 ---
 
@@ -242,6 +331,16 @@ This document tracks planned features, incomplete implementations, and technical
 - Database connectivity
 - External service dependencies
 - WebSocket server status
+
+### File Upload Hardening: Quotas, Orphan Cleanup, AV Scanning (P2)
+**Location**: `server/services/file-upload.ts` (lines 15-77), `server/middleware/uploadMiddleware.ts`, `uploads/`
+**Description**: IP-level rate limiting exists but there are no per-user/per-organization quotas, no cleanup of partial uploads left in `uploads/temp`, and no malware scanning before files become available for AI grounding.
+
+**Required**:
+- Per-user and per-organization upload quotas (count and total bytes) tracked in DB
+- Scheduled job to remove `uploads/temp` files older than 1 hour
+- Integrate ClamAV (or equivalent) scanning in production; quarantine on positive hits
+- Reject uploads exceeding allow-listed MIME types after content-sniffing (not just extension)
 
 ---
 
