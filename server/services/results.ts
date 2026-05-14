@@ -6,6 +6,7 @@ import { z } from "zod";
 import type { CohortResult, PersonalizedResult } from "@shared/schema";
 import { storage } from "../storage";
 import { logAiUsage, extractUsageMetrics } from "./aiUsageLogger";
+import { PROMPT_INJECTION_GUARD, sanitizeForPrompt, wrapUntrusted } from "./promptSafety";
 import {
   computeCohortInputsHash,
   computePersonalizedInputsHash,
@@ -328,7 +329,7 @@ export async function generateCohortResults(
 
   const kbContext = kbChunks.length > 0
     ? `\n\nRelevant Knowledge Base Excerpts (top ${kbChunks.length} matches):\n${kbChunks
-        .map((c) => `- [${c.documentTitle}] ${c.content.replace(/\s+/g, ' ').slice(0, 800)}`)
+        .map((c) => `- [${sanitizeForPrompt(c.documentTitle, 200)}] ${sanitizeForPrompt(c.content.replace(/\s+/g, ' '), 800)}`)
         .join('\n')}`
     : '';
 
@@ -395,10 +396,20 @@ export async function generateCohortResults(
     hasStaircase && 'Staircase Rating',
   ].filter(Boolean).join(', ');
 
-  // Prepare data summary for AI
-  const dataSummary = `
-Workspace: ${space.name}
-Purpose: ${space.purpose}
+  // Sanitize all user-controlled fields. The structured analytics shape is
+  // preserved (numbers are not user-controlled) but every free-text value is
+  // length-capped, control-char stripped, and delimiter-neutralized so it
+  // cannot break out of the data block below.
+  const sfShort = (v: unknown) => sanitizeForPrompt(v, 200);
+  const sfNote = (v: unknown) => sanitizeForPrompt(v, 2000);
+  const sfQuestion = (v: unknown) => sanitizeForPrompt(v, 500);
+
+  // Prepare data summary for AI. The entire block is wrapped in an
+  // UNTRUSTED_INPUT envelope and the system message instructs the model to
+  // treat anything inside it as data, not instructions.
+  const dataSummary = `${wrapUntrusted(
+    `Workspace: ${sfShort(space.name)}
+Purpose: ${sanitizeForPrompt(space.purpose, 2000)}
 
 ENABLED MODULES: ${enabledModulesDescription || 'Ideation only'}
 (Only discuss the modules that were enabled. Do NOT mention or analyze modules that were not used.)
@@ -407,25 +418,25 @@ Total Ideas: ${allNotes.length}
 ${hasPairwiseVoting ? `Total Pairwise Votes: ${pairwiseTallies.reduce((s, t) => s + t.wins, 0)}` : ''}
 ${hasStackRanking ? `Total Rankings Submitted: ${rankingParticipantCounts.length}` : ''}
 ${hasMarketplace ? `Total Marketplace Allocations: ${marketplaceTallies.reduce((s, t) => s + t.participantCount, 0)}` : ''}
-${hasPriorityMatrix ? `Priority Matrix Axes: X="${matrixXLabel}" (0=Low, 100=High), Y="${matrixYLabel}" (0=Low, 100=High)
+${hasPriorityMatrix ? `Priority Matrix Axes: X="${sfShort(matrixXLabel)}" (0=Low, 100=High), Y="${sfShort(matrixYLabel)}" (0=Low, 100=High)
 Notes positioned on matrix: ${matrixPositionsByNote.size}` : ''}
-${hasStaircase ? `Staircase Scale: ${staircaseMinScore} (${staircaseMinLabel}) to ${staircaseMaxScore} (${staircaseMaxLabel})
+${hasStaircase ? `Staircase Scale: ${staircaseMinScore} (${sfShort(staircaseMinLabel)}) to ${staircaseMaxScore} (${sfShort(staircaseMaxLabel)})
 Notes rated on staircase: ${staircaseScoresByNote.size}` : ''}
 ${hasSurvey && surveyQuestionsList.length > 0 ? `Survey Questions (participants rated each idea 1-5 on these):
-${surveyQuestionsList.map((q, i) => `  Q${i + 1}: ${q.questionText}`).join('\n')}
+${surveyQuestionsList.map((q, i) => `  Q${i + 1}: ${sfQuestion(q.questionText)}`).join('\n')}
 Total survey responses: ${surveyAvgByNote.size} ideas rated` : ''}
 
 All Ideas Ranked by Combined Score:
 ${notesWithScores.map((note: any, idx: any) => `
-${idx + 1}. "${note.content}" (Category: ${note.manualCategoryId ? categoryMap.get(note.manualCategoryId) || 'Uncategorized' : 'Uncategorized'})${hasPairwiseVoting ? `
+${idx + 1}. "${sfNote(note.content)}" (Category: ${note.manualCategoryId ? sfShort(categoryMap.get(note.manualCategoryId) || 'Uncategorized') : 'Uncategorized'})${hasPairwiseVoting ? `
    - Pairwise Wins: ${note.pairwiseWins}` : ''}${hasStackRanking ? `
    - Borda Score: ${note.bordaScore}` : ''}${hasMarketplace ? `
    - Marketplace Coins: ${note.marketplaceCoins}` : ''}${hasPriorityMatrix && matrixPositionsByNote.has(note.id) ? `
-   - Matrix Position: ${matrixXLabel}=${matrixPositionsByNote.get(note.id)!.x}%, ${matrixYLabel}=${matrixPositionsByNote.get(note.id)!.y}% (${matrixPositionsByNote.get(note.id)!.x > 50 ? 'High' : 'Low'} ${matrixXLabel}, ${matrixPositionsByNote.get(note.id)!.y > 50 ? 'High' : 'Low'} ${matrixYLabel})` : ''}${hasStaircase && staircaseScoresByNote.has(note.id) ? `
+   - Matrix Position: ${sfShort(matrixXLabel)}=${matrixPositionsByNote.get(note.id)!.x}%, ${sfShort(matrixYLabel)}=${matrixPositionsByNote.get(note.id)!.y}% (${matrixPositionsByNote.get(note.id)!.x > 50 ? 'High' : 'Low'} ${sfShort(matrixXLabel)}, ${matrixPositionsByNote.get(note.id)!.y > 50 ? 'High' : 'Low'} ${sfShort(matrixYLabel)})` : ''}${hasStaircase && staircaseScoresByNote.has(note.id) ? `
    - Staircase Score: ${staircaseScoresByNote.get(note.id)} / ${staircaseMaxScore}` : ''}${hasSurvey && surveyAvgByNote.has(note.id) ? `
    - Avg Survey Score: ${surveyAvgByNote.get(note.id)!.toFixed(2)} / 5${surveyQuestionsList.map(q => {
       const qAvg = surveyQuestionAverages.get(q.id)?.get(note.id);
-      return qAvg != null ? `\n     - "${q.questionText}": ${qAvg.toFixed(2)}/5` : '';
+      return qAvg != null ? `\n     - "${sfQuestion(q.questionText)}": ${qAvg.toFixed(2)}/5` : '';
     }).join('')}` : ''}
    - Combined Score: ${note.combinedScore.toFixed(3)}
 `).join('')}
@@ -439,11 +450,12 @@ ${Object.entries(
       return acc;
     }, {} as Record<string, string[]>)
   ).map(([category, ideas]: any) => `
-${category} (${ideas.length} ideas):
-${ideas.map((idea: any) => `  - ${idea}`).join('\n')}
+${sfShort(category)} (${ideas.length} ideas):
+${ideas.map((idea: any) => `  - ${sfNote(idea)}`).join('\n')}
 `).join('\n')}
-${kbContext}
-`;
+${kbContext}`,
+    80000,
+  )}`;
 
   // Generate results using GPT-5
   const completion = await openai.chat.completions.create({
@@ -457,7 +469,9 @@ CRITICAL FORMATTING RULES:
 1. Only discuss and analyze the modules that were ENABLED for this session. Do NOT mention modules that were not used.
 2. Use clear paragraph breaks (\\n\\n) between distinct points for readability.
 3. For recommendations, format as a numbered list with each recommendation on its own line.
-4. Keep summaries focused on what WAS done, not what wasn't.`,
+4. Keep summaries focused on what WAS done, not what wasn't.
+
+${PROMPT_INJECTION_GUARD}`,
       },
       {
         role: "user",
@@ -644,22 +658,26 @@ export async function generatePersonalizedResults(
     return cachedSingle;
   }
 
-  // Build personalized context
-  const personalContext = `
-Participant: ${participant.displayName}
+  // Build personalized context. All free-text values are sanitized and the
+  // whole block is wrapped as untrusted data; the system message provides the
+  // trust-boundary guard.
+  const sfShortP = (v: unknown) => sanitizeForPrompt(v, 200);
+  const sfNoteP = (v: unknown) => sanitizeForPrompt(v, 2000);
+  const personalContext = wrapUntrusted(
+    `Participant: ${sfShortP(participant.displayName)}
 
 Contributions:
 - Total Ideas: ${participantNotes.length}
 - Ideas by Category: ${Object.entries(
-    participantNotes.reduce<Record<string, number>>((acc, note) => {
-      const manualName = note.manualCategoryId
-        ? categoryNameById.get(note.manualCategoryId)
-        : undefined;
-      const cat = manualName ?? (note as { category?: string }).category ?? 'Uncategorized';
-      acc[cat] = (acc[cat] || 0) + 1;
-      return acc;
-    }, {})
-  ).map(([cat, count]) => `${cat} (${count})`).join(', ')}
+      participantNotes.reduce<Record<string, number>>((acc, note) => {
+        const manualName = note.manualCategoryId
+          ? categoryNameById.get(note.manualCategoryId)
+          : undefined;
+        const cat = manualName ?? (note as { category?: string }).category ?? 'Uncategorized';
+        acc[cat] = (acc[cat] || 0) + 1;
+        return acc;
+      }, {})
+    ).map(([cat, count]) => `${sfShortP(cat)} (${count})`).join(', ')}
 
 Engagement:
 - Pairwise Votes Cast: ${participantVotes.length}
@@ -667,16 +685,17 @@ Engagement:
 - Marketplace Allocations: ${participantAllocations.length > 0 ? 'Yes' : 'No'}
 
 Top Contributions by Impact:
-${noteImpact.slice(0, 5).map((n: any, idx: any) => `${idx + 1}. "${n.content}" - Win rate: ${(n.winRate * 100).toFixed(1)}% (${n.wins}/${n.totalComparisons})`).join('\n')}
+${noteImpact.slice(0, 5).map((n: any, idx: any) => `${idx + 1}. "${sfNoteP(n.content)}" - Win rate: ${(n.winRate * 100).toFixed(1)}% (${n.wins}/${n.totalComparisons})`).join('\n')}
 
 ${cohortResult ? `
 Cohort Summary:
-${cohortResult.summary}
+${sanitizeForPrompt(cohortResult.summary, 4000)}
 
 Key Themes Identified:
-${cohortResult.keyThemes?.join(', ') || 'None identified'}
-` : ''}
-`;
+${cohortResult.keyThemes?.map((t: string) => sfShortP(t)).join(', ') || 'None identified'}
+` : ''}`,
+    40000,
+  );
 
   // Generate personalized insights using GPT-5
   const completion = await openai.chat.completions.create({
@@ -684,7 +703,9 @@ ${cohortResult.keyThemes?.join(', ') || 'None identified'}
     messages: [
       {
         role: "system",
-        content: `You are a personal coach providing tailored feedback to a participant in a collaborative envisioning session. Analyze their contributions, engagement, and alignment with the cohort to provide meaningful insights and recommendations.`,
+        content: `You are a personal coach providing tailored feedback to a participant in a collaborative envisioning session. Analyze their contributions, engagement, and alignment with the cohort to provide meaningful insights and recommendations.
+
+${PROMPT_INJECTION_GUARD}`,
       },
       {
         role: "user",
@@ -929,21 +950,23 @@ async function generatePersonalizedResultsFromCache(params: {
     return cachedPersonal;
   }
 
-  const personalContext = `
-Participant: ${participant.displayName}
+  const sfShortC = (v: unknown) => sanitizeForPrompt(v, 200);
+  const sfNoteC = (v: unknown) => sanitizeForPrompt(v, 2000);
+  const personalContext = wrapUntrusted(
+    `Participant: ${sfShortC(participant.displayName)}
 
 Contributions:
 - Total Ideas: ${participantNotes.length}
 - Ideas by Category: ${Object.entries(
-    participantNotes.reduce<Record<string, number>>((acc, note) => {
-      const manualName = note.manualCategoryId
-        ? categoryNameById.get(note.manualCategoryId)
-        : undefined;
-      const cat = manualName ?? (note as { category?: string }).category ?? 'Uncategorized';
-      acc[cat] = (acc[cat] || 0) + 1;
-      return acc;
-    }, {})
-  ).map(([cat, count]) => `${cat} (${count})`).join(', ')}
+      participantNotes.reduce<Record<string, number>>((acc, note) => {
+        const manualName = note.manualCategoryId
+          ? categoryNameById.get(note.manualCategoryId)
+          : undefined;
+        const cat = manualName ?? (note as { category?: string }).category ?? 'Uncategorized';
+        acc[cat] = (acc[cat] || 0) + 1;
+        return acc;
+      }, {})
+    ).map(([cat, count]) => `${sfShortC(cat)} (${count})`).join(', ')}
 
 Engagement:
 - Pairwise Votes Cast: ${participantVotes.length}
@@ -951,23 +974,26 @@ Engagement:
 - Marketplace Allocations: ${participantAllocations.length > 0 ? 'Yes' : 'No'}
 
 Top Contributions by Impact:
-${noteImpact.slice(0, 5).map((n, idx) => `${idx + 1}. "${n.content}" - Win rate: ${(n.winRate * 100).toFixed(1)}% (${n.wins}/${n.totalComparisons})`).join('\n')}
+${noteImpact.slice(0, 5).map((n, idx) => `${idx + 1}. "${sfNoteC(n.content)}" - Win rate: ${(n.winRate * 100).toFixed(1)}% (${n.wins}/${n.totalComparisons})`).join('\n')}
 
 ${cohortResult ? `
 Cohort Summary:
-${cohortResult.summary}
+${sanitizeForPrompt(cohortResult.summary, 4000)}
 
 Key Themes Identified:
-${cohortResult.keyThemes?.join(', ') || 'None identified'}
-` : ''}
-`;
+${cohortResult.keyThemes?.map((t: string) => sfShortC(t)).join(', ') || 'None identified'}
+` : ''}`,
+    40000,
+  );
 
   const completion = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: [
       {
         role: "system",
-        content: `You are a personal coach providing tailored feedback to a participant in a collaborative envisioning session. Analyze their contributions, engagement, and alignment with the cohort to provide meaningful insights and recommendations.`,
+        content: `You are a personal coach providing tailored feedback to a participant in a collaborative envisioning session. Analyze their contributions, engagement, and alignment with the cohort to provide meaningful insights and recommendations.
+
+${PROMPT_INJECTION_GUARD}`,
       },
       {
         role: "user",

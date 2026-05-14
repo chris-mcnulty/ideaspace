@@ -129,14 +129,15 @@ This document tracks planned features, incomplete implementations, and technical
 
 ## AI & LLM Safety
 
-### AI Prompt Injection Hardening (P1)
-**Location**: `server/services/openai.ts` (categorization prompt at lines 57-92, similar patterns elsewhere)
+### AI Prompt Injection Hardening (P1) — _IMPLEMENTED 2026-05-14_
+**Location**: `server/services/openai.ts` (categorization prompt at lines 57-92, similar patterns elsewhere), `server/services/results.ts` (cohort/personalized prompts), `server/services/promptSafety.ts` (new)
 **Description**: User-supplied note content is interpolated directly into LLM prompts (`${notes.map(... note.content ...)}` at line 62) with no delimiters, escaping, or input-length caps. A crafted note could redirect categorization, leak system instructions, or trigger jailbreaks.
 
-**Required**:
-- Wrap user content in clearly delimited blocks (e.g. `<note>...</note>`) and instruct the model to treat anything inside as untrusted data
-- Enforce per-note and per-batch input size limits before calling the API
-- Add a regression test suite of known injection payloads against `categorizeNotes` and any other prompt builders
+**Delivered**:
+- New `promptSafety` module: `sanitizeForPrompt`, `wrapUntrusted`, `capAggregate`, `PROMPT_INJECTION_GUARD`
+- All 6 prompt builders (`categorizeNotes`, `rewriteCard`, `suggestIdeas`, `generateCohortResults`, `generatePersonalizedResults`, `generatePersonalizedResultsFromCache`) now wrap user content in tagged blocks, sanitize control characters and Unicode bidi overrides, and cap per-field + aggregate length
+- System prompts include the trust-boundary guard
+- Regression tests in `server/services/promptSafety.test.ts` cover delimiter escape attempts, bidi smuggling, control chars, length caps
 
 ### AI Response Timeout & Fallback Handling (P2)
 **Location**: `server/services/openai.ts` (line 82 and other `openai.chat.completions.create` callsites)
@@ -215,23 +216,32 @@ This document tracks planned features, incomplete implementations, and technical
 
 ## Security & Hardening
 
-### CSRF Protection & SameSite Cookie Hardening (P1)
-**Location**: `server/routes.ts` (session setup), `server/middleware/`
+### CSRF Protection & SameSite Cookie Hardening (P1) — _IMPLEMENTED 2026-05-14 (opt-in)_
+**Location**: `server/middleware/csrf.ts` (new), `server/index.ts`, `client/src/lib/queryClient.ts`, `client/src/lib/installFetchCsrf.ts` (new), `server/session.ts`
 **Description**: State-changing routes rely on session cookies but lack CSRF tokens or strict `SameSite`/`Secure` cookie attributes verified end-to-end. Cross-site requests against authenticated facilitators could trigger destructive actions (delete space, change roles).
 
-**Required**:
-- Add a CSRF middleware (e.g. `csurf` or double-submit cookie pattern) on all non-idempotent routes
-- Audit cookie config: `SameSite=Lax` minimum, `Secure` in production, `HttpOnly` on session cookies
-- Add tests asserting cross-origin POSTs without a CSRF token are rejected
+**Delivered**:
+- Double-submit-cookie middleware with three modes (`CSRF_MODE=off|report|enforce`, default `off`)
+- Token cookie: `SameSite=Lax`, `Secure` in production, 30-day max age
+- Constant-time comparison; `/api/csrf-token` endpoint for non-cookie clients
+- `apiRequest` and `getQueryFn` send `X-CSRF-Token` automatically; a global fetch interceptor (`installFetchCsrf`) catches the ~30 direct `fetch()` callers in the client without per-file edits
+- Session secret hardened: production now fails fast if `SESSION_SECRET` is missing or <32 chars (was previously a hardcoded fallback)
+- 8 middleware tests covering mode switches, mismatch rejection, allowlist, and safe-method passthrough
 
-### Log Redaction & Sensitive Data Hygiene (P1)
-**Location**: `server/routes.ts` (numerous `console.error(err)` callsites), `server/services/email.ts`
+**Rollout**: ship with `CSRF_MODE=off`, flip to `report` in staging to confirm no clients are missing the header (logs will show `CSRF token mismatch` warnings), then flip to `enforce` in production.
+
+### Log Redaction & Sensitive Data Hygiene (P1) — _IMPLEMENTED 2026-05-14 (high-risk callsites)_
+**Location**: `server/utils/logger.ts` (new), `server/routes.ts` (password reset paths), `server/routes/auth-oauth.ts`, `server/routes/auth-entra.ts`, `server/index.ts` (global error handler)
 **Description**: Errors are logged with raw payloads that may include password-reset tokens, OAuth codes, session IDs, and PII (emails). Logs flow to hosting platforms without redaction.
 
-**Required**:
-- Central logger that redacts a known list of sensitive keys (`token`, `password`, `secret`, `authorization`, `cookie`, `email`)
-- Replace direct `console.error(err)` with the central logger
-- Add a lint rule or pre-commit check that flags new direct console usage in `server/`
+**Delivered**:
+- Central `logger` with recursive key-based redaction (passwords, tokens, secrets, cookies, OAuth codes, refresh/access/id tokens, session payloads, etc.)
+- Email addresses in string values are masked (`a***@example.com`)
+- String values are truncated at 2 KB; recursion is depth-capped
+- Wired into the highest-risk paths: password reset endpoints (request/reset), all OAuth/Entra auth flows, and the global Express error handler
+- 13 redaction tests cover key matching, recursion, Error serialization, email masking, depth limits
+
+**Follow-up**: ~190 routine `console.error` calls remain in CRUD handlers — migrate gradually; an ESLint rule banning new `console` usage in `server/` is recommended.
 
 ### Workspace Code Rotation & Audit Trail (P3)
 **Location**: `server/services/workspace-code.ts`
@@ -266,16 +276,18 @@ This document tracks planned features, incomplete implementations, and technical
 - Integration tests for API routes
 - E2E tests for critical user flows
 
-### Query Parameter Validation with Zod (P1)
-**Location**: `server/routes.ts` (pagination, listing, and export endpoints — e.g. lines ~2766-2776, ~7640-7641, ~8124)
+### Query Parameter Validation with Zod (P1) — _IMPLEMENTED 2026-05-14_
+**Location**: `server/utils/queryParams.ts` (new), `server/routes.ts`, `server/routes/auth-oauth.ts`, `server/routes/auth-entra.ts`
 **Description**: Query params like `limit`, `page`, `offset`, `coinBudget` are coerced with bare `parseInt()` and minimal bounds checking. Missing or non-numeric values produce `NaN` that silently flows into storage calls.
 
-**Required**:
-- Define shared Zod schemas for common query shapes (pagination, range filters) in `shared/`
-- Replace inline parsing with `schema.parse(req.query)` and return 400 on validation failure
-- Add tests for negative numbers, overflow, and string injection in numeric params
+**Delivered**:
+- Shared Zod schemas: `paginationQuerySchema`, `notificationListQuerySchema`, `kbSearchQuerySchema`, plus `optionalUuid`, `optionalDomain`, `boolFromQuery`, and a `parseQuery` helper that responds 400 with field-level details
+- Wired into the routes flagged in the audit: KB search, notifications list, galaxy reports pagination, projects org filter
+- **Open-redirect fix**: `safeReturnTo` validator rejects absolute URLs, protocol-relative URLs (`//evil.com`), CR/LF injection, and JS scheme tricks. Applied to both the OAuth (`auth-oauth.ts`) and Entra (`auth-entra.ts`) `returnTo` flows — at write time and at use time
+- 18 schema/redirect tests cover NaN, overflow, invalid scope, missing default, all redirect bypass patterns
 
-### Storage Layer N+1 Query Audit (P2)
+### Storage Layer N+1 Query Audit (P2) — _AUDIT COMPLETE 2026-05-14_
+**Audit report**: `docs/storage-query-audit.md` — 12 findings (2 Critical, 5 High, 3 Medium, 2 Low), file:line anchored, with one-sentence fix recommendations. Top issues: per-space DB round-trip in `GET /api/galaxy/reports`, full-table scan in `getOrganizationByDomain`, duplicate facilitator authorization queries.
 **Location**: `server/storage.ts` (e.g. `getNotesBySpace`, `getIdeasBySpace`, `getParticipantsBySpace` and their callers)
 **Description**: Several storage methods load full collections and filter in JS, and several routes call per-row lookups inside loops. As spaces grow this becomes the dominant latency cost.
 

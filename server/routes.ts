@@ -13,6 +13,15 @@ import { CSV_IMPORT_TYPES, csvConfirmTemplatesBodySchema, csvConfirmUsersBodySch
 import { buildCsvPreview, buildErrorReportCsv } from "./services/csvImport";
 import { uploadImage, validateImageFile, cleanupTempFile } from "./middleware/uploadMiddleware";
 import { processUploadedImage } from "./utils/contentUtils";
+import {
+  paginationQuerySchema,
+  notificationListQuerySchema,
+  kbSearchQuerySchema,
+  optionalUuid,
+  optionalDomain,
+  parseQuery,
+} from "./utils/queryParams";
+import { logger } from "./utils/logger";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { categorizeNotes, rewriteCard, suggestIdeas } from "./services/openai";
@@ -853,16 +862,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           resetUrl,
         });
       } catch (emailError) {
-        console.error("Failed to send password reset email:", emailError);
+        logger.error("Failed to send password reset email", { error: emailError });
         return res.status(500).json({ error: "Failed to send password reset email" });
       }
-      
+
       res.json({ message: "Password reset link sent. Please check your email." });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Invalid email address" });
       }
-      console.error("Password reset request error:", error);
+      logger.error("Password reset request error", { error });
       res.status(500).json({ error: "Failed to process password reset request" });
     }
   });
@@ -924,7 +933,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Invalid request data. Password must be at least 8 characters." });
       }
-      console.error("Password reset error:", error);
+      logger.error("Password reset error", { error });
       res.status(500).json({ error: "Failed to reset password" });
     }
   });
@@ -1412,7 +1421,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/projects", requireAuth, async (req, res) => {
     try {
       const user = req.user as User;
-      const orgId = req.query.organizationId as string | undefined;
+      const orgIdParse = optionalUuid.safeParse(req.query.organizationId);
+      if (!orgIdParse.success) {
+        return res.status(400).json({ error: "Invalid organizationId" });
+      }
+      const orgId = orgIdParse.data;
       
       if (orgId) {
         // Filter by specific org
@@ -2760,11 +2773,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/knowledge-base/search", requireAuth, async (req, res) => {
     try {
       const currentUser = req.user as User;
-      const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
-      const scope = typeof req.query.scope === 'string' ? req.query.scope : 'system';
-      const scopeId = typeof req.query.scopeId === 'string' ? req.query.scopeId : undefined;
-      const limitRaw = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : 8;
-      const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(20, limitRaw)) : 8;
+      const parsed = parseQuery(kbSearchQuerySchema, req, res);
+      if (!parsed) return;
+      const { q, scope, scopeId, limit } = parsed;
 
       if (!q) {
         return res.json({ query: '', results: [] });
@@ -7637,7 +7648,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/notifications", requireAuth, async (req, res) => {
     try {
       const user = req.user as User;
-      const limit = Math.min(parseInt(String(req.query.limit || "30"), 10) || 30, 100);
+      const parsed = parseQuery(notificationListQuerySchema, req, res);
+      if (!parsed) return;
+      const { limit } = parsed;
       const items = await storage.getNotificationsByUser(user.id, limit);
       const unreadCount = await storage.getUnreadNotificationCount(user.id);
       res.json({ items, unreadCount });
@@ -8120,15 +8133,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/galaxy/reports  — paginated list of CLOSED workspaces that have a cohort result
   app.get("/api/galaxy/reports", requireApiKey, async (req, res) => {
     try {
-      const page = Math.max(1, parseInt(req.query.page as string || "1", 10));
-      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string || "20", 10)));
+      const parsed = parseQuery(paginationQuerySchema, req, res);
+      if (!parsed) return;
+      const { page, limit } = parsed;
 
       const organisationId = await resolveGalaxyListOrg(req, res);
       if (organisationId === false) return; // error already sent
       if (organisationId === null) return res.json({ data: [], page, limit, total: 0 }); // empty match
 
       // Optional ?projectId= narrows results to a specific project
-      const projectId = req.query.projectId as string | undefined;
+      const projectIdParse = optionalUuid.safeParse(req.query.projectId);
+      if (!projectIdParse.success) {
+        return res.status(400).json({ error: "Invalid projectId" });
+      }
+      const projectId = projectIdParse.data;
 
       // All non-template, non-archived spaces are eligible — we include them if
       // they have at least one generated cohort result, regardless of status.

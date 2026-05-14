@@ -5,6 +5,8 @@ import { users, type User } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import { db } from '../db';
 import type { Request, Response } from 'express';
+import { safeReturnTo } from '../utils/queryParams';
+import { logger } from '../utils/logger';
 
 // Extend express-session types to include OAuth properties
 declare module 'express-session' {
@@ -39,7 +41,7 @@ router.get('/api/auth/oauth-status', async (req: Request, res: Response) => {
     
     res.json({ enabled: oauthEnabled });
   } catch (error) {
-    console.error('Error checking OAuth status:', error);
+    logger.error('Error checking OAuth status', { error });
     // Fail open - if we can't check, allow OAuth if credentials exist
     const enabled = !!(process.env.ORION_CLIENT_ID && process.env.ORION_CLIENT_SECRET);
     res.json({ enabled });
@@ -74,14 +76,18 @@ router.get('/auth/sso/login', (req: Request, res: Response) => {
     req.session.oauth_state = oauthClient.getState();
     req.session.code_verifier = oauthClient.getCodeVerifier();
     
-    // Save the original URL they were trying to access (if any)
+    // Save the original URL they were trying to access (if any).
+    // Validate against open-redirect: only same-origin relative paths.
     if (req.query.returnTo) {
-      req.session.returnTo = req.query.returnTo as string;
+      const safe = safeReturnTo(req.query.returnTo, '');
+      if (safe) {
+        req.session.returnTo = safe;
+      }
     }
     
     res.redirect(authUrl);
   } catch (error) {
-    console.error('OAuth login error:', error);
+    logger.error('OAuth login error', { error });
     res.status(500).json({ error: 'Failed to initiate SSO login' });
   }
 });
@@ -93,25 +99,25 @@ router.get('/auth/callback', async (req: Request, res: Response) => {
     
     // Handle OAuth errors
     if (oauthError) {
-      console.error('OAuth error:', oauthError);
+      logger.error('OAuth provider error', { oauthError });
       return res.redirect('/login?error=oauth_failed');
     }
     
     // Validate state to prevent CSRF attacks
     if (state !== req.session.oauth_state) {
-      console.error('Invalid state parameter');
+      logger.warn('OAuth invalid state parameter');
       return res.redirect('/login?error=invalid_state');
     }
     
     // Validate code is present
     if (!code) {
-      console.error('No authorization code received');
+      logger.warn('OAuth no authorization code received');
       return res.redirect('/login?error=no_code');
     }
     
     // Restore code verifier from session
     if (!req.session.code_verifier) {
-      console.error('No code verifier found in session');
+      logger.warn('OAuth no code verifier in session');
       return res.redirect('/login?error=missing_verifier');
     }
     oauthClient.setCodeVerifier(req.session.code_verifier);
@@ -128,7 +134,7 @@ router.get('/auth/callback', async (req: Request, res: Response) => {
       try {
         idTokenClaims = await oauthClient.verifyIdToken(tokens.id_token);
       } catch (error) {
-        console.error('ID token verification failed:', error);
+        logger.error('ID token verification failed', { error });
         // Continue without ID token verification for now
       }
     }
@@ -194,14 +200,15 @@ router.get('/auth/callback', async (req: Request, res: Response) => {
     delete req.session.oauth_state;
     delete req.session.code_verifier;
     
-    // Redirect to original destination or dashboard
-    const returnTo = req.session.returnTo || '/o';
+    // Redirect to original destination or dashboard. Validate again at use
+    // time in case session was populated by an older, unvalidated code path.
+    const returnTo = safeReturnTo(req.session.returnTo, '/o');
     delete req.session.returnTo;
-    
+
     res.redirect(returnTo);
     
   } catch (error) {
-    console.error('OAuth callback error:', error);
+    logger.error('OAuth callback error', { error });
     res.redirect('/login?error=callback_failed');
   }
 });
@@ -212,7 +219,7 @@ router.post('/auth/sso/logout', (req: Request, res: Response) => {
   
   req.session.destroy((err) => {
     if (err) {
-      console.error('Session destroy error:', err);
+      logger.error('Session destroy error', { error: err });
       return res.status(500).json({ error: 'Logout failed' });
     }
     
@@ -256,7 +263,7 @@ router.post('/auth/refresh', async (req: Request, res: Response) => {
     res.json({ success: true });
     
   } catch (error) {
-    console.error('Token refresh error:', error);
+    logger.error('OAuth token refresh error', { error });
     res.status(401).json({ error: 'Token refresh failed' });
   }
 });

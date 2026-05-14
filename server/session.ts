@@ -6,13 +6,33 @@ import { pool } from "./db";
 
 const PgStore = connectPgSimple(session);
 
+// Resolve the session secret with a fail-fast policy in production. The
+// previous default ("nebula-session-secret-change-in-production") would let an
+// unconfigured deploy boot with a known-public secret, allowing trivial
+// session forgery. Refuse to start in production if the env var is missing.
+function resolveSessionSecret(): string {
+  const envSecret = process.env.SESSION_SECRET?.trim();
+  if (envSecret && envSecret.length >= 32) return envSecret;
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "SESSION_SECRET is required in production and must be at least 32 chars",
+    );
+  }
+
+  console.warn(
+    "[session] SESSION_SECRET is missing or weak; using a development-only fallback. Set SESSION_SECRET in production.",
+  );
+  return "nebula-dev-session-secret-not-for-production-use-32chars";
+}
+
 export const sessionMiddleware: RequestHandler = session({
   store: new PgStore({
     pool: pool,
     tableName: "session",
     createTableIfMissing: true,
   }),
-  secret: process.env.SESSION_SECRET || "nebula-session-secret-change-in-production",
+  secret: resolveSessionSecret(),
   resave: false,
   saveUninitialized: false,
   cookie: {
