@@ -7,6 +7,7 @@ Nebula is a multi-tenant web application designed for structured collaborative e
 - The user wants iterative development.
 - The user wants the agent to ask before making major changes.
 - The user wants detailed explanations.
+- **When a newly merged pull request is detected in Git, always inspect and integrate it**: read every changed file, verify schema integrity (no orphaned columns, insert schemas, select types), verify the database layer (storage interface, migrations), fix any integration gaps (missing imports, un-migrated patterns, leftover stubs), and confirm the app builds cleanly.
 - The user wants me to follow the design guidelines in `design_guidelines.md` for comprehensive design system including:
   - Color palette and semantic tokens
   - Typography scales (Inter, JetBrains Mono)

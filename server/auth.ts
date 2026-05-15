@@ -4,6 +4,7 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { storage } from "./storage";
 import type { User } from "@shared/schema";
+import { logger } from "./utils/logger";
 
 const SALT_ROUNDS = 10;
 
@@ -147,7 +148,7 @@ export function requireApiKey(req: any, res: any, next: any) {
     storage.touchOrganisationApiKey(keyRow.id).catch(() => {});
     next();
   }).catch((err: unknown) => {
-    console.error("[requireApiKey] DB lookup failed:", err);
+    logger.error("requireApiKey DB lookup failed", { error: err });
     res.status(500).json({ error: "Internal server error" });
   });
 }

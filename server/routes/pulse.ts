@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
 import type { User } from "@shared/schema";
+import { logger } from "../utils/logger";
 
 // Resolve a workspace identifier (UUID or 8-digit workspace code) to a
 // canonical workspace UUID. Returns null if not found.
@@ -93,9 +94,7 @@ export function registerPulseRoute(app: Express): void {
       // Lightweight benchmark logging so growth past the documented scope is
       // observable. Useful when validating with 500-participant test cohorts.
       if (joined >= 200 || pulseDurationMs > 250) {
-        console.log(
-          `[pulse] spaceId=${spaceId} participants=${joined} aggregateMs=${pulseDurationMs}`,
-        );
+        logger.info("pulse slow/large", { spaceId, participants: joined, aggregateMs: pulseDurationMs });
       }
 
       // Per-minute activity heatmap across the full session, sourced from the
@@ -121,8 +120,7 @@ export function registerPulseRoute(app: Express): void {
         generatedAt: new Date().toISOString(),
       });
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error("[pulse] failed:", errorMessage);
+      logger.error("pulse snapshot failed", { error });
       res.status(500).json({ error: "Failed to load pulse snapshot" });
     }
   });
