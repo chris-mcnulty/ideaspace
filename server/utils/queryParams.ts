@@ -72,7 +72,8 @@ export const optionalDomain = z
 /**
  * Validate a `returnTo` query parameter to prevent open-redirect attacks.
  * Only relative paths under `/` are allowed; absolute URLs, protocol-relative
- * URLs, and paths containing CR/LF (header smuggling) are rejected.
+ * URLs, paths containing CR/LF (header smuggling), and paths containing any
+ * backslash (Windows-style URL parser tricks) are rejected.
  *
  * Returns a safe path string or the provided fallback.
  */
@@ -85,10 +86,13 @@ export function safeReturnTo(
   if (v.length === 0 || v.length > 2048) return fallback;
   // Disallow CR/LF (header injection) and tabs.
   if (/[\r\n\t]/.test(v)) return fallback;
+  // Disallow any backslash — some URL parsers normalize "\" to "/", letting
+  // crafted inputs like "/\\evil.com" or "/a\\b" smuggle a host segment.
+  if (v.includes("\\")) return fallback;
   // Must start with a single "/" but not "//" (protocol-relative URL) and
-  // must not contain a backslash (Windows-style trick) or scheme.
+  // must not contain a scheme prefix.
   if (!v.startsWith("/")) return fallback;
-  if (v.startsWith("//") || v.startsWith("/\\")) return fallback;
+  if (v.startsWith("//")) return fallback;
   if (/^\/[a-zA-Z][a-zA-Z0-9+.-]*:/.test(v)) return fallback;
   return v;
 }

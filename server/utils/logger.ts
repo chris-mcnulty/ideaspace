@@ -10,9 +10,21 @@
  *   import { logger } from "@/server/utils/logger";
  *   logger.error("Password reset failed", { email, error });
  *
- * The second argument is recursively walked; any key matching the redaction
- * list is replaced with "[REDACTED]". Long random-looking strings in
- * unknown-key positions are also collapsed.
+ * Behavior:
+ *   - The metadata argument is walked recursively. Any key matching the
+ *     REDACT_KEY_PATTERNS list is replaced with "[REDACTED]".
+ *   - Email addresses in string values are partially masked (`a***@domain`)
+ *     so the domain remains visible for triage but the local part is hidden.
+ *   - String values longer than MAX_STRING_LEN (2 KB) are truncated.
+ *   - Recursion stops at MAX_DEPTH to bound work on cyclic / deep inputs.
+ *   - `Error` instances are converted to `{ name, message, stack }` so they
+ *     serialize cleanly.
+ *
+ * What this does NOT do (yet):
+ *   - It does not hash emails into stable fingerprints; it only masks the
+ *     local part.
+ *   - It does not collapse long random-looking strings in unknown keys —
+ *     only keys explicitly matched by REDACT_KEY_PATTERNS are redacted.
  */
 
 const REDACT_KEY_PATTERNS: RegExp[] = [

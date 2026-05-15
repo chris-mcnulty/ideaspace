@@ -67,7 +67,16 @@ function readCookie(req: Request, name: string): string | undefined {
   if (!cookieHeader) return undefined;
   for (const part of cookieHeader.split(";")) {
     const [k, ...rest] = part.trim().split("=");
-    if (k === name) return decodeURIComponent(rest.join("="));
+    if (k === name) {
+      // Malformed percent-encoding from an attacker-controlled cookie would
+      // throw URIError and could crash the request. Treat decode failures as
+      // a missing cookie.
+      try {
+        return decodeURIComponent(rest.join("="));
+      } catch {
+        return undefined;
+      }
+    }
   }
   return undefined;
 }

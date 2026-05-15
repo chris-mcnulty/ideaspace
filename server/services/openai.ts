@@ -64,16 +64,25 @@ export async function categorizeNotes(
     (note, idx) =>
       `${idx + 1}. [ID: ${note.id}] ${wrapUntrusted(note.content, NOTE_CHAR_CAP)}`,
   );
-  const { kept: keptNoteLines, dropped: droppedNotes, truncated } = capAggregate(
-    noteLines,
-  );
+  const { kept: keptNoteLines, dropped: droppedNotes, truncated } =
+    capAggregate(noteLines);
+
+  // Fail fast rather than silently dropping notes and backfilling them as
+  // "Uncategorized" — that mode would produce mostly-Uncategorized output and
+  // a summary that doesn't reflect the omitted ideas. Callers should chunk
+  // their notes or raise the cap.
+  if (truncated) {
+    throw new Error(
+      `Too many notes to categorize in a single request: ${notes.length} provided, ${droppedNotes} would be omitted to fit the model input limit. Reduce the batch size.`,
+    );
+  }
 
   const prompt = `You are an expert facilitator analyzing ideas from a collaborative envisioning session.
 
 Your task: Analyze the following sticky notes and group them into meaningful categories/themes.
 
 NOTES:
-${keptNoteLines.join('\n')}${truncated ? `\n…[${droppedNotes} additional notes omitted to stay within prompt size limit]` : ''}
+${keptNoteLines.join('\n')}
 
 CRITICAL Instructions:
 1. Identify 3-7 main themes/categories that emerge from these notes

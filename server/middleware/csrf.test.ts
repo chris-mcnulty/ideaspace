@@ -156,4 +156,22 @@ describe("csrfMiddleware", () => {
     csrfMiddleware(req, res, next);
     expect(next).toHaveBeenCalled();
   });
+
+  it("does not crash on a cookie with malformed percent-encoding", () => {
+    process.env.CSRF_MODE = "enforce";
+    // Raw cookie header with broken percent-encoding the server would
+    // otherwise pass to decodeURIComponent.
+    const req = {
+      method: "POST",
+      path: "/api/anything",
+      headers: { cookie: "csrf-token=%ZZ" },
+    } as unknown as Request;
+    const res = mockRes() as any;
+    const next = vi.fn();
+    expect(() => csrfMiddleware(req, res, next)).not.toThrow();
+    // Cookie was unreadable, so the middleware treats it as missing and
+    // issues a fresh one; the request itself fails CSRF since no header
+    // was sent.
+    expect(res.statusCode).toBe(403);
+  });
 });

@@ -89,6 +89,11 @@ describe("safeReturnTo", () => {
     expect(safeReturnTo("/\\evil.com")).toBe("/");
   });
 
+  it("rejects any backslash anywhere in the path", () => {
+    expect(safeReturnTo("/path\\extra")).toBe("/");
+    expect(safeReturnTo("/a/b\\c")).toBe("/");
+  });
+
   it("rejects CR/LF injections (header smuggling)", () => {
     expect(safeReturnTo("/path\r\nSet-Cookie: foo=bar")).toBe("/");
     expect(safeReturnTo("/path\nfoo")).toBe("/");
