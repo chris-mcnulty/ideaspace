@@ -127,6 +127,38 @@ This document tracks planned features, incomplete implementations, and technical
 
 ---
 
+## AI & LLM Safety
+
+### AI Prompt Injection Hardening (P1) — _IMPLEMENTED 2026-05-14_
+**Location**: `server/services/openai.ts` (categorization prompt at lines 57-92, similar patterns elsewhere), `server/services/results.ts` (cohort/personalized prompts), `server/services/promptSafety.ts` (new)
+**Description**: User-supplied note content is interpolated directly into LLM prompts (`${notes.map(... note.content ...)}` at line 62) with no delimiters, escaping, or input-length caps. A crafted note could redirect categorization, leak system instructions, or trigger jailbreaks.
+
+**Delivered**:
+- New `promptSafety` module: `sanitizeForPrompt`, `wrapUntrusted`, `capAggregate`, `PROMPT_INJECTION_GUARD`
+- All 6 prompt builders (`categorizeNotes`, `rewriteCard`, `suggestIdeas`, `generateCohortResults`, `generatePersonalizedResults`, `generatePersonalizedResultsFromCache`) now wrap user content in tagged blocks, sanitize control characters and Unicode bidi overrides, and cap per-field + aggregate length
+- System prompts include the trust-boundary guard
+- Regression tests in `server/services/promptSafety.test.ts` cover delimiter escape attempts, bidi smuggling, control chars, length caps
+
+### AI Response Timeout & Fallback Handling (P2)
+**Location**: `server/services/openai.ts` (line 82 and other `openai.chat.completions.create` callsites)
+**Description**: OpenAI calls are made without an explicit `timeout`. If the model stalls, the request blocks until the client gives up, leaving facilitators with a spinning UI and no graceful degradation.
+
+**Required**:
+- Pass an explicit timeout (e.g. 30s) to every LLM call
+- Use the existing retry loop to fall back to a degraded response (empty categorization, generic summary) after exhausting attempts
+- Surface a user-visible "AI temporarily unavailable" state instead of a hang
+
+### AI Cost Attribution & Per-Organization Budget Caps (P2)
+**Location**: `server/services/aiUsageLogger.ts`, `server/services/openai.ts`
+**Description**: `aiUsageLogger` records usage but there is no enforcement layer that stops calls when an organization exceeds a configured budget. Without caps a single workspace can consume unbounded spend.
+
+**Required**:
+- Add monthly token/cost budgets at the organization level (schema + admin UI)
+- Middleware that checks remaining budget before issuing LLM calls and returns 429 with a clear message when exceeded
+- Admin dashboard view of usage vs. budget per org
+
+---
+
 ## Notifications & Communication
 
 ### In-App Notifications (P2)
@@ -182,6 +214,46 @@ This document tracks planned features, incomplete implementations, and technical
 
 ---
 
+## Security & Hardening
+
+### CSRF Protection & SameSite Cookie Hardening (P1) — _IMPLEMENTED 2026-05-14 (opt-in)_
+**Location**: `server/middleware/csrf.ts` (new), `server/index.ts`, `client/src/lib/queryClient.ts`, `client/src/lib/installFetchCsrf.ts` (new), `server/session.ts`
+**Description**: State-changing routes rely on session cookies but lack CSRF tokens or strict `SameSite`/`Secure` cookie attributes verified end-to-end. Cross-site requests against authenticated facilitators could trigger destructive actions (delete space, change roles).
+
+**Delivered**:
+- Double-submit-cookie middleware with three modes (`CSRF_MODE=off|report|enforce`, default `off`)
+- Token cookie: `SameSite=Lax`, `Secure` in production, 30-day max age
+- Constant-time comparison; `/api/csrf-token` endpoint for non-cookie clients
+- `apiRequest` and `getQueryFn` send `X-CSRF-Token` automatically; a global fetch interceptor (`installFetchCsrf`) catches the ~30 direct `fetch()` callers in the client without per-file edits
+- Session secret hardened: production now fails fast if `SESSION_SECRET` is missing or <32 chars (was previously a hardcoded fallback)
+- 8 middleware tests covering mode switches, mismatch rejection, allowlist, and safe-method passthrough
+
+**Rollout**: ship with `CSRF_MODE=off`, flip to `report` in staging to confirm no clients are missing the header (logs will show `CSRF token mismatch` warnings), then flip to `enforce` in production.
+
+### Log Redaction & Sensitive Data Hygiene (P1) — _IMPLEMENTED 2026-05-14 (high-risk callsites)_
+**Location**: `server/utils/logger.ts` (new), `server/routes.ts` (password reset paths), `server/routes/auth-oauth.ts`, `server/routes/auth-entra.ts`, `server/index.ts` (global error handler)
+**Description**: Errors are logged with raw payloads that may include password-reset tokens, OAuth codes, session IDs, and PII (emails). Logs flow to hosting platforms without redaction.
+
+**Delivered**:
+- Central `logger` with recursive key-based redaction (passwords, tokens, secrets, cookies, OAuth codes, refresh/access/id tokens, session payloads, etc.)
+- Email addresses in string values are masked (`a***@example.com`)
+- String values are truncated at 2 KB; recursion is depth-capped
+- Wired into the highest-risk paths: password reset endpoints (request/reset), all OAuth/Entra auth flows, and the global Express error handler
+- 13 redaction tests cover key matching, recursion, Error serialization, email masking, depth limits
+
+**Follow-up**: ~190 routine `console.error` calls remain in CRUD handlers — migrate gradually; an ESLint rule banning new `console` usage in `server/` is recommended.
+
+### Workspace Code Rotation & Audit Trail (P3)
+**Location**: `server/services/workspace-code.ts`
+**Description**: Workspace join codes are issued without expiration, rotation, or per-use audit logging. A leaked code grants indefinite access.
+
+**Required**:
+- Add `expiresAt` and `revokedAt` columns to workspace codes
+- Facilitator UI action to rotate a code (invalidates old, issues new)
+- Log each redemption (who, when, IP) for forensic review
+
+---
+
 ## Technical Debt
 
 ### Sidebar Rail Compatibility (P3)
@@ -203,6 +275,35 @@ This document tracks planned features, incomplete implementations, and technical
 - Unit tests for storage layer
 - Integration tests for API routes
 - E2E tests for critical user flows
+
+### Query Parameter Validation with Zod (P1) — _IMPLEMENTED 2026-05-14_
+**Location**: `server/utils/queryParams.ts` (new), `server/routes.ts`, `server/routes/auth-oauth.ts`, `server/routes/auth-entra.ts`
+**Description**: Query params like `limit`, `page`, `offset`, `coinBudget` are coerced with bare `parseInt()` and minimal bounds checking. Missing or non-numeric values produce `NaN` that silently flows into storage calls.
+
+**Delivered**:
+- Shared Zod schemas: `paginationQuerySchema`, `notificationListQuerySchema`, `kbSearchQuerySchema`, plus `optionalUuid`, `optionalDomain`, `boolFromQuery`, and a `parseQuery` helper that responds 400 with field-level details
+- Wired into the routes flagged in the audit: KB search, notifications list, galaxy reports pagination, projects org filter
+- **Open-redirect fix**: `safeReturnTo` validator rejects absolute URLs, protocol-relative URLs (`//evil.com`), CR/LF injection, and JS scheme tricks. Applied to both the OAuth (`auth-oauth.ts`) and Entra (`auth-entra.ts`) `returnTo` flows — at write time and at use time
+- 18 schema/redirect tests cover NaN, overflow, invalid scope, missing default, all redirect bypass patterns
+
+### Storage Layer N+1 Query Audit (P2) — _AUDIT COMPLETE 2026-05-14_
+**Audit report**: `docs/storage-query-audit.md` — 12 findings (2 Critical, 5 High, 3 Medium, 2 Low), file:line anchored, with one-sentence fix recommendations. Top issues: per-space DB round-trip in `GET /api/galaxy/reports`, full-table scan in `getOrganizationByDomain`, duplicate facilitator authorization queries.
+**Location**: `server/storage.ts` (e.g. `getNotesBySpace`, `getIdeasBySpace`, `getParticipantsBySpace` and their callers)
+**Description**: Several storage methods load full collections and filter in JS, and several routes call per-row lookups inside loops. As spaces grow this becomes the dominant latency cost.
+
+**Required**:
+- Audit `server/routes.ts` and `server/services/results.ts` for `for`/`map` loops that invoke storage methods
+- Push filtering and joins into Drizzle queries (single round-trip per request)
+- Add pagination to listing methods that currently return unbounded arrays
+
+### WebSocket Connection Limits & Per-Space Caps (P2)
+**Location**: `server/routes.ts` (WebSocket setup around lines 7793-7867)
+**Description**: Separate from the existing pooling item, the server has no max-connections-per-space cap, no global connection ceiling, and the heartbeat/stale-sweep interval is hard-coded. A misbehaving client can exhaust sockets for a workspace.
+
+**Required**:
+- Configurable global and per-space connection limits (reject with a clear close code when exceeded)
+- Environment-driven heartbeat and stale-cleanup intervals
+- Metrics endpoint exposing current connection counts per space
 
 ---
 
@@ -242,6 +343,16 @@ This document tracks planned features, incomplete implementations, and technical
 - Database connectivity
 - External service dependencies
 - WebSocket server status
+
+### File Upload Hardening: Quotas, Orphan Cleanup, AV Scanning (P2)
+**Location**: `server/services/file-upload.ts` (lines 15-77), `server/middleware/uploadMiddleware.ts`, `uploads/`
+**Description**: IP-level rate limiting exists but there are no per-user/per-organization quotas, no cleanup of partial uploads left in `uploads/temp`, and no malware scanning before files become available for AI grounding.
+
+**Required**:
+- Per-user and per-organization upload quotas (count and total bytes) tracked in DB
+- Scheduled job to remove `uploads/temp` files older than 1 hour
+- Integrate ClamAV (or equivalent) scanning in production; quarantine on positive hits
+- Reject uploads exceeding allow-listed MIME types after content-sniffing (not just extension)
 
 ---
 

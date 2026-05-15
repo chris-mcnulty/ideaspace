@@ -3,6 +3,8 @@ import { ConfidentialClientApplication, Configuration } from '@azure/msal-node';
 import crypto from 'crypto';
 import { storage } from '../storage';
 import { isPublicEmailDomain, getEmailDomain } from '@shared/schema';
+import { safeReturnTo } from '../utils/queryParams';
+import { logger } from '../utils/logger';
 
 declare module 'express-session' {
   interface SessionData {
@@ -93,7 +95,7 @@ router.get('/api/auth/entra/status', async (_req: Request, res: Response) => {
       configured: isConfigured,
     });
   } catch (error) {
-    console.error('Error checking Entra SSO status:', error);
+    logger.error('Error checking Entra SSO status', { error });
     res.json({ enabled: false, configured: false });
   }
 });
@@ -123,9 +125,13 @@ router.get('/auth/entra/login', async (req: Request, res: Response) => {
     };
     req.session.oauthState = state;
     
-    // Store return URL if provided
+    // Store return URL if provided. Validate against open-redirect: only
+    // same-origin relative paths.
     if (req.query.returnTo) {
-      req.session.returnTo = req.query.returnTo as string;
+      const safe = safeReturnTo(req.query.returnTo, '');
+      if (safe) {
+        req.session.returnTo = safe;
+      }
     }
     
     // Scopes for SSO - includes User.Read.All for tenant admin user lookup
@@ -144,13 +150,13 @@ router.get('/auth/entra/login', async (req: Request, res: Response) => {
     // Explicitly save session before redirect to ensure PKCE codes are persisted
     req.session.save((err) => {
       if (err) {
-        console.error('[Entra SSO] Session save error:', err);
+        logger.error('Entra SSO session save error', { error: err });
         return res.redirect(`/auth?error=${encodeURIComponent('Session error')}`);
       }
       res.redirect(authUrl);
     });
   } catch (error: any) {
-    console.error('Error initiating Entra login:', error);
+    logger.error('Error initiating Entra login', { error });
     res.redirect(`/auth?error=${encodeURIComponent(error.message || 'Failed to initiate SSO login')}`);
   }
 });
@@ -161,7 +167,7 @@ router.get('/auth/entra/callback', async (req: Request, res: Response) => {
     const { code, error, error_description, state } = req.query;
     
     if (error) {
-      console.error('Entra SSO error:', error, error_description);
+      logger.error('Entra SSO error', { error, error_description });
       // Clear session state on error
       delete req.session.pkceCodes;
       delete req.session.oauthState;
@@ -176,7 +182,7 @@ router.get('/auth/entra/callback', async (req: Request, res: Response) => {
     // Validate state parameter for CSRF protection
     const storedState = req.session.oauthState;
     if (!storedState || storedState !== state) {
-      console.error('State mismatch - potential CSRF attack detected', {
+      logger.warn('OAuth state mismatch - potential CSRF attack detected', {
         hasStoredState: !!storedState,
         storedStatePrefix: storedState?.substring(0, 8),
         receivedStatePrefix: (state as string)?.substring(0, 8),
@@ -238,7 +244,7 @@ router.get('/auth/entra/callback', async (req: Request, res: Response) => {
     // This is required for req.isAuthenticated() to work correctly
     req.login(user, (loginErr) => {
       if (loginErr) {
-        console.error('[Entra SSO] Passport login error:', loginErr);
+        logger.error('Entra SSO passport login error', { error: loginErr });
         return res.redirect(`/auth?error=${encodeURIComponent('Failed to establish session')}`);
       }
       
@@ -246,21 +252,22 @@ router.get('/auth/entra/callback', async (req: Request, res: Response) => {
       req.session.userId = user.id;
       req.session.isAuthenticated = true;
       
-      // Redirect to return URL or dashboard
-      const returnTo = (req.session as any).returnTo || '/';
+      // Redirect to return URL or dashboard. Re-validate at use time in case
+      // session was populated by an older, unvalidated code path.
+      const returnTo = safeReturnTo((req.session as any).returnTo, '/');
       delete (req.session as any).returnTo;
       
       // Explicitly save session before redirect to ensure cookie is set
       req.session.save((err) => {
         if (err) {
-          console.error('[Entra SSO] Session save error:', err);
+          logger.error('Entra SSO session save error', { error: err });
           return res.redirect('/login?error=Session error');
         }
         res.redirect(returnTo);
       });
     });
   } catch (error: any) {
-    console.error('Error processing Entra callback:', error);
+    logger.error('Error processing Entra callback', { error });
     res.redirect(`/auth?error=${encodeURIComponent(error.message || 'SSO authentication failed')}`);
   }
 });
@@ -580,7 +587,7 @@ async function processEntraUser(userInfo: EntraUserInfo): Promise<ProcessUserRes
       console.log(`[Entra SSO] User ${email} added to default project: ${defaultProject.name}`);
     }
   } catch (projError) {
-    console.error('[Entra SSO] Failed to add user to default project:', projError);
+    logger.error('Entra SSO failed to add user to default project', { error: projError });
     // Don't fail user creation if project assignment fails
   }
   
@@ -641,7 +648,7 @@ router.post('/auth/entra/logout', (req: Request, res: Response) => {
   
   req.session.destroy((err) => {
     if (err) {
-      console.error('Session destruction error:', err);
+      logger.error('Session destruction error', { error: err });
     }
     res.json({ logoutUrl });
   });

@@ -1,6 +1,11 @@
 import OpenAI from "openai";
 import { z } from "zod";
 import { logAiUsage, extractUsageMetrics } from "./aiUsageLogger";
+import {
+  PROMPT_INJECTION_GUARD,
+  wrapUntrusted,
+  capAggregate,
+} from "./promptSafety";
 
 // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
 // This is using Replit's AI Integrations service, which provides OpenAI-compatible API access without requiring your own OpenAI API key.
@@ -54,12 +59,30 @@ export async function categorizeNotes(
     };
   }
 
-  const prompt = `You are an expert facilitator analyzing ideas from a collaborative envisioning session. 
+  const NOTE_CHAR_CAP = 2000;
+  const noteLines = notes.map(
+    (note, idx) =>
+      `${idx + 1}. [ID: ${note.id}] ${wrapUntrusted(note.content, NOTE_CHAR_CAP)}`,
+  );
+  const { kept: keptNoteLines, dropped: droppedNotes, truncated } =
+    capAggregate(noteLines);
+
+  // Fail fast rather than silently dropping notes and backfilling them as
+  // "Uncategorized" — that mode would produce mostly-Uncategorized output and
+  // a summary that doesn't reflect the omitted ideas. Callers should chunk
+  // their notes or raise the cap.
+  if (truncated) {
+    throw new Error(
+      `Too many notes to categorize in a single request: ${notes.length} provided, ${droppedNotes} would be omitted to fit the model input limit. Reduce the batch size.`,
+    );
+  }
+
+  const prompt = `You are an expert facilitator analyzing ideas from a collaborative envisioning session.
 
 Your task: Analyze the following sticky notes and group them into meaningful categories/themes.
 
 NOTES:
-${notes.map((note, idx) => `${idx + 1}. [ID: ${note.id}] ${note.content}`).join('\n')}
+${keptNoteLines.join('\n')}
 
 CRITICAL Instructions:
 1. Identify 3-7 main themes/categories that emerge from these notes
@@ -84,7 +107,9 @@ Respond with valid JSON in this exact format:
         messages: [
           {
             role: "system",
-            content: "You are an expert facilitator and thematic analyst. You excel at identifying patterns and grouping ideas into coherent categories. You ALWAYS categorize every single note provided."
+            content: `You are an expert facilitator and thematic analyst. You excel at identifying patterns and grouping ideas into coherent categories. You ALWAYS categorize every single note provided.
+
+${PROMPT_INJECTION_GUARD}`
           },
           {
             role: "user",
@@ -114,7 +139,6 @@ Respond with valid JSON in this exact format:
 
       const result = validationResult.data;
 
-      const noteIds = new Set(notes.map(n => n.id));
       const categorizedIds = new Set(result.categories.map(c => c.noteId));
       const missingNotes = notes.filter(n => !categorizedIds.has(n.id));
 
@@ -201,14 +225,14 @@ export async function rewriteCard(
     throw new Error("Count must be between 1 and 3");
   }
 
-  const categoryContext = category ? `\nCategory/Theme: ${category}` : "";
-  
+  const categoryContext = category ? `\nCategory/Theme: ${wrapUntrusted(category, 200)}` : "";
+
   const prompt = `You are an expert facilitator helping to clarify and improve ideas from a collaborative envisioning session.
 
 Your task: Generate ${count} alternative ways to express the following idea. Keep the same core meaning and theme, but improve clarity, conciseness, or perspective.${categoryContext}
 
 ORIGINAL IDEA:
-"${content}"
+${wrapUntrusted(content, 4000)}
 
 CRITICAL Instructions:
 1. Generate exactly ${count} variations
@@ -236,7 +260,9 @@ Respond with valid JSON in this exact format:
         messages: [
           {
             role: "system",
-            content: "You are an expert facilitator and communication specialist. You excel at rephrasing ideas clearly while preserving their core meaning and intent."
+            content: `You are an expert facilitator and communication specialist. You excel at rephrasing ideas clearly while preserving their core meaning and intent.
+
+${PROMPT_INJECTION_GUARD}`
           },
           {
             role: "user",
@@ -343,20 +369,31 @@ export async function suggestIdeas(
 ): Promise<SuggestIdeasResponse> {
   const target = Math.max(5, Math.min(10, params.count ?? 8));
 
-  const existingBlock = params.existingIdeas.length
+  const IDEA_CHAR_CAP = 1000;
+  const KB_CHAR_CAP = 4000;
+
+  const existingLines = params.existingIdeas
+    .slice(0, 200)
+    .map((c, i) => `${i + 1}. ${wrapUntrusted(c, IDEA_CHAR_CAP)}`);
+  const cappedExisting = capAggregate(existingLines, 30000);
+  const existingBlock = existingLines.length
     ? `EXISTING IDEAS (do NOT duplicate these — your suggestions must be net-new):
-${params.existingIdeas.slice(0, 200).map((c, i) => `${i + 1}. ${c}`).join('\n')}`
+${cappedExisting.kept.join('\n')}${cappedExisting.truncated ? `\n…[${cappedExisting.dropped} additional ideas omitted]` : ''}`
     : 'EXISTING IDEAS: (none yet)';
 
-  const kbBlock = params.knowledgeBaseSnippets && params.knowledgeBaseSnippets.length
+  const kbLines = (params.knowledgeBaseSnippets ?? [])
+    .slice(0, 8)
+    .map((s, i) => `[${i + 1}] ${wrapUntrusted(s, KB_CHAR_CAP)}`);
+  const cappedKb = capAggregate(kbLines, 24000);
+  const kbBlock = kbLines.length
     ? `RELEVANT KNOWLEDGE BASE SNIPPETS (use these to ground your suggestions in the organization's context):
-${params.knowledgeBaseSnippets.slice(0, 8).map((s, i) => `[${i + 1}] ${s}`).join('\n\n')}`
+${cappedKb.kept.join('\n\n')}`
     : '';
 
   const prompt = `You are an expert facilitator helping to expand a collaborative envisioning session with fresh, high-quality ideas.
 
-WORKSPACE: ${params.workspaceName}
-PURPOSE: ${params.workspacePurpose}
+WORKSPACE: ${wrapUntrusted(params.workspaceName, 200)}
+PURPOSE: ${wrapUntrusted(params.workspacePurpose, 2000)}
 
 ${existingBlock}
 
@@ -385,7 +422,9 @@ Respond with valid JSON in this exact format:
         messages: [
           {
             role: "system",
-            content: "You are an expert facilitator and ideation specialist. You generate net-new, diverse, concrete ideas that build on what a cohort has already produced — never duplicating their existing ideas.",
+            content: `You are an expert facilitator and ideation specialist. You generate net-new, diverse, concrete ideas that build on what a cohort has already produced — never duplicating their existing ideas.
+
+${PROMPT_INJECTION_GUARD}`,
           },
           { role: "user", content: prompt },
         ],

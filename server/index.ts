@@ -8,6 +8,8 @@ import { pool } from "./db";
 import { sessionMiddleware } from "./session";
 import { runStartupMigrations } from "./migrations";
 import { startTrafficWorker, stopTrafficWorker, flushNow } from "./services/trafficWorker";
+import { logger } from "./utils/logger";
+import { csrfMiddleware, csrfTokenHandler } from "./middleware/csrf";
 
 const app = express();
 
@@ -33,6 +35,12 @@ app.use(sessionMiddleware);
 // Initialize passport and session support
 app.use(passport.initialize());
 app.use(passport.session());
+
+// CSRF protection (double-submit-cookie). Default mode is "off" so existing
+// clients keep working; flip CSRF_MODE=enforce in production once all client
+// fetch callers send the X-CSRF-Token header (apiRequest already does).
+app.use(csrfMiddleware);
+app.get("/api/csrf-token", csrfTokenHandler);
 
 // Setup passport authentication strategies
 setupAuth();
@@ -78,12 +86,17 @@ app.use((req, res, next) => {
 
   const server = await registerRoutes(app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
     res.status(status).json({ message });
-    throw err;
+    logger.error("Unhandled request error", {
+      method: req.method,
+      path: req.path,
+      status,
+      error: err,
+    });
   });
 
   // importantly only setup vite in development and after
