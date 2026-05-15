@@ -130,7 +130,6 @@ ${PROMPT_INJECTION_GUARD}`
 
       const result = validationResult.data;
 
-      const noteIds = new Set(notes.map(n => n.id));
       const categorizedIds = new Set(result.categories.map(c => c.noteId));
       const missingNotes = notes.filter(n => !categorizedIds.has(n.id));
 
