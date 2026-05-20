@@ -1377,40 +1377,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Protected: Only global admins can delete organizations
   app.delete("/api/organizations/:id", requireGlobalAdmin, async (req, res) => {
     try {
-      // Check if organization has any workspaces
-      const spaces = await storage.getSpacesByOrganization(req.params.id);
-      if (spaces.length > 0) {
-        return res.status(400).json({ 
-          error: "Cannot delete organization with existing workspaces. Please delete all workspaces first." 
-        });
-      }
-      
+      const orgId = req.params.id;
+
       // Verify organization exists
-      const org = await storage.getOrganization(req.params.id);
+      const org = await storage.getOrganization(orgId);
       if (!org) {
         return res.status(404).json({ error: "Organization not found" });
       }
-      
-      // Delete all associated data first to avoid foreign key constraints
+
+      // Query ALL spaces for this org — including hidden, archived, and templates —
+      // so we can cascade-delete them. The previous guard used getSpacesByOrganization
+      // which excluded hidden/archived rows, causing FK violations when those
+      // unreachable spaces remained in the DB.
+      const allOrgSpaces = await db
+        .select({ id: spaces.id })
+        .from(spaces)
+        .where(eq(spaces.organizationId, orgId));
+
+      // Cascade-delete each space and all its dependent data in sequence.
+      for (const space of allOrgSpaces) {
+        await storage.deleteSpace(space.id);
+      }
+
+      // Delete all remaining org-scoped data
       await Promise.all([
-        // Nullify organizationId for users in this organization (since it's nullable)
-        db.update(users).set({ organizationId: null }).where(eq(users.organizationId, req.params.id)),
+        // Nullify organizationId for users in this organization (nullable FK)
+        db.update(users).set({ organizationId: null }).where(eq(users.organizationId, orgId)),
         // Delete company admin associations
-        db.delete(companyAdminsTable).where(eq(companyAdminsTable.organizationId, req.params.id)),
+        db.delete(companyAdminsTable).where(eq(companyAdminsTable.organizationId, orgId)),
         // Delete knowledge base documents scoped to this organization
-        db.delete(knowledgeBaseDocuments).where(eq(knowledgeBaseDocuments.organizationId, req.params.id)),
+        db.delete(knowledgeBaseDocuments).where(eq(knowledgeBaseDocuments.organizationId, orgId)),
         // Delete workspace templates scoped to this organization
-        db.delete(workspaceTemplates).where(eq(workspaceTemplates.organizationId, req.params.id)),
+        db.delete(workspaceTemplates).where(eq(workspaceTemplates.organizationId, orgId)),
         // Delete AI usage logs for this organization
-        db.delete(aiUsageLog).where(eq(aiUsageLog.organizationId, req.params.id)),
+        db.delete(aiUsageLog).where(eq(aiUsageLog.organizationId, orgId)),
       ]);
-      
+
       // Finally, delete the organization itself
-      await db.delete(organizations).where(eq(organizations.id, req.params.id));
-      
+      await db.delete(organizations).where(eq(organizations.id, orgId));
+
       res.status(204).send();
     } catch (error) {
-      console.error("Failed to delete organization:", error);
+      logger.error("Failed to delete organization", { error });
       res.status(500).json({ error: "Failed to delete organization" });
     }
   });
