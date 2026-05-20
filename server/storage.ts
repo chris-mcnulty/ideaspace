@@ -962,26 +962,30 @@ export class DbStorage implements IStorage {
       safeDelete(db.delete(documentWorkspaceAccess).where(eq(documentWorkspaceAccess.spaceId, id))),
     ]);
     
-    // Phase 2: Delete parent records
+    // Phase 2: Delete records that reference participants (notes has FK → participants)
     await Promise.all([
+      safeDelete(db.delete(notes).where(eq(notes.spaceId, id))),
+      safeDelete(db.delete(votes).where(eq(votes.spaceId, id))),
+      safeDelete(db.delete(rankings).where(eq(rankings.spaceId, id))),
+      safeDelete(db.delete(marketplaceAllocations).where(eq(marketplaceAllocations.spaceId, id))),
+      safeDelete(db.delete(accessRequests).where(eq(accessRequests.spaceId, id))),
+      safeDelete(db.delete(cohortResults).where(eq(cohortResults.spaceId, id))),
+      safeDelete(db.delete(personalizedResults).where(eq(personalizedResults.spaceId, id))),
+      safeDelete(db.delete(aiUsageLog).where(eq(aiUsageLog.spaceId, id))),
+    ]);
+
+    // Phase 3: Delete records safe to remove once notes/votes are gone
+    await Promise.all([
+      safeDelete(db.delete(participants).where(eq(participants.spaceId, id))),
       safeDelete(db.delete(staircaseModules).where(eq(staircaseModules.spaceId, id))),
       safeDelete(db.delete(priorityMatrices).where(eq(priorityMatrices.spaceId, id))),
       safeDelete(db.delete(ideas).where(eq(ideas.spaceId, id))),
       safeDelete(db.delete(surveyQuestions).where(eq(surveyQuestions.spaceId, id))),
       safeDelete(db.delete(workspaceModuleRuns).where(eq(workspaceModuleRuns.spaceId, id))),
       safeDelete(db.delete(workspaceModules).where(eq(workspaceModules.spaceId, id))),
-      safeDelete(db.delete(notes).where(eq(notes.spaceId, id))),
-      safeDelete(db.delete(votes).where(eq(votes.spaceId, id))),
-      safeDelete(db.delete(rankings).where(eq(rankings.spaceId, id))),
-      safeDelete(db.delete(marketplaceAllocations).where(eq(marketplaceAllocations.spaceId, id))),
-      safeDelete(db.delete(participants).where(eq(participants.spaceId, id))),
-      safeDelete(db.delete(accessRequests).where(eq(accessRequests.spaceId, id))),
       safeDelete(db.delete(categories).where(eq(categories.spaceId, id))),
       safeDelete(db.delete(spaceFacilitators).where(eq(spaceFacilitators.spaceId, id))),
-      safeDelete(db.delete(cohortResults).where(eq(cohortResults.spaceId, id))),
-      safeDelete(db.delete(personalizedResults).where(eq(personalizedResults.spaceId, id))),
       safeDelete(db.delete(knowledgeBaseDocuments).where(eq(knowledgeBaseDocuments.spaceId, id))),
-      safeDelete(db.delete(aiUsageLog).where(eq(aiUsageLog.spaceId, id))),
     ]);
 
     // Finally, delete the workspace itself

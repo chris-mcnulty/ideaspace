@@ -1396,7 +1396,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Nullify organizationId for users in this organization (since it's nullable)
         db.update(users).set({ organizationId: null }).where(eq(users.organizationId, req.params.id)),
         // Delete company admin associations
-        db.delete(companyAdmins).where(eq(companyAdmins.organizationId, req.params.id)),
+        db.delete(companyAdminsTable).where(eq(companyAdminsTable.organizationId, req.params.id)),
         // Delete knowledge base documents scoped to this organization
         db.delete(knowledgeBaseDocuments).where(eq(knowledgeBaseDocuments.organizationId, req.params.id)),
         // Delete workspace templates scoped to this organization
