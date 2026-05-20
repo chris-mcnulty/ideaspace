@@ -953,8 +953,9 @@ export class DbStorage implements IStorage {
     };
     
     // Delete all associated data first to avoid foreign key constraints
-    // Note: Some child tables (staircase_positions, priority_matrix_positions, idea_contributions)
-    // use onDelete: "cascade" and will be automatically deleted when parent records are removed
+    // Note: staircase_positions and priority_matrix_positions use onDelete:"cascade" and are
+    // removed automatically when their parent rows go. idea_contributions does NOT cascade on
+    // participantId, so it must be deleted explicitly in Phase 2 (see below).
     
     // Phase 1: Delete records that reference other workspace data
     await Promise.all([
@@ -963,7 +964,11 @@ export class DbStorage implements IStorage {
     ]);
     
     // Phase 2: Delete records that reference participants (notes has FK → participants)
+    // idea_contributions.participantId has no cascade, so must be deleted here before participants
     await Promise.all([
+      safeDelete(db.delete(ideaContributions).where(
+        inArray(ideaContributions.ideaId, db.select({ id: ideas.id }).from(ideas).where(eq(ideas.spaceId, id)))
+      )),
       safeDelete(db.delete(notes).where(eq(notes.spaceId, id))),
       safeDelete(db.delete(votes).where(eq(votes.spaceId, id))),
       safeDelete(db.delete(rankings).where(eq(rankings.spaceId, id))),
