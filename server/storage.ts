@@ -979,12 +979,13 @@ export class DbStorage implements IStorage {
       safeDelete(db.delete(aiUsageLog).where(eq(aiUsageLog.spaceId, id))),
     ]);
 
-    // Phase 3: Delete records safe to remove once notes/votes are gone
+    // Phase 3: Delete ideas first — ideas.createdByParticipantId → participants has no cascade,
+    // so ideas must go before participants. ideaContributions cascades from ideaId so it
+    // also disappears here (belt-and-suspenders after Phase 2).
     await Promise.all([
-      safeDelete(db.delete(participants).where(eq(participants.spaceId, id))),
+      safeDelete(db.delete(ideas).where(eq(ideas.spaceId, id))),
       safeDelete(db.delete(staircaseModules).where(eq(staircaseModules.spaceId, id))),
       safeDelete(db.delete(priorityMatrices).where(eq(priorityMatrices.spaceId, id))),
-      safeDelete(db.delete(ideas).where(eq(ideas.spaceId, id))),
       safeDelete(db.delete(surveyQuestions).where(eq(surveyQuestions.spaceId, id))),
       safeDelete(db.delete(workspaceModuleRuns).where(eq(workspaceModuleRuns.spaceId, id))),
       safeDelete(db.delete(workspaceModules).where(eq(workspaceModules.spaceId, id))),
@@ -992,6 +993,9 @@ export class DbStorage implements IStorage {
       safeDelete(db.delete(spaceFacilitators).where(eq(spaceFacilitators.spaceId, id))),
       safeDelete(db.delete(knowledgeBaseDocuments).where(eq(knowledgeBaseDocuments.spaceId, id))),
     ]);
+
+    // Phase 4: Participants last — all tables referencing participants.id are now gone
+    await safeDelete(db.delete(participants).where(eq(participants.spaceId, id)));
 
     // Finally, delete the workspace itself
     const result = await db.delete(spaces).where(eq(spaces.id, id));

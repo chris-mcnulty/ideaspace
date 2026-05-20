@@ -1484,8 +1484,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (user.role === "admin") {
         organizations = await storage.getAllOrganizations();
       } else {
-        const userOrgs = await storage.getUserOrganizations(user.id);
-        organizations = userOrgs.map(uo => uo.organization).filter(Boolean) as Organization[];
+        const adminRecords = await storage.getCompanyAdminsByUser(user.id);
+        organizations = await storage.getOrganizationsByIds(adminRecords.map(r => r.organizationId));
       }
       
       const allProjects = await storage.getProjectsByOrganizations(
