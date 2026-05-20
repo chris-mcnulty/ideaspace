@@ -17,6 +17,7 @@ import { QueryErrorState } from "@/components/QueryErrorState";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfileMenu } from "@/components/UserProfileMenu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -390,6 +391,15 @@ function OrganizationCard({
     },
   });
 
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteSummaryLoading, setDeleteSummaryLoading] = useState(false);
+  const [deleteSummary, setDeleteSummary] = useState<{
+    totalSpaces: number;
+    totalNotes: number;
+    totalParticipants: number;
+    spaces: Array<{ id: string; name: string; status: string; hidden: boolean; isTemplate: boolean }>;
+  } | null>(null);
+
   const deleteOrgMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest("DELETE", `/api/organizations/${organization.id}`);
@@ -400,12 +410,14 @@ function OrganizationCard({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/organizations"] });
+      setDeleteConfirmOpen(false);
       toast({
         title: "Organization deleted",
         description: "The organization has been deleted successfully.",
       });
     },
     onError: (error: any) => {
+      setDeleteConfirmOpen(false);
       toast({
         variant: "destructive",
         title: "Failed to delete organization",
@@ -414,18 +426,17 @@ function OrganizationCard({
     },
   });
 
-  const handleDelete = () => {
-    if (spaces.length > 0) {
-      toast({
-        variant: "destructive",
-        title: "Cannot delete organization",
-        description: "Please delete all workspaces first before deleting the organization.",
-      });
-      return;
-    }
-    
-    if (confirm(`Are you sure you want to delete "${organization.name}"? This action cannot be undone.`)) {
-      deleteOrgMutation.mutate();
+  const handleDelete = async () => {
+    setDeleteSummaryLoading(true);
+    try {
+      const res = await fetch(`/api/organizations/${organization.id}/delete-summary`, { credentials: "include" });
+      const data = await res.json();
+      setDeleteSummary(data);
+      setDeleteConfirmOpen(true);
+    } catch {
+      toast({ variant: "destructive", title: "Could not load delete summary", description: "Please try again." });
+    } finally {
+      setDeleteSummaryLoading(false);
     }
   };
 
@@ -476,10 +487,10 @@ function OrganizationCard({
                     variant="ghost" 
                     size="icon"
                     onClick={handleDelete}
-                    disabled={deleteOrgMutation.isPending}
+                    disabled={deleteOrgMutation.isPending || deleteSummaryLoading}
                     data-testid={`button-delete-org-${organization.id}`}
                   >
-                    {deleteOrgMutation.isPending ? (
+                    {deleteOrgMutation.isPending || deleteSummaryLoading ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <Trash2 className="h-4 w-4 text-destructive" />
@@ -556,6 +567,67 @@ function OrganizationCard({
       open={editDialogOpen}
       onOpenChange={setEditDialogOpen}
     />
+
+    <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete &ldquo;{organization.name}&rdquo;?</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3 text-sm">
+              <p>This action is permanent and cannot be undone.</p>
+              {deleteSummary && (
+                <>
+                  {deleteSummary.totalSpaces === 0 ? (
+                    <p className="text-muted-foreground">This organisation has no workspaces.</p>
+                  ) : (
+                    <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 space-y-1.5">
+                      <p className="font-medium text-destructive-foreground">
+                        The following data will be permanently erased:
+                      </p>
+                      <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                        <li>
+                          <span className="font-semibold text-foreground">{deleteSummary.totalSpaces}</span>{" "}
+                          workspace{deleteSummary.totalSpaces !== 1 ? "s" : ""}
+                          {deleteSummary.spaces.some((s) => s.hidden) && " (including hidden)"}
+                          {deleteSummary.spaces.some((s) => s.isTemplate) && " (including templates)"}
+                        </li>
+                        {deleteSummary.totalParticipants > 0 && (
+                          <li>
+                            <span className="font-semibold text-foreground">{deleteSummary.totalParticipants}</span>{" "}
+                            participant record{deleteSummary.totalParticipants !== 1 ? "s" : ""}
+                          </li>
+                        )}
+                        {deleteSummary.totalNotes > 0 && (
+                          <li>
+                            <span className="font-semibold text-foreground">{deleteSummary.totalNotes}</span>{" "}
+                            idea{deleteSummary.totalNotes !== 1 ? "s" : ""} / note{deleteSummary.totalNotes !== 1 ? "s" : ""}
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel data-testid={`button-delete-org-cancel-${organization.id}`}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => { e.preventDefault(); deleteOrgMutation.mutate(); }}
+            disabled={deleteOrgMutation.isPending}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            data-testid={`button-delete-org-confirm-${organization.id}`}
+          >
+            {deleteOrgMutation.isPending ? (
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Deleting…</>
+            ) : (
+              "Delete permanently"
+            )}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }

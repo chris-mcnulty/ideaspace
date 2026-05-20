@@ -23,7 +23,7 @@ import {
 } from "./utils/queryParams";
 import { logger } from "./utils/logger";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, count, inArray } from "drizzle-orm";
 import { categorizeNotes, rewriteCard, suggestIdeas } from "./services/openai";
 import { getNextPair, calculateProgress } from "./services/pairwise";
 import { validateRanking, calculateBordaScores, calculateBordaScoresFromAggregates, calculateRankingProgress, calculateRankingProgressFromCounts, hasParticipantCompleted } from "./services/stack-ranking";
@@ -1371,6 +1371,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error linking Entra tenant:", error);
       res.status(500).json({ error: "Failed to link Entra tenant" });
+    }
+  });
+
+  // Summary of what will be deleted — lets the client show a confirmation dialog
+  // with real data counts before proceeding.
+  app.get("/api/organizations/:id/delete-summary", requireGlobalAdmin, async (req, res) => {
+    try {
+      const orgId = req.params.id;
+      const org = await storage.getOrganization(orgId);
+      if (!org) return res.status(404).json({ error: "Organization not found" });
+
+      const allSpaces = await db
+        .select({ id: spaces.id, name: spaces.name, status: spaces.status, hidden: spaces.hidden, isTemplate: spaces.isTemplate })
+        .from(spaces)
+        .where(eq(spaces.organizationId, orgId));
+
+      let totalNotes = 0;
+      let totalParticipants = 0;
+      if (allSpaces.length > 0) {
+        const spaceIds = allSpaces.map((s) => s.id);
+        const [notesRes, participantsRes] = await Promise.all([
+          db.select({ n: count() }).from(notes).where(inArray(notes.spaceId, spaceIds)),
+          db.select({ n: count() }).from(participants).where(inArray(participants.spaceId, spaceIds)),
+        ]);
+        totalNotes = Number(notesRes[0]?.n ?? 0);
+        totalParticipants = Number(participantsRes[0]?.n ?? 0);
+      }
+
+      res.json({
+        orgName: org.name,
+        totalSpaces: allSpaces.length,
+        totalNotes,
+        totalParticipants,
+        spaces: allSpaces,
+      });
+    } catch (error) {
+      logger.error("Failed to fetch org delete summary", { error });
+      res.status(500).json({ error: "Failed to fetch delete summary" });
     }
   });
 
