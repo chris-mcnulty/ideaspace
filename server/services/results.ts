@@ -17,8 +17,18 @@ import {
 } from "./resultsCache";
 
 // Schema for validating AI-generated cohort results
+// Accepts a string or an array of strings from the model and normalises to string.
+const coercedString = z.preprocess(
+  (v) => Array.isArray(v) ? v.join('\n\n') : v,
+  z.string(),
+);
+const coercedStringOptional = z.preprocess(
+  (v) => Array.isArray(v) ? v.join('\n\n') : v,
+  z.string().optional().nullable(),
+);
+
 const CohortResultSchema = z.object({
-  summary: z.string(),
+  summary: coercedString,
   keyThemes: z.array(z.string()),
   topIdeas: z.array(z.object({
     noteId: z.union([z.string(), z.number()]).transform(v => String(v)),
@@ -37,22 +47,22 @@ const CohortResultSchema = z.object({
     avgSurveyScore: z.number().optional().nullable().transform(v => v ?? undefined),
     overallRank: z.number(),
   })),
-  surveyAnalysis: z.string().optional().nullable(),
-  insights: z.string(),
-  recommendations: z.string().optional().nullable(),
+  surveyAnalysis: coercedStringOptional,
+  insights: coercedString,
+  recommendations: coercedStringOptional,
 });
 
 // Schema for validating AI-generated personalized results
 const PersonalizedResultSchema = z.object({
-  personalSummary: z.string(),
+  personalSummary: coercedString,
   alignmentScore: z.number().min(0).max(100),
   topContributions: z.array(z.object({
     noteId: z.union([z.string(), z.number()]).transform(v => String(v)),
     content: z.string(),
     impact: z.string(),
   })),
-  insights: z.string(),
-  recommendations: z.string().optional().nullable(),
+  insights: coercedString,
+  recommendations: coercedStringOptional,
 });
 
 /**
