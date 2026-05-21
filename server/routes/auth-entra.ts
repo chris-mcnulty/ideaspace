@@ -477,14 +477,31 @@ async function processEntraUser(userInfo: EntraUserInfo): Promise<ProcessUserRes
   existingUser = await storage.getUserByEmail(email);
   
   if (existingUser) {
-    // Check if user's organization has SSO enabled before linking
+    // Check if user's organization has SSO enabled before linking.
+    // If the org domain matches the user's email domain and SSO isn't yet enabled,
+    // auto-enable it — Microsoft has already authenticated this user, so it's safe.
+    // This mirrors the JIT path for new users and recovers orgs where SSO was
+    // never enabled or was accidentally disabled.
     if (existingUser.organizationId) {
       const org = await storage.getOrganization(existingUser.organizationId);
       if (org && !org.ssoEnabled) {
-        return {
-          success: false,
-          error: 'SSO is not enabled for your organization. Please use email and password to sign in.',
-        };
+        const domainMatches = !isPublicDomain && org.domain === emailDomain;
+        if (domainMatches) {
+          logger.info('Auto-enabling SSO for org via domain match on existing user login', {
+            orgId: org.id,
+            domain: emailDomain,
+          });
+          await storage.updateOrganization(org.id, {
+            entraTenantId,
+            ssoEnabled: true,
+            ssoProvider: 'entra',
+          });
+        } else {
+          return {
+            success: false,
+            error: 'SSO is not enabled for your organization. Please use email and password to sign in.',
+          };
+        }
       }
     }
     
