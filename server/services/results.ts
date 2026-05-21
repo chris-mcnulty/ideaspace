@@ -328,9 +328,9 @@ export async function generateCohortResults(
     : [];
 
   const kbContext = kbChunks.length > 0
-    ? `\n\nRelevant Knowledge Base Excerpts (top ${kbChunks.length} matches):\n${kbChunks
-        .map((c) => `- [${sanitizeForPrompt(c.documentTitle, 200)}] ${sanitizeForPrompt(c.content.replace(/\s+/g, ' '), 800)}`)
-        .join('\n')}`
+    ? `\n\nKNOWLEDGE BASE CONTEXT — ${kbChunks.length} excerpt(s) retrieved from the organisation's grounding documents.\nYou MUST anchor your analysis, insights, and recommendations in this material. Quote or reference specific concepts, frameworks, or terminology from these excerpts where relevant. Do not ignore this content.\n${kbChunks
+        .map((c, i) => `[KB${i + 1}] ${sanitizeForPrompt(c.documentTitle, 200)}\n${sanitizeForPrompt(c.content.replace(/\s+/g, ' '), 1000)}`)
+        .join('\n\n')}`
     : '';
 
   // Hash over every prompt-affecting input; cache invalidates on any change.
@@ -413,6 +413,7 @@ Purpose: ${sanitizeForPrompt(space.purpose, 2000)}
 
 ENABLED MODULES: ${enabledModulesDescription || 'Ideation only'}
 (Only discuss the modules that were enabled. Do NOT mention or analyze modules that were not used.)
+${kbContext}
 
 Total Ideas: ${allNotes.length}
 ${hasPairwiseVoting ? `Total Pairwise Votes: ${pairwiseTallies.reduce((s, t) => s + t.wins, 0)}` : ''}
@@ -452,8 +453,7 @@ ${Object.entries(
   ).map(([category, ideas]: any) => `
 ${sfShort(category)} (${ideas.length} ideas):
 ${ideas.map((idea: any) => `  - ${sfNote(idea)}`).join('\n')}
-`).join('\n')}
-${kbContext}`,
+`).join('\n')}`,
     80000,
   )}`;
 
@@ -463,7 +463,12 @@ ${kbContext}`,
     messages: [
       {
         role: "system",
-        content: `You are an expert facilitator analyzing collaborative envisioning session results. Generate comprehensive cohort insights based on voting data, idea categorization, and participant engagement. Focus on identifying patterns, themes, and actionable recommendations.
+        content: `You are an expert facilitator analyzing collaborative envisioning session results. Generate comprehensive cohort insights grounded in the session data AND any provided knowledge base material.
+
+KNOWLEDGE BASE GROUNDING (most important rule):
+- If a KNOWLEDGE BASE CONTEXT block is present in the data, you MUST use it. Your summary, insights, and recommendations must draw on the specific concepts, frameworks, terminology, and strategic context from those excerpts.
+- Reference knowledge base material explicitly — cite document titles (e.g. "As outlined in [document name]...") when it is relevant to a finding or recommendation.
+- Do NOT produce generic analysis that could apply to any organisation. Ground every recommendation in both the session data AND the knowledge base content.
 
 CRITICAL FORMATTING RULES:
 1. Only discuss and analyze the modules that were ENABLED for this session. Do NOT mention modules that were not used.
@@ -499,10 +504,11 @@ Please provide your analysis in the following JSON format:
   ],
   ${hasSurvey ? '"surveyAnalysis": "A paragraph analyzing survey response patterns across questions and ideas. What dimensions scored highest/lowest? Any surprising patterns?",' : ''}
   "insights": "3-4 paragraphs of deep insights about patterns, alignment, diversity of thought, and key findings. Use \\n\\n between paragraphs for readability. Focus only on enabled modules.${hasPriorityMatrix ? ' Include analysis of where ideas fall on the priority matrix quadrants.' : ''}${hasStaircase ? ' Include analysis of staircase rating distributions.' : ''}${hasSurvey ? ' Include analysis of survey response patterns.' : ''}",
-  "recommendations": "Format as a numbered list:\\n\\n1. First recommendation\\n\\n2. Second recommendation\\n\\n3. Third recommendation\\n\\nEach recommendation should be actionable and specific."
+  "recommendations": "Format as a numbered list:\\n\\n1. First recommendation\\n\\n2. Second recommendation\\n\\n3. Third recommendation\\n\\nEach recommendation must be actionable and specific. Where a KNOWLEDGE BASE CONTEXT block was provided, every recommendation must explicitly connect to or build upon concepts from that material — name the relevant framework, principle, or approach from the knowledge base."
 }
 
-Include ALL ideas in the topIdeas array, ranked by combined score (highest to lowest). Only include fields for modules that were enabled. Use null for ideas that don't have data for a particular module (e.g. not positioned on matrix).`,
+Include ALL ideas in the topIdeas array, ranked by combined score (highest to lowest). Only include fields for modules that were enabled. Use null for ideas that don't have data for a particular module (e.g. not positioned on matrix).
+${kbChunks.length > 0 ? `\nIMPORTANT: ${kbChunks.length} knowledge base excerpt(s) are embedded in the session data above under "KNOWLEDGE BASE CONTEXT". You must ground your analysis in this material — do not ignore it.` : ''}`,
       },
     ],
     response_format: { type: "json_object" },
