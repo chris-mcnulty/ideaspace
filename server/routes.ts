@@ -5823,6 +5823,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/votes", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
     try {
       const data = insertVoteSchema.parse(req.body);
+
+      // Resolve workspace code to UUID — middleware resolves req.params but not req.body,
+      // so participants who join via code (e.g. "7455-4600") get the right UUID here.
+      const resolvedSpaceId = await resolveWorkspaceId(data.spaceId);
+      if (!resolvedSpaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      data.spaceId = resolvedSpaceId;
+
       const vote = await storage.createVote(data);
       
       void storage.recordPulseActivity(vote.spaceId, "pairwise-voting", vote.participantId);
@@ -5929,11 +5938,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/rankings/bulk", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
     try {
-      const { participantId, spaceId, rankings: rankingData } = req.body as {
+      const { participantId, rankings: rankingData } = req.body as {
         participantId: string;
         spaceId: string;
         rankings: Array<{ noteId: string; rank: number }>;
       };
+
+      // Resolve workspace code to UUID (middleware resolves req.params but not req.body)
+      const resolvedSpaceId = await resolveWorkspaceId((req.body as any).spaceId);
+      if (!resolvedSpaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      const spaceId = resolvedSpaceId;
 
       // Get all notes in the space for validation
       const notes = await storage.getNotesBySpace(spaceId);
@@ -6062,10 +6078,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Submit bulk marketplace allocations
   app.post("/api/marketplace-allocations/bulk", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
     try {
-      const { spaceId, allocations: allocationData } = req.body as {
+      const { allocations: allocationData } = req.body as {
         spaceId: string;
         allocations: Array<{ noteId: string; coins: number }>;
       };
+
+      // Resolve workspace code to UUID (middleware resolves req.params but not req.body)
+      const resolvedSpaceId = await resolveWorkspaceId((req.body as any).spaceId);
+      if (!resolvedSpaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      const spaceId = resolvedSpaceId;
 
       // SECURITY: Use session-verified participantId to prevent impersonation
       const participantId = req.session?.participantId;
@@ -6073,7 +6096,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "No participant session found. Please rejoin the workspace." });
       }
 
-      // Verify participant belongs to this space
+      // Verify participant belongs to this space (compare UUIDs after resolution)
       const participant = await storage.getParticipant(participantId);
       if (!participant || participant.spaceId !== spaceId) {
         return res.status(403).json({ error: "Participant does not belong to this workspace" });
@@ -6417,12 +6440,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Submit survey response (create or update)
   app.post("/api/survey-responses", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
     try {
-      const { spaceId, questionId, noteId, score } = req.body;
+      const { questionId, noteId, score } = req.body;
       
       // Validate score is 1-5
       if (!score || score < 1 || score > 5) {
         return res.status(400).json({ error: "Score must be between 1 and 5" });
       }
+
+      // Resolve workspace code to UUID (middleware resolves req.params but not req.body)
+      const resolvedSpaceId = await resolveWorkspaceId((req.body as any).spaceId);
+      if (!resolvedSpaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      const spaceId = resolvedSpaceId;
       
       const participantId = req.session?.participantId;
       if (!participantId) {
