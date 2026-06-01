@@ -3881,10 +3881,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Space not found" });
       }
       
-      const participant = await storage.createParticipant({
-        ...data,
-        spaceId, // Use resolved UUID
-      });
+      // For authenticated users, use get-or-create so re-joins and duplicate
+      // requests don't hit the (space_id, user_id) unique constraint and 500.
+      const participant = data.userId
+        ? await storage.getOrCreateParticipantByUserId(spaceId, data.userId, {
+            displayName: data.displayName,
+            isGuest: data.isGuest ?? false,
+            isOnline: data.isOnline ?? true,
+            profileData: data.profileData,
+            email: data.email,
+          })
+        : await storage.createParticipant({
+            ...data,
+            spaceId,
+          });
       
       // Store participant ID in session for authentication
       if (req.session) {

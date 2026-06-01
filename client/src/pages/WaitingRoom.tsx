@@ -230,13 +230,68 @@ export default function WaitingRoomPage() {
     );
   }
 
-  // User has permission or guest access is allowed - show normal waiting room
+  // Authenticated user shortcut: join with their account identity (SSO / local)
+  if (currentUser) {
+    const accountName = currentUser.displayName || currentUser.username || currentUser.email;
+    return (
+      <div id="main-content" tabIndex={-1} className="flex min-h-screen flex-col bg-background focus:outline-none">
+        <header className="sticky top-0 z-50 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="flex h-full items-center justify-end gap-3 px-6">
+            <ThemeToggle />
+            <UserProfileMenu />
+          </div>
+        </header>
+        <div className="flex flex-1 items-center justify-center p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{org.name}</div>
+              <CardTitle className="text-2xl">{space.name}</CardTitle>
+              {space.purpose && (
+                <CardDescription>{space.purpose}</CardDescription>
+              )}
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-md border bg-muted/40 p-4 text-center space-y-1">
+                <p className="text-sm text-muted-foreground">You are signed in as</p>
+                <p className="font-semibold">{accountName}</p>
+              </div>
+              <Button
+                className="w-full"
+                onClick={() =>
+                  joinMutation.mutate({
+                    displayName: accountName,
+                    isGuest: false,
+                  })
+                }
+                disabled={joinMutation.isPending}
+                data-testid="button-join-as-user"
+              >
+                {joinMutation.isPending ? "Joining…" : `Join as ${accountName}`}
+              </Button>
+              <p className="text-center text-xs text-muted-foreground">
+                Not you?{" "}
+                <button
+                  className="underline hover:text-foreground"
+                  onClick={() => setLocation("/logout")}
+                  data-testid="button-sign-out-waiting-room"
+                >
+                  Sign out
+                </button>{" "}
+                to join as a guest.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // Unauthenticated — show normal waiting room (guest / login / register tabs)
   return (
     <div id="main-content" tabIndex={-1} className="flex min-h-screen flex-col bg-background focus:outline-none">
       <header className="sticky top-0 z-50 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-full items-center justify-end gap-3 px-6">
           <ThemeToggle />
-          {isAuthenticated && <UserProfileMenu />}
         </div>
       </header>
       <WaitingRoomComponent
@@ -248,7 +303,7 @@ export default function WaitingRoomPage() {
         onJoinAnonymous={(guestName) => {
           joinMutation.mutate({
             displayName: guestName,
-            isGuest: !currentUser, // If user is logged in, not a guest
+            isGuest: true,
           });
         }}
         onRegister={(data) => {
