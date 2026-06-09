@@ -91,10 +91,10 @@ export default function SignalPresenter() {
       <div className="w-full">
         <p className="text-xs text-muted-foreground mb-1">Or visit</p>
         <p
-          className="break-all text-xs font-medium text-foreground/80 leading-relaxed"
+          className="text-sm font-semibold text-foreground"
           data-testid="text-signal-presenter-url"
         >
-          {joinUrl}
+          nebula.synozur.com
         </p>
       </div>
     </div>
@@ -154,8 +154,8 @@ export default function SignalPresenter() {
               </div>
               <div className="w-full">
                 <p className="text-sm text-muted-foreground mb-1">Or visit</p>
-                <p className="break-all text-sm font-medium text-foreground/80 leading-relaxed">
-                  {joinUrl}
+                <p className="text-xl font-semibold text-foreground">
+                  nebula.synozur.com
                 </p>
               </div>
             </div>
