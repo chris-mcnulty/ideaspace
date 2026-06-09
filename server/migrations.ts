@@ -371,6 +371,17 @@ export async function ensureSignalTables(): Promise<void> {
   `);
 }
 
+/**
+ * Ensure the cohort_results table has the signal_summary column.
+ * Idempotent; safe to run on every startup.
+ */
+export async function ensureSignalSummaryColumn(): Promise<void> {
+  await pool.query(`
+    ALTER TABLE cohort_results
+    ADD COLUMN IF NOT EXISTS signal_summary jsonb;
+  `);
+}
+
 export async function runStartupMigrations(): Promise<void> {
   await ensureNotificationsTable();
   await ensureClientErrorsTable();
@@ -380,4 +391,5 @@ export async function runStartupMigrations(): Promise<void> {
   await ensureOrganisationApiKeysTable();
   await ensureStarshipTables();
   await ensureSignalTables();
+  await ensureSignalSummaryColumn();
 }

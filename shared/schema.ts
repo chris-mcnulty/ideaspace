@@ -437,6 +437,7 @@ export const cohortResults = pgTable("cohort_results", {
   topIdeas: jsonb("top_ideas"), // Top-ranked ideas with scores from all voting methods
   insights: text("insights").notNull(), // AI-generated insights from the data
   recommendations: text("recommendations"), // Actionable recommendations for the cohort
+  signalSummary: jsonb("signal_summary"), // Structured Signal activity summaries (always populated when signal module has responses)
   metadata: jsonb("metadata"), // Additional data: voting stats, participation stats, etc.
   inputsHash: text("inputs_hash"), // sha256 of inputs (notes/votes/rankings/modules/kb chunks) for cache lookup
   createdAt: timestamp("created_at").defaultNow().notNull(),

@@ -462,6 +462,14 @@ export async function generateCohortResults(
       : [],
     kbChunkIds: kbChunks.map((c) => c.id),
     kbContentHash: hashKbChunkContents(kbChunks.map((c) => ({ id: c.id, content: c.content }))),
+    signalResponses: hasSignal
+      ? signalResponsesRows.map((r) => ({
+          activityId: r.activityId,
+          valueText: r.valueText,
+          valueNumber: r.valueNumber,
+          optionId: r.optionId,
+        }))
+      : [],
   };
   const inputsHash = computeCohortInputsHash(cohortInputs);
 
@@ -660,6 +668,7 @@ ${kbChunks.length > 0 ? `\nIMPORTANT: ${kbChunks.length} knowledge base excerpt(
       topIdeas: validated.topIdeas,
       insights: validated.insights,
       recommendations: validated.recommendations || null,
+      signalSummary: signalActivitySummaries.length > 0 ? signalActivitySummaries : null,
       inputsHash,
       metadata: {
         totalNotes: allNotes.length,
@@ -674,6 +683,76 @@ ${kbChunks.length > 0 ? `\nIMPORTANT: ${kbChunks.length} knowledge base excerpt(
     .returning();
 
   return cohortResult;
+}
+
+/**
+ * Format a participant's Signal responses into a readable prompt block.
+ * Returns an empty string when the participant has no Signal responses.
+ */
+function buildParticipantSignalContext(
+  participantResponses: Array<{ activityId: string; valueText: string | null; valueNumber: number | null; optionId: string | null }>,
+  activities: Array<{ id: string; type: string; prompt: string; orderIndex: number; config: unknown }>,
+  sfShort: (v: unknown) => string,
+): string {
+  if (participantResponses.length === 0) return '';
+  const actMap = new Map(activities.map((a) => [a.id, a]));
+  // Group responses by activity.
+  const byActivity = new Map<string, typeof participantResponses>();
+  for (const r of participantResponses) {
+    const bucket = byActivity.get(r.activityId) ?? [];
+    bucket.push(r);
+    byActivity.set(r.activityId, bucket);
+  }
+  const lines: string[] = ['\nSignal (Live Interaction) — Participant Responses:'];
+  const sortedActIds = [...byActivity.keys()].sort((a, b) => {
+    const oa = actMap.get(a)?.orderIndex ?? 0;
+    const ob = actMap.get(b)?.orderIndex ?? 0;
+    return oa - ob;
+  });
+  for (const actId of sortedActIds) {
+    const act = actMap.get(actId);
+    if (!act) continue;
+    const responses = byActivity.get(actId)!;
+    if (act.type === 'word-cloud') {
+      const words = responses.map((r) => r.valueText).filter(Boolean).map((w) => sfShort(w));
+      lines.push(`  - Word Cloud "${sfShort(act.prompt)}": submitted word(s): ${words.join(', ') || '(none)'}`);
+    } else if (act.type === 'multiple-choice') {
+      const cfg = act.config as { options?: Array<{ id: string; text: string }> } ?? {};
+      const optMap = new Map((cfg.options ?? []).map((o) => [o.id, o.text]));
+      const labels = responses.map((r) => r.optionId ? sfShort(optMap.get(r.optionId) ?? r.optionId) : null).filter(Boolean);
+      lines.push(`  - Multiple Choice "${sfShort(act.prompt)}": selected: ${labels.join(', ') || '(none)'}`);
+    } else if (act.type === 'numeric') {
+      const nums = responses.map((r) => r.valueNumber).filter((v): v is number => v != null);
+      if (nums.length > 0) {
+        lines.push(`  - Numeric "${sfShort(act.prompt)}": response: ${nums[0]}`);
+      }
+    }
+  }
+  return lines.join('\n') + '\n';
+}
+
+/**
+ * Format the cohort's Signal summary for inclusion in the personalized prompt
+ * so the AI can compare individual vs. cohort responses.
+ */
+function formatCohortSignalSummary(
+  signalSummary: unknown,
+  sfShort: (v: unknown) => string,
+): string {
+  if (!Array.isArray(signalSummary) || signalSummary.length === 0) return '(none)';
+  const lines: string[] = [];
+  for (const entry of signalSummary as Array<{ type: string; prompt: string; responseCount: number; wordFreqs?: Array<{ word: string; count: number }>; optionCounts?: Array<{ label: string; count: number }>; numericMean?: number; numericCount?: number }>) {
+    if (entry.type === 'word-cloud' && entry.wordFreqs?.length) {
+      const top = entry.wordFreqs.slice(0, 5).map((w) => `"${sfShort(w.word)}"(${w.count})`).join(', ');
+      lines.push(`  - Word Cloud "${sfShort(entry.prompt)}" (${entry.responseCount} responses): top words: ${top}`);
+    } else if (entry.type === 'multiple-choice' && entry.optionCounts?.length) {
+      const opts = entry.optionCounts.map((o) => `"${sfShort(o.label)}"(${o.count})`).join(', ');
+      lines.push(`  - Multiple Choice "${sfShort(entry.prompt)}" (${entry.responseCount} responses): ${opts}`);
+    } else if (entry.type === 'numeric' && entry.numericMean != null) {
+      lines.push(`  - Numeric "${sfShort(entry.prompt)}" (${entry.numericCount} responses): cohort mean ${entry.numericMean.toFixed(2)}`);
+    }
+  }
+  return lines.join('\n') || '(none)';
 }
 
 /**
@@ -709,7 +788,9 @@ export async function generatePersonalizedResults(
   // Fetch participant inputs first so the cache key reflects every
   // prompt-affecting input (notes/votes/rankings/allocations + cohort
   // alignment), not just identity + cohort hash.
-  const [participantNotes, participantVotes, participantRankings, participantAllocations, allCategories, allVotes] =
+  type SignalActRow = { id: string; type: string; prompt: string; orderIndex: number; config: unknown };
+  type SignalRespRow = { activityId: string; valueText: string | null; valueNumber: number | null; optionId: string | null };
+  const [participantNotes, participantVotes, participantRankings, participantAllocations, allCategories, allVotes, spaceSignalActivities, participantSignalResponses] =
     await Promise.all([
       db.select().from(notes).where(and(eq(notes.spaceId, spaceId), eq(notes.participantId, participantId))),
       db.select().from(votes).where(and(eq(votes.spaceId, spaceId), eq(votes.participantId, participantId))),
@@ -717,6 +798,8 @@ export async function generatePersonalizedResults(
       db.select().from(marketplaceAllocations).where(and(eq(marketplaceAllocations.spaceId, spaceId), eq(marketplaceAllocations.participantId, participantId))),
       db.select().from(categories).where(eq(categories.spaceId, spaceId)),
       db.select().from(votes).where(eq(votes.spaceId, spaceId)),
+      db.select({ id: signalActivities.id, type: signalActivities.type, prompt: signalActivities.prompt, orderIndex: signalActivities.orderIndex, config: signalActivities.config }).from(signalActivities).where(eq(signalActivities.spaceId, spaceId)) as Promise<SignalActRow[]>,
+      db.select({ activityId: signalResponses.activityId, valueText: signalResponses.valueText, valueNumber: signalResponses.valueNumber, optionId: signalResponses.optionId }).from(signalResponses).where(and(eq(signalResponses.spaceId, spaceId), eq(signalResponses.participantId, participantId))) as Promise<SignalRespRow[]>,
     ]);
   const categoryNameById = new Map<string, string>();
   for (const c of allCategories) categoryNameById.set(c.id, c.name);
@@ -776,6 +859,14 @@ export async function generatePersonalizedResults(
   // trust-boundary guard.
   const sfShortP = (v: unknown) => sanitizeForPrompt(v, 200);
   const sfNoteP = (v: unknown) => sanitizeForPrompt(v, 2000);
+
+  // Format participant's Signal responses for context.
+  const signalContextBlock = buildParticipantSignalContext(
+    participantSignalResponses,
+    spaceSignalActivities,
+    sfShortP,
+  );
+
   const personalContext = wrapUntrusted(
     `Participant: ${sfShortP(participant.displayName)}
 
@@ -796,7 +887,7 @@ Engagement:
 - Pairwise Votes Cast: ${participantVotes.length}
 - Rankings Submitted: ${participantRankings.length > 0 ? 'Yes' : 'No'}
 - Marketplace Allocations: ${participantAllocations.length > 0 ? 'Yes' : 'No'}
-
+${signalContextBlock}
 Top Contributions by Impact:
 ${noteImpact.slice(0, 5).map((n: any, idx: any) => `${idx + 1}. "${sfNoteP(n.content)}" - Win rate: ${(n.winRate * 100).toFixed(1)}% (${n.wins}/${n.totalComparisons})`).join('\n')}
 
@@ -806,6 +897,7 @@ ${sanitizeForPrompt(cohortResult.summary, 4000)}
 
 Key Themes Identified:
 ${cohortResult.keyThemes?.map((t: string) => sfShortP(t)).join(', ') || 'None identified'}
+${(cohortResult as any).signalSummary ? `\nCohort Signal Summary (for comparison with participant's own responses below):\n${formatCohortSignalSummary((cohortResult as any).signalSummary, sfShortP)}` : ''}
 ` : ''}`,
     40000,
   );
@@ -908,6 +1000,8 @@ export async function generateAllPersonalizedResults(
     allAllocations,
     allCategories,
     cohortResultRow,
+    allSignalActivities,
+    allSignalResponses,
   ] = await Promise.all([
     db.select().from(participants).where(eq(participants.spaceId, spaceId)),
     db.select().from(notes).where(eq(notes.spaceId, spaceId)),
@@ -916,6 +1010,8 @@ export async function generateAllPersonalizedResults(
     db.select().from(marketplaceAllocations).where(eq(marketplaceAllocations.spaceId, spaceId)),
     db.select().from(categories).where(eq(categories.spaceId, spaceId)),
     db.select().from(cohortResults).where(eq(cohortResults.id, cohortResultId)).limit(1),
+    db.select({ id: signalActivities.id, type: signalActivities.type, prompt: signalActivities.prompt, orderIndex: signalActivities.orderIndex, config: signalActivities.config }).from(signalActivities).where(eq(signalActivities.spaceId, spaceId)) as Promise<SignalActivityBatchRow[]>,
+    db.select({ activityId: signalResponses.activityId, participantId: signalResponses.participantId, valueText: signalResponses.valueText, valueNumber: signalResponses.valueNumber, optionId: signalResponses.optionId }).from(signalResponses).where(eq(signalResponses.spaceId, spaceId)),
   ]);
 
   const cohortResult: CohortResult | null = cohortResultRow[0] || null;
@@ -949,6 +1045,15 @@ export async function generateAllPersonalizedResults(
     allocationsByParticipant.set(a.participantId, list);
   }
 
+  // Group signal responses by participant.
+  const signalResponsesByParticipant = new Map<string, SignalResponseBatchRow[]>();
+  for (const r of allSignalResponses) {
+    if (!r.participantId) continue;
+    const list = signalResponsesByParticipant.get(r.participantId) ?? [];
+    list.push({ activityId: r.activityId, valueText: r.valueText, valueNumber: r.valueNumber, optionId: r.optionId });
+    signalResponsesByParticipant.set(r.participantId, list);
+  }
+
   // Pre-compute global vote tallies per note (used to score every participant's
   // contributions). Avoids re-scanning allVotes for each participant.
   const winsByNote = new Map<string, number>();
@@ -980,6 +1085,8 @@ export async function generateAllPersonalizedResults(
         winsByNote,
         comparisonsByNote,
         categoryNameById,
+        signalActivities: allSignalActivities,
+        participantSignalResponses: signalResponsesByParticipant.get(participant.id) ?? [],
       });
       results.push(result);
     } catch (error) {
@@ -996,6 +1103,8 @@ type NoteRow = typeof notes.$inferSelect;
 type VoteRow = typeof votes.$inferSelect;
 type RankingRow = typeof rankings.$inferSelect;
 type AllocationRow = typeof marketplaceAllocations.$inferSelect;
+type SignalActivityBatchRow = { id: string; type: string; prompt: string; orderIndex: number; config: unknown };
+type SignalResponseBatchRow = { activityId: string; valueText: string | null; valueNumber: number | null; optionId: string | null };
 
 /**
  * AI + persistence half of generatePersonalizedResults, operating purely on
@@ -1015,11 +1124,14 @@ async function generatePersonalizedResultsFromCache(params: {
   winsByNote: Map<string, number>;
   comparisonsByNote: Map<string, number>;
   categoryNameById: Map<string, string>;
+  signalActivities: SignalActivityBatchRow[];
+  participantSignalResponses: SignalResponseBatchRow[];
 }): Promise<PersonalizedResult> {
   const {
     spaceId, cohortResultId, participant, cohortResult, currentCohortInputsHash,
     participantNotes, participantVotes, participantRankings, participantAllocations,
     winsByNote, comparisonsByNote, categoryNameById,
+    signalActivities, participantSignalResponses,
   } = params;
 
   const noteImpact = participantNotes.map((note) => {
@@ -1065,6 +1177,13 @@ async function generatePersonalizedResultsFromCache(params: {
 
   const sfShortC = (v: unknown) => sanitizeForPrompt(v, 200);
   const sfNoteC = (v: unknown) => sanitizeForPrompt(v, 2000);
+
+  const signalContextBlockC = buildParticipantSignalContext(
+    participantSignalResponses,
+    signalActivities,
+    sfShortC,
+  );
+
   const personalContext = wrapUntrusted(
     `Participant: ${sfShortC(participant.displayName)}
 
@@ -1085,7 +1204,7 @@ Engagement:
 - Pairwise Votes Cast: ${participantVotes.length}
 - Rankings Submitted: ${participantRankings.length > 0 ? 'Yes' : 'No'}
 - Marketplace Allocations: ${participantAllocations.length > 0 ? 'Yes' : 'No'}
-
+${signalContextBlockC}
 Top Contributions by Impact:
 ${noteImpact.slice(0, 5).map((n, idx) => `${idx + 1}. "${sfNoteC(n.content)}" - Win rate: ${(n.winRate * 100).toFixed(1)}% (${n.wins}/${n.totalComparisons})`).join('\n')}
 
@@ -1095,6 +1214,7 @@ ${sanitizeForPrompt(cohortResult.summary, 4000)}
 
 Key Themes Identified:
 ${cohortResult.keyThemes?.map((t: string) => sfShortC(t)).join(', ') || 'None identified'}
+${(cohortResult as any).signalSummary ? `\nCohort Signal Summary (for comparison with participant's own responses below):\n${formatCohortSignalSummary((cohortResult as any).signalSummary, sfShortC)}` : ''}
 ` : ''}`,
     40000,
   );
@@ -1125,7 +1245,7 @@ Please provide your analysis in the following JSON format:
       "impact": "description of why this idea was impactful"
     }
   ],
-  "insights": "2-3 paragraphs of personalized insights about their thinking style, contribution patterns, and engagement",
+  "insights": "2-3 paragraphs of personalized insights about their thinking style, contribution patterns, and engagement${participantSignalResponses.length > 0 ? '. If Signal (Live Interaction) data is present, compare their individual responses to the cohort averages and highlight alignment or divergence.' : ''}",
   "recommendations": "Personalized next steps and development suggestions based on their session performance"
 }
 
@@ -1193,6 +1313,7 @@ export async function getCurrentCohortInputsHash(spaceId: string): Promise<strin
   const hasSurvey = enabledModuleTypes.includes('survey');
   const hasPriorityMatrix = enabledModuleTypes.includes('priority-matrix');
   const hasStaircase = enabledModuleTypes.includes('staircase');
+  const hasSignalH = enabledModuleTypes.includes('signal');
   const noteCount = allNotes.length;
 
   // Aggregate-shaped fetches in parallel — same SQL GROUP BY pattern as
@@ -1200,6 +1321,7 @@ export async function getCurrentCohortInputsHash(spaceId: string): Promise<strin
   type MatrixRow = { id: string; xAxisLabel: string; yAxisLabel: string };
   type StaircaseRow = { id: string; minLabel: string; maxLabel: string; minScore: number; maxScore: number };
   type SurveyQuestionRow = { id: string; questionText: string; sortOrder: number };
+  type SignalRespRowH = { activityId: string; valueText: string | null; valueNumber: number | null; optionId: string | null };
   const [
     pairwiseTallies,
     rankingAggregates,
@@ -1208,6 +1330,7 @@ export async function getCurrentCohortInputsHash(spaceId: string): Promise<strin
     matrixRowH,
     staircaseRowH,
     surveyQRows,
+    signalRespRowsH,
   ] = await Promise.all([
     storage.getPairwiseTalliesBySpace(spaceId),
     noteCount > 0 ? storage.getRankingAggregatesBySpace(spaceId, noteCount) : Promise.resolve([]),
@@ -1224,6 +1347,9 @@ export async function getCurrentCohortInputsHash(spaceId: string): Promise<strin
     hasSurvey
       ? (db.select().from(surveyQuestions).where(eq(surveyQuestions.spaceId, spaceId)) as Promise<SurveyQuestionRow[]>)
       : Promise.resolve<SurveyQuestionRow[]>([]),
+    hasSignalH
+      ? (db.select({ activityId: signalResponses.activityId, valueText: signalResponses.valueText, valueNumber: signalResponses.valueNumber, optionId: signalResponses.optionId }).from(signalResponses).where(eq(signalResponses.spaceId, spaceId)) as Promise<SignalRespRowH[]>)
+      : Promise.resolve<SignalRespRowH[]>([]),
   ]);
   const matrixH = matrixRowH[0];
   const staircaseH = staircaseRowH[0];
@@ -1297,6 +1423,14 @@ export async function getCurrentCohortInputsHash(spaceId: string): Promise<strin
       : [],
     kbChunkIds: kbChunks.map((c) => c.id),
     kbContentHash: hashKbChunkContents(kbChunks.map((c) => ({ id: c.id, content: c.content }))),
+    signalResponses: hasSignalH
+      ? signalRespRowsH.map((r) => ({
+          activityId: r.activityId,
+          valueText: r.valueText,
+          valueNumber: r.valueNumber,
+          optionId: r.optionId,
+        }))
+      : [],
   };
   return computeCohortInputsHash(inputs);
 }

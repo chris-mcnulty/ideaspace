@@ -658,6 +658,118 @@ export async function generateCohortResultsPDF(
     });
   }
 
+  // Add Signal (Live Interaction) section
+  type SignalEntry = {
+    type: string;
+    prompt: string;
+    responseCount: number;
+    wordFreqs?: Array<{ word: string; count: number }>;
+    optionCounts?: Array<{ label: string; count: number }>;
+    numericMean?: number;
+    numericCount?: number;
+  };
+  const signalSummary = (cohortResult as any).signalSummary as SignalEntry[] | null | undefined;
+  if (signalSummary && signalSummary.length > 0) {
+    if (yPos > 200) {
+      doc.addPage();
+      yPos = 20;
+    }
+
+    setBrandFont(doc, true, fontsAvailable);
+    doc.setFontSize(14);
+    doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
+    doc.text('Live Interaction Results', 15, yPos);
+    yPos += 10;
+
+    for (const activity of signalSummary) {
+      if (yPos > 230) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      // Activity sub-heading
+      setBrandFont(doc, true, fontsAvailable);
+      doc.setFontSize(11);
+      doc.setTextColor(60, 60, 60);
+      const typeLabel = activity.type === 'word-cloud'
+        ? 'Word Cloud'
+        : activity.type === 'multiple-choice'
+          ? 'Multiple Choice'
+          : 'Numeric';
+      const subHeading = `${typeLabel}: ${activity.prompt}`;
+      const subHeadLines = doc.splitTextToSize(subHeading, doc.internal.pageSize.getWidth() - 30);
+      doc.text(subHeadLines, 15, yPos);
+      yPos += subHeadLines.length * 5 + 2;
+
+      setBrandFont(doc, false, fontsAvailable);
+      doc.setFontSize(9);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`${activity.responseCount} response(s)`, 15, yPos);
+      yPos += 7;
+
+      if (activity.type === 'word-cloud' && activity.wordFreqs && activity.wordFreqs.length > 0) {
+        const tableData = activity.wordFreqs.slice(0, 15).map((w) => [w.word, String(w.count)]);
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Word', 'Count']],
+          body: tableData,
+          theme: 'striped',
+          headStyles: {
+            fillColor: [primaryRgb[0], primaryRgb[1], primaryRgb[2]],
+            textColor: [255, 255, 255],
+            fontSize: 8,
+            fontStyle: 'bold',
+            font: fontsAvailable ? 'Avenir Next LT Pro' : 'helvetica',
+          },
+          bodyStyles: {
+            fontSize: 8,
+            font: fontsAvailable ? 'Avenir Next LT Pro' : 'helvetica',
+          },
+          columnStyles: {
+            0: { cellWidth: 100 },
+            1: { cellWidth: 30 },
+          },
+        });
+        yPos = (doc as any).lastAutoTable.finalY + 8;
+      } else if (activity.type === 'multiple-choice' && activity.optionCounts && activity.optionCounts.length > 0) {
+        const tableData = activity.optionCounts.map((o) => [o.label, String(o.count)]);
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Option', 'Count']],
+          body: tableData,
+          theme: 'striped',
+          headStyles: {
+            fillColor: [primaryRgb[0], primaryRgb[1], primaryRgb[2]],
+            textColor: [255, 255, 255],
+            fontSize: 8,
+            fontStyle: 'bold',
+            font: fontsAvailable ? 'Avenir Next LT Pro' : 'helvetica',
+          },
+          bodyStyles: {
+            fontSize: 8,
+            font: fontsAvailable ? 'Avenir Next LT Pro' : 'helvetica',
+          },
+          columnStyles: {
+            0: { cellWidth: 120 },
+            1: { cellWidth: 30 },
+          },
+        });
+        yPos = (doc as any).lastAutoTable.finalY + 8;
+      } else if (activity.type === 'numeric' && activity.numericMean != null) {
+        doc.setFontSize(9);
+        doc.setTextColor(40, 40, 40);
+        setBrandFont(doc, false, fontsAvailable);
+        doc.text(
+          `Mean: ${activity.numericMean.toFixed(2)}   Responses: ${activity.numericCount ?? 0}`,
+          20,
+          yPos,
+        );
+        yPos += 8;
+      }
+    }
+    yPos += 5;
+  }
+
   // Add footer
   addFooter(doc, branding, fontsAvailable);
 

@@ -44,6 +44,8 @@ export interface CohortInputs {
   matrixPositions: Array<{ noteId: string; xCoord: number; yCoord: number }>;
   staircasePositions: Array<{ noteId: string; score: number }>;
   surveyAggregates: Array<{ noteId: string; questionId: string; sum: number; count: number }>;
+  // Signal activity responses (for cache invalidation when signal data changes)
+  signalResponses?: Array<{ activityId: string; valueText: string | null; valueNumber: number | null; optionId: string | null }>;
   // KB grounding
   kbChunkIds: string[];
   kbContentHash?: string;
@@ -98,6 +100,9 @@ export function computeCohortInputsHash(inputs: CohortInputs): string {
     surveyAggregates: [...inputs.surveyAggregates].sort((a, b) =>
       (a.noteId + a.questionId).localeCompare(b.noteId + b.questionId),
     ),
+    signalResponses: inputs.signalResponses
+      ? [...inputs.signalResponses].sort((a, b) => a.activityId.localeCompare(b.activityId))
+      : [],
     kbChunkIds: [...inputs.kbChunkIds].sort(),
     kbContentHash: inputs.kbContentHash ?? null,
   };
