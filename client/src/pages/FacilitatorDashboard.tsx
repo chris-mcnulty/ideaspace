@@ -1,5 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useSearch, useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -83,8 +83,11 @@ interface Project {
 export default function FacilitatorDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const search = useSearch();
+  const [, setLocation] = useLocation();
+  const selectedOrgId = new URLSearchParams(search).get("org");
+
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
-  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
   const [showOnlyMine, setShowOnlyMine] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [newProjectDialog, setNewProjectDialog] = useState<{
@@ -135,8 +138,15 @@ export default function FacilitatorDashboard() {
   });
 
   const handleOrgChange = useCallback((orgId: string | null) => {
-    setSelectedOrgId(orgId);
-  }, []);
+    const params = new URLSearchParams(search);
+    if (orgId) {
+      params.set("org", orgId);
+    } else {
+      params.delete("org");
+    }
+    const qs = params.toString();
+    setLocation(qs ? `/dashboard?${qs}` : "/dashboard");
+  }, [search, setLocation]);
 
   const groupedWorkspaces = useMemo(() => {
     if (!workspaces) return [];

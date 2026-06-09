@@ -1,5 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useSearch, useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -153,7 +153,9 @@ function MoveWorkspacePopover({
 
 export default function MyProjects() {
   const { user, isLoading: authLoading } = useAuth();
-  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
+  const search = useSearch();
+  const [, setLocation] = useLocation();
+  const selectedOrgId = new URLSearchParams(search).get("org");
   const [showOnlyMine, setShowOnlyMine] = useState(false);
   const [newProjectDialog, setNewProjectDialog] = useState<{
     open: boolean;
@@ -194,7 +196,14 @@ export default function MyProjects() {
   });
 
   const handleOrgChange = (orgId: string | null) => {
-    setSelectedOrgId(orgId);
+    const params = new URLSearchParams(search);
+    if (orgId) {
+      params.set("org", orgId);
+    } else {
+      params.delete("org");
+    }
+    const qs = params.toString();
+    setLocation(qs ? `/projects?${qs}` : "/projects");
   };
 
   const isAdmin =
