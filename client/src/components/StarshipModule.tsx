@@ -163,6 +163,9 @@ export default function StarshipModule({
           });
         } else if (data.type === 'note_created') {
           queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/notes`] });
+        } else if (data.type === 'starship_configured') {
+          // Zone labels changed — refetch config so the board updates live.
+          queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/starship`] });
         }
       } catch (error) {
         console.error('[StarshipModule] WebSocket message error:', error);

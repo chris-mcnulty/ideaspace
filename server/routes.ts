@@ -5826,6 +5826,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Starship Envisioning Module API Routes
   // ============================================
 
+  // Resolve the workspace and assert the caller is a facilitator/admin *for that
+  // specific workspace* (not just any facilitator). Returns the spaceId, or null
+  // after having written the error response. Used by Starship + Signal
+  // facilitator-only routes.
+  async function requireSpaceFacilitator(req: ExpressRequest, res: ExpressResponse): Promise<string | null> {
+    const spaceId = await resolveWorkspaceId(req.params.spaceId);
+    if (!spaceId) {
+      res.status(404).json({ error: "Workspace not found" });
+      return null;
+    }
+    const space = await storage.getSpace(spaceId);
+    if (!space) {
+      res.status(404).json({ error: "Workspace not found" });
+      return null;
+    }
+    if (!(await assertFacilitatorForSpace(req, res, space))) return null;
+    return spaceId;
+  }
+
   // Default labels for a brand-new starship (kept in sync with the schema defaults).
   const STARSHIP_DEFAULTS = {
     destinationLabel: "Destinations",
@@ -5891,10 +5910,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create or update starship configuration (facilitator only)
   app.put("/api/spaces/:spaceId/starship", requireFacilitator, async (req, res) => {
     try {
-      const spaceId = await resolveWorkspaceId(req.params.spaceId);
-      if (!spaceId) {
-        return res.status(404).json({ error: "Workspace not found" });
-      }
+      const spaceId = await requireSpaceFacilitator(req, res);
+      if (!spaceId) return;
 
       const starshipData = insertStarshipSchema.parse({
         ...req.body,
@@ -6037,6 +6054,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Workspace not found" });
       }
 
+      // Mirror the upsert route's guard: facilitators can always remove;
+      // participants need an open workspace and a participant session.
+      const user = req.user as User | undefined;
+      const isFacilitator = user && ["facilitator", "company_admin", "global_admin"].includes(user.role);
+      if (!isFacilitator) {
+        const space = await storage.getSpace(spaceId);
+        if (space && space.status !== "open") {
+          return res.status(403).json({
+            error: "This workspace is not currently open for participation",
+            code: "WORKSPACE_NOT_OPEN",
+          });
+        }
+        if (!req.session?.participantId) {
+          return res.status(401).json({ error: "No participant session found" });
+        }
+      }
+
       const starship = await storage.getStarship(spaceId);
       if (!starship) {
         return res.json({ success: false });
@@ -6153,8 +6187,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update deck-level state: title, responsesOpen, activeActivityId (live pointer).
   app.put("/api/spaces/:spaceId/signal/deck", requireFacilitator, async (req, res) => {
     try {
-      const spaceId = await resolveWorkspaceId(req.params.spaceId);
-      if (!spaceId) return res.status(404).json({ error: "Workspace not found" });
+      const spaceId = await requireSpaceFacilitator(req, res);
+      if (!spaceId) return;
 
       const deck = await getOrCreateSignalDeck(spaceId);
       const { title, responsesOpen, activeActivityId } = req.body as {
@@ -6207,8 +6241,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create an activity (auto-creates the deck if needed).
   app.post("/api/spaces/:spaceId/signal/activities", requireFacilitator, async (req, res) => {
     try {
-      const spaceId = await resolveWorkspaceId(req.params.spaceId);
-      if (!spaceId) return res.status(404).json({ error: "Workspace not found" });
+      const spaceId = await requireSpaceFacilitator(req, res);
+      if (!spaceId) return;
 
       const type = req.body?.type as SignalActivityType;
       if (!SIGNAL_ACTIVITY_TYPES.includes(type)) {
@@ -6244,8 +6278,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update an activity (prompt / config / orderIndex / status).
   app.put("/api/spaces/:spaceId/signal/activities/:id", requireFacilitator, async (req, res) => {
     try {
-      const spaceId = await resolveWorkspaceId(req.params.spaceId);
-      if (!spaceId) return res.status(404).json({ error: "Workspace not found" });
+      const spaceId = await requireSpaceFacilitator(req, res);
+      if (!spaceId) return;
 
       const activity = await storage.getSignalActivity(req.params.id);
       if (!activity || activity.spaceId !== spaceId) {
@@ -6275,8 +6309,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delete an activity.
   app.delete("/api/spaces/:spaceId/signal/activities/:id", requireFacilitator, async (req, res) => {
     try {
-      const spaceId = await resolveWorkspaceId(req.params.spaceId);
-      if (!spaceId) return res.status(404).json({ error: "Workspace not found" });
+      const spaceId = await requireSpaceFacilitator(req, res);
+      if (!spaceId) return;
 
       const activity = await storage.getSignalActivity(req.params.id);
       if (!activity || activity.spaceId !== spaceId) {
@@ -6302,8 +6336,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Facilitator-only: aggregated results are shown on the presenter screen.
   app.get("/api/spaces/:spaceId/signal/activities/:id/responses", requireFacilitator, async (req, res) => {
     try {
-      const spaceId = await resolveWorkspaceId(req.params.spaceId);
-      if (!spaceId) return res.status(404).json({ error: "Workspace not found" });
+      const spaceId = await requireSpaceFacilitator(req, res);
+      if (!spaceId) return;
 
       const activity = await storage.getSignalActivity(req.params.id);
       if (!activity || activity.spaceId !== spaceId) {
@@ -6417,8 +6451,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Reset (clear) all responses for an activity.
   app.post("/api/spaces/:spaceId/signal/activities/:id/reset", requireFacilitator, async (req, res) => {
     try {
-      const spaceId = await resolveWorkspaceId(req.params.spaceId);
-      if (!spaceId) return res.status(404).json({ error: "Workspace not found" });
+      const spaceId = await requireSpaceFacilitator(req, res);
+      if (!spaceId) return;
 
       const activity = await storage.getSignalActivity(req.params.id);
       if (!activity || activity.spaceId !== spaceId) {
@@ -6438,8 +6472,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ideas; frequency is preserved in metadata.
   app.post("/api/spaces/:spaceId/signal/activities/:id/push-to-ideas", requireFacilitator, async (req, res) => {
     try {
-      const spaceId = await resolveWorkspaceId(req.params.spaceId);
-      if (!spaceId) return res.status(404).json({ error: "Workspace not found" });
+      const spaceId = await requireSpaceFacilitator(req, res);
+      if (!spaceId) return;
 
       const activity = await storage.getSignalActivity(req.params.id);
       if (!activity || activity.spaceId !== spaceId) {
