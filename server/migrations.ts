@@ -315,6 +315,62 @@ export async function ensureStarshipTables(): Promise<void> {
   `);
 }
 
+/**
+ * Ensure the Signal (live interaction) module tables exist: a deck per space, an
+ * ordered set of activities, and an append-only responses log. Idempotent and
+ * safe to run on every startup.
+ */
+export async function ensureSignalTables(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS signal_decks (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      space_id varchar NOT NULL REFERENCES spaces(id),
+      module_run_id varchar REFERENCES workspace_module_runs(id) ON DELETE CASCADE,
+      title text NOT NULL DEFAULT 'Live Session',
+      active_activity_id varchar,
+      responses_open boolean NOT NULL DEFAULT false,
+      created_at timestamp NOT NULL DEFAULT now(),
+      updated_at timestamp NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS signal_activities (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      deck_id varchar NOT NULL REFERENCES signal_decks(id) ON DELETE CASCADE,
+      space_id varchar NOT NULL REFERENCES spaces(id),
+      module_run_id varchar REFERENCES workspace_module_runs(id) ON DELETE CASCADE,
+      type text NOT NULL,
+      prompt text NOT NULL DEFAULT '',
+      order_index integer NOT NULL DEFAULT 0,
+      status text NOT NULL DEFAULT 'draft',
+      config jsonb NOT NULL DEFAULT '{}'::jsonb,
+      source_filter jsonb,
+      created_at timestamp NOT NULL DEFAULT now(),
+      updated_at timestamp NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_signal_activities_deck ON signal_activities(deck_id);
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS signal_responses (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      activity_id varchar NOT NULL REFERENCES signal_activities(id) ON DELETE CASCADE,
+      deck_id varchar NOT NULL REFERENCES signal_decks(id) ON DELETE CASCADE,
+      space_id varchar NOT NULL REFERENCES spaces(id),
+      module_run_id varchar REFERENCES workspace_module_runs(id) ON DELETE CASCADE,
+      participant_id varchar REFERENCES participants(id),
+      value_text text,
+      value_number real,
+      option_id text,
+      created_at timestamp NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_signal_responses_activity ON signal_responses(activity_id);
+  `);
+}
+
 export async function runStartupMigrations(): Promise<void> {
   await ensureNotificationsTable();
   await ensureClientErrorsTable();
@@ -323,4 +379,5 @@ export async function runStartupMigrations(): Promise<void> {
   await ensureNotificationPreferencesTable();
   await ensureOrganisationApiKeysTable();
   await ensureStarshipTables();
+  await ensureSignalTables();
 }

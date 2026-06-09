@@ -29,6 +29,7 @@ export function useModuleNavigation({ spaceId, orgSlug, onMessage }: UseModuleNa
             'priority-matrix': `/o/${orgSlug}/s/${spaceId}/priority-matrix`,
             staircase: `/o/${orgSlug}/s/${spaceId}/staircase`,
             starship: `/o/${orgSlug}/s/${spaceId}/starship`,
+            signal: `/o/${orgSlug}/s/${spaceId}/signal`,
             ideate: `/o/${orgSlug}/s/${spaceId}/participate`,
             results: `/o/${orgSlug}/s/${spaceId}/results`,
           };

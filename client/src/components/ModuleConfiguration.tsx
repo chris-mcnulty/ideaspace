@@ -11,7 +11,7 @@ import {
   Settings, Save, RotateCcw, GripVertical,
   FileText, Vote, TrendingUp, ShoppingCart,
   Grid3x3, ClipboardList, ChevronUp, ChevronDown,
-  Info, Lock, Rocket
+  Info, Lock, Rocket, Radio
 } from 'lucide-react';
 import {
   DndContext,
@@ -150,6 +150,16 @@ const MODULE_METADATA = {
       dragLabel: 'Black Holes',
       collaborative: true,
       assignZoneAsCategory: true
+    }
+  },
+  'signal': {
+    name: 'Signal',
+    icon: Radio,
+    description: 'Live word clouds, polls, and numeric check-ins with a presenter screen',
+    configurable: true,
+    config: {
+      showResponseCounts: true,
+      allowAnonymous: true
     }
   }
 } as const satisfies Record<ModuleType, {

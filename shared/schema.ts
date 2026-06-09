@@ -514,7 +514,8 @@ export const MODULE_TYPES = [
   "priority-matrix",
   "survey",
   "staircase",
-  "starship"
+  "starship",
+  "signal"
 ] as const;
 export type ModuleType = typeof MODULE_TYPES[number];
 
@@ -526,6 +527,29 @@ export type ModuleType = typeof MODULE_TYPES[number];
 //   - drag:        the forces dragging the ship down — black holes (bottom)
 export const STARSHIP_ZONES = ["thrust", "destination", "drag"] as const;
 export type StarshipZone = typeof STARSHIP_ZONES[number];
+
+// Signal (live interaction / Mentimeter-style) activity types. A Signal "deck"
+// is an ordered set of activities the facilitator advances through live while
+// participants respond from their phones and a presenter screen aggregates the
+// results in real time.
+export const SIGNAL_ACTIVITY_TYPES = ["word_cloud", "multiple_choice", "numeric"] as const;
+export type SignalActivityType = typeof SIGNAL_ACTIVITY_TYPES[number];
+
+// Per-activity config shapes (stored in signal_activities.config jsonb).
+export const signalWordCloudConfigSchema = z.object({
+  maxEntriesPerParticipant: z.number().int().min(1).max(10).default(3),
+  normalizeCase: z.boolean().default(true),
+});
+export const signalMultipleChoiceConfigSchema = z.object({
+  options: z.array(z.object({ id: z.string(), label: z.string() })).default([]),
+  allowMultiple: z.boolean().default(false),
+});
+export const signalNumericConfigSchema = z.object({
+  min: z.number().default(0),
+  max: z.number().default(10),
+  step: z.number().positive().default(1),
+  chartStyle: z.enum(["histogram", "bar"]).default("histogram"),
+});
 
 // Module config schemas
 const ideationConfigSchema = z.object({
@@ -588,6 +612,11 @@ const starshipConfigSchema = z.object({
   assignZoneAsCategory: z.boolean().default(true)
 });
 
+const signalConfigSchema = z.object({
+  showResponseCounts: z.boolean().default(true),
+  allowAnonymous: z.boolean().default(true),
+});
+
 export const moduleConfigSchemas = {
   "ideation": ideationConfigSchema,
   "pairwise-voting": pairwiseVotingConfigSchema,
@@ -596,7 +625,8 @@ export const moduleConfigSchemas = {
   "priority-matrix": priorityMatrixConfigSchema,
   "survey": surveyConfigSchema,
   "staircase": staircaseConfigSchema,
-  "starship": starshipConfigSchema
+  "starship": starshipConfigSchema,
+  "signal": signalConfigSchema
 } satisfies Record<ModuleType, z.ZodTypeAny>;
 
 export type ModuleConfigMap = {
@@ -738,6 +768,57 @@ export const starshipPositions = pgTable("starship_positions", {
   uniqueStarshipNote: unique().on(table.starshipId, table.noteId, table.moduleRunId),
   checkXCoord: sql`CHECK (x_coord >= 0 AND x_coord <= 1)`,
   checkYCoord: sql`CHECK (y_coord >= 0 AND y_coord <= 1)`,
+}));
+
+// Signal Decks: one live-interaction deck per space (mirrors the single-config
+// pattern of priority matrices). Tracks which activity is currently "live" and
+// whether responses are being accepted.
+export const signalDecks = pgTable("signal_decks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  spaceId: varchar("space_id").notNull().references(() => spaces.id),
+  moduleRunId: varchar("module_run_id").references(() => workspaceModuleRuns.id, { onDelete: "cascade" }),
+  title: text("title").notNull().default("Live Session"),
+  activeActivityId: varchar("active_activity_id"), // No FK: avoids a circular reference and lets the activity be deleted independently
+  responsesOpen: boolean("responses_open").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Signal Activities: the ordered "slides" within a deck. Each has a type and a
+// type-specific config blob (word cloud / multiple choice / numeric).
+export const signalActivities = pgTable("signal_activities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  deckId: varchar("deck_id").notNull().references(() => signalDecks.id, { onDelete: "cascade" }),
+  spaceId: varchar("space_id").notNull().references(() => spaces.id),
+  moduleRunId: varchar("module_run_id").references(() => workspaceModuleRuns.id, { onDelete: "cascade" }),
+  type: text("type").notNull().$type<SignalActivityType>(),
+  prompt: text("prompt").notNull().default(""),
+  orderIndex: integer("order_index").notNull().default(0),
+  status: text("status").notNull().default("draft"), // 'draft' | 'live' | 'closed'
+  config: jsonb("config").notNull().default(sql`'{}'::jsonb`),
+  sourceFilter: jsonb("source_filter"), // Reserved for v2: seed inputs from workspace ideas / a subset
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  deckIdx: index("idx_signal_activities_deck").on(table.deckId),
+}));
+
+// Signal Responses: append-only log of participant submissions. Upsert-latest
+// semantics for numeric / single-select are enforced in the route by deleting a
+// participant's prior rows before inserting; word cloud / multi-select append.
+export const signalResponses = pgTable("signal_responses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  activityId: varchar("activity_id").notNull().references(() => signalActivities.id, { onDelete: "cascade" }),
+  deckId: varchar("deck_id").notNull().references(() => signalDecks.id, { onDelete: "cascade" }),
+  spaceId: varchar("space_id").notNull().references(() => spaces.id),
+  moduleRunId: varchar("module_run_id").references(() => workspaceModuleRuns.id, { onDelete: "cascade" }),
+  participantId: varchar("participant_id").references(() => participants.id),
+  valueText: text("value_text"), // word cloud entry / free text
+  valueNumber: real("value_number"), // numeric response
+  optionId: text("option_id"), // multiple-choice selected option id
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  activityIdx: index("idx_signal_responses_activity").on(table.activityId),
 }));
 
 // Append-only event log for the Pulse heatmap. One row per participation
@@ -1020,6 +1101,10 @@ const moduleInsertVariants = [
   z.object({
     moduleType: z.literal("starship" as const),
     config: moduleConfigSchemas["starship"]
+  }),
+  z.object({
+    moduleType: z.literal("signal" as const),
+    config: moduleConfigSchemas["signal"]
   })
 ] as const;
 
@@ -1070,6 +1155,26 @@ export const insertStarshipPositionSchema = createInsertSchema(starshipPositions
   id: true,
   createdAt: true,
   updatedAt: true,
+});
+
+export const insertSignalDeckSchema = createInsertSchema(signalDecks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertSignalActivitySchema = createInsertSchema(signalActivities, {
+  type: z.enum(SIGNAL_ACTIVITY_TYPES),
+  config: z.any(),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertSignalResponseSchema = createInsertSchema(signalResponses).omit({
+  id: true,
+  createdAt: true,
 });
 
 export const insertNotificationSchema = createInsertSchema(notifications).omit({
@@ -1192,6 +1297,20 @@ export type InsertStarship = z.infer<typeof insertStarshipSchema>;
 
 export type StarshipPosition = typeof starshipPositions.$inferSelect;
 export type InsertStarshipPosition = z.infer<typeof insertStarshipPositionSchema>;
+
+export type SignalDeck = typeof signalDecks.$inferSelect;
+export type InsertSignalDeck = z.infer<typeof insertSignalDeckSchema>;
+
+export type SignalActivity = typeof signalActivities.$inferSelect;
+export type InsertSignalActivity = z.infer<typeof insertSignalActivitySchema>;
+
+export type SignalResponse = typeof signalResponses.$inferSelect;
+export type InsertSignalResponse = z.infer<typeof insertSignalResponseSchema>;
+
+// Discriminated config types for activities (parsed/validated in routes).
+export type SignalWordCloudConfig = z.infer<typeof signalWordCloudConfigSchema>;
+export type SignalMultipleChoiceConfig = z.infer<typeof signalMultipleChoiceConfigSchema>;
+export type SignalNumericConfig = z.infer<typeof signalNumericConfigSchema>;
 
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;

@@ -35,6 +35,8 @@ const WORKSPACE_SECTIONS = [
   { value: "priority-matrix", label: "2x2 Priority Matrix", path: "/priority-matrix" },
   { value: "staircase", label: "Staircase Rating", path: "/staircase" },
   { value: "starship", label: "Starship", path: "/starship" },
+  { value: "signal", label: "Signal", path: "/signal" },
+  { value: "signal-present", label: "Signal — Presenter Screen", path: "/signal/present" },
   { value: "survey", label: "Survey", path: "/survey" },
   { value: "results", label: "Results", path: "/results" },
   { value: "public-results", label: "Public Results (No Login)", path: "/public-results" },

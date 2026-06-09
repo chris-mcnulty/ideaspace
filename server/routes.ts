@@ -8,7 +8,7 @@ import { getUserIdFromUpgradeRequest } from "./session";
 import oauthRoutes from "./routes/auth-oauth";
 import entraRoutes from "./routes/auth-entra";
 import { db } from "./db";
-import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, type Space, type InsertSpace, organizations, users, companyAdmins as companyAdminsTable, knowledgeBaseDocuments, workspaceTemplates, workspaceTemplateNotes, aiUsageLog, insertIdeaSchema, insertWorkspaceModuleSchema, insertWorkspaceModuleRunSchema, insertPriorityMatrixSchema, insertPriorityMatrixPositionSchema, insertStaircaseModuleSchema, insertStaircasePositionSchema, insertStarshipSchema, insertStarshipPositionSchema, STARSHIP_ZONES, type StarshipZone, projectMembers, categories, notes, participants, projects, spaces, NOTIFICATION_TYPES, NOTIFICATION_TYPE_DEFAULTS, type NotificationType, updateNotificationPreferencesSchema } from "@shared/schema";
+import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, type Space, type InsertSpace, organizations, users, companyAdmins as companyAdminsTable, knowledgeBaseDocuments, workspaceTemplates, workspaceTemplateNotes, aiUsageLog, insertIdeaSchema, insertWorkspaceModuleSchema, insertWorkspaceModuleRunSchema, insertPriorityMatrixSchema, insertPriorityMatrixPositionSchema, insertStaircaseModuleSchema, insertStaircasePositionSchema, insertStarshipSchema, insertStarshipPositionSchema, STARSHIP_ZONES, type StarshipZone, insertSignalActivitySchema, SIGNAL_ACTIVITY_TYPES, type SignalActivityType, signalWordCloudConfigSchema, signalMultipleChoiceConfigSchema, signalNumericConfigSchema, projectMembers, categories, notes, participants, projects, spaces, NOTIFICATION_TYPES, NOTIFICATION_TYPE_DEFAULTS, type NotificationType, updateNotificationPreferencesSchema } from "@shared/schema";
 import { CSV_IMPORT_TYPES, csvConfirmTemplatesBodySchema, csvConfirmUsersBodySchema, csvConfirmIdeasBodySchema, type CsvImportType, type TemplateCsvRow, type UserCsvRow, type IdeaCsvRow } from "@shared/csvImport";
 import { buildCsvPreview, buildErrorReportCsv } from "./services/csvImport";
 import { uploadImage, validateImageFile, cleanupTempFile } from "./middleware/uploadMiddleware";
@@ -34,7 +34,7 @@ import { hashPassword, requireAuth, requireRole, requireGlobalAdmin, requireComp
 import { generateWorkspaceCode, isValidWorkspaceCode } from "./services/workspace-code";
 import { sendAccessRequestEmail, sendEmailVerification, sendPasswordReset, sendSessionInviteEmail, sendPhaseChangeNotificationEmail, sendResultsAvailableEmail, sendBulkNotifications, type SessionInviteEmailData, type PhaseChangeEmailData, type ResultsReadyEmailData } from "./services/email";
 import { createImportJob, getImportJob, markJobRunning, recordJobSuccess, recordJobFailure, finishJob } from "./services/importJobs";
-import { randomBytes } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 import { fileUploadService } from "./services/file-upload";
 import { extractAndChunk } from "./services/kbExtraction";
 import { getPresenceForSpace, buildPresenceChangedMessage, type PresenceWsMeta } from "./presence";
@@ -92,6 +92,7 @@ function isWorkspaceOpenForParticipation(status: string): boolean {
     'priority-matrix', 'priority',
     'staircase',
     'starship',
+    'signal',
     'results'
   ];
   
@@ -2134,10 +2135,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Protected: Navigate all participants to a specific phase
   app.post("/api/spaces/:id/navigate-participants", requireFacilitator, async (req, res) => {
     try {
-      const { phase } = req.body as { phase: "vote" | "rank" | "marketplace" | "ideate" | "results" | "priority-matrix" | "staircase" | "starship" | "survey" };
+      const { phase } = req.body as { phase: "vote" | "rank" | "marketplace" | "ideate" | "results" | "priority-matrix" | "staircase" | "starship" | "signal" | "survey" };
 
-      if (!phase || !["vote", "rank", "marketplace", "ideate", "results", "priority-matrix", "staircase", "starship", "survey"].includes(phase)) {
-        return res.status(400).json({ error: "Invalid phase. Must be one of: vote, rank, marketplace, ideate, results, priority-matrix, staircase, starship, survey" });
+      if (!phase || !["vote", "rank", "marketplace", "ideate", "results", "priority-matrix", "staircase", "starship", "signal", "survey"].includes(phase)) {
+        return res.status(400).json({ error: "Invalid phase. Must be one of: vote, rank, marketplace, ideate, results, priority-matrix, staircase, starship, signal, survey" });
       }
       
       // Resolve workspace code to UUID
@@ -2189,6 +2190,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         case "priority-matrix":
         case "staircase":
         case "starship":
+        case "signal":
         case "results":
           // These modules don't need time window updates
           // Just broadcast the navigation
@@ -6093,6 +6095,338 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============================================
+  // Signal (live interaction) Module API Routes
+  // ============================================
+
+  // Validate & normalize an activity's type-specific config, generating ids for
+  // multiple-choice options that don't have one.
+  function parseSignalConfig(type: SignalActivityType, rawConfig: unknown): Record<string, unknown> {
+    if (type === "word_cloud") {
+      return signalWordCloudConfigSchema.parse(rawConfig ?? {});
+    }
+    if (type === "numeric") {
+      const cfg = signalNumericConfigSchema.parse(rawConfig ?? {});
+      if (cfg.max <= cfg.min) {
+        throw new z.ZodError([{ code: "custom", path: ["max"], message: "max must be greater than min" }]);
+      }
+      return cfg;
+    }
+    // multiple_choice
+    const cfg = signalMultipleChoiceConfigSchema.parse(rawConfig ?? {});
+    cfg.options = cfg.options.map((o) => ({ id: o.id || `opt_${randomUUID().slice(0, 8)}`, label: o.label }));
+    return cfg;
+  }
+
+  // Fetch the deck for a space, creating an empty one if it doesn't exist.
+  async function getOrCreateSignalDeck(spaceId: string) {
+    let deck = await storage.getSignalDeck(spaceId);
+    if (!deck) {
+      deck = await storage.createSignalDeck({ spaceId, title: "Live Session", responsesOpen: false });
+    }
+    return deck;
+  }
+
+  const isFacilitatorUser = (req: any): boolean => {
+    const user = req.user as User | undefined;
+    return !!user && ["facilitator", "company_admin", "global_admin"].includes(user.role);
+  };
+
+  // Get the deck + its activities (everyone with workspace access; participants
+  // need it to follow the live activity).
+  app.get("/api/spaces/:spaceId/signal", createWorkspaceAccessMiddleware({}), async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) return res.status(404).json({ error: "Workspace not found" });
+
+      const deck = await storage.getSignalDeck(spaceId);
+      if (!deck) return res.json({ deck: null, activities: [] });
+
+      const activities = await storage.getSignalActivities(deck.id);
+      res.json({ deck, activities });
+    } catch (error) {
+      console.error("Failed to fetch signal deck:", error);
+      res.status(500).json({ error: "Failed to fetch signal deck" });
+    }
+  });
+
+  // Update deck-level state: title, responsesOpen, activeActivityId (live pointer).
+  app.put("/api/spaces/:spaceId/signal/deck", requireFacilitator, async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) return res.status(404).json({ error: "Workspace not found" });
+
+      const deck = await getOrCreateSignalDeck(spaceId);
+      const { title, responsesOpen, activeActivityId } = req.body as {
+        title?: string; responsesOpen?: boolean; activeActivityId?: string | null;
+      };
+
+      const updates: Record<string, unknown> = {};
+      if (typeof title === "string") updates.title = title;
+      if (typeof responsesOpen === "boolean") updates.responsesOpen = responsesOpen;
+
+      // Changing the live pointer: mark the chosen activity 'live' and any other
+      // live activity 'closed'.
+      let activityChanged = false;
+      if (activeActivityId !== undefined) {
+        if (activeActivityId === null) {
+          updates.activeActivityId = null;
+        } else {
+          const activity = await storage.getSignalActivity(activeActivityId);
+          if (!activity || activity.deckId !== deck.id) {
+            return res.status(400).json({ error: "activeActivityId does not belong to this deck" });
+          }
+          updates.activeActivityId = activeActivityId;
+          const all = await storage.getSignalActivities(deck.id);
+          await Promise.all(all.map((a) => {
+            if (a.id === activeActivityId && a.status !== "live") return storage.updateSignalActivity(a.id, { status: "live" });
+            if (a.id !== activeActivityId && a.status === "live") return storage.updateSignalActivity(a.id, { status: "closed" });
+            return Promise.resolve(undefined);
+          }));
+        }
+        activityChanged = true;
+      }
+
+      const updated = await storage.updateSignalDeck(deck.id, updates);
+      if (activityChanged) {
+        broadcastToSpace(spaceId, { type: "signal_activity_changed", data: { deckId: deck.id, activeActivityId: updated?.activeActivityId ?? null } });
+      }
+      broadcastToSpace(spaceId, { type: "signal_deck_updated", data: updated });
+      res.json(updated);
+    } catch (error) {
+      console.error("Failed to update signal deck:", error);
+      res.status(500).json({ error: "Failed to update signal deck" });
+    }
+  });
+
+  // Create an activity (auto-creates the deck if needed).
+  app.post("/api/spaces/:spaceId/signal/activities", requireFacilitator, async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) return res.status(404).json({ error: "Workspace not found" });
+
+      const type = req.body?.type as SignalActivityType;
+      if (!SIGNAL_ACTIVITY_TYPES.includes(type)) {
+        return res.status(400).json({ error: `type must be one of: ${SIGNAL_ACTIVITY_TYPES.join(", ")}` });
+      }
+
+      const deck = await getOrCreateSignalDeck(spaceId);
+      const config = parseSignalConfig(type, req.body?.config);
+      const existing = await storage.getSignalActivities(deck.id);
+      const orderIndex = typeof req.body?.orderIndex === "number"
+        ? req.body.orderIndex
+        : existing.length;
+
+      const activity = await storage.createSignalActivity({
+        deckId: deck.id,
+        spaceId,
+        type,
+        prompt: typeof req.body?.prompt === "string" ? req.body.prompt : "",
+        orderIndex,
+        status: "draft",
+        config,
+      });
+
+      broadcastToSpace(spaceId, { type: "signal_activities_updated", data: { deckId: deck.id } });
+      res.status(201).json(activity);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      console.error("Failed to create signal activity:", error);
+      res.status(500).json({ error: "Failed to create signal activity" });
+    }
+  });
+
+  // Update an activity (prompt / config / orderIndex / status).
+  app.put("/api/spaces/:spaceId/signal/activities/:id", requireFacilitator, async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) return res.status(404).json({ error: "Workspace not found" });
+
+      const activity = await storage.getSignalActivity(req.params.id);
+      if (!activity || activity.spaceId !== spaceId) {
+        return res.status(404).json({ error: "Activity not found" });
+      }
+
+      const updates: Record<string, unknown> = {};
+      if (typeof req.body?.prompt === "string") updates.prompt = req.body.prompt;
+      if (typeof req.body?.orderIndex === "number") updates.orderIndex = req.body.orderIndex;
+      if (typeof req.body?.status === "string" && ["draft", "live", "closed"].includes(req.body.status)) {
+        updates.status = req.body.status;
+      }
+      if (req.body?.config !== undefined) {
+        updates.config = parseSignalConfig(activity.type, req.body.config);
+      }
+
+      const updated = await storage.updateSignalActivity(activity.id, updates);
+      broadcastToSpace(spaceId, { type: "signal_activities_updated", data: { deckId: activity.deckId } });
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      console.error("Failed to update signal activity:", error);
+      res.status(500).json({ error: "Failed to update signal activity" });
+    }
+  });
+
+  // Delete an activity.
+  app.delete("/api/spaces/:spaceId/signal/activities/:id", requireFacilitator, async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) return res.status(404).json({ error: "Workspace not found" });
+
+      const activity = await storage.getSignalActivity(req.params.id);
+      if (!activity || activity.spaceId !== spaceId) {
+        return res.status(404).json({ error: "Activity not found" });
+      }
+
+      const deck = await storage.getSignalDeck(spaceId);
+      await storage.deleteSignalActivity(activity.id);
+      // Clear the live pointer if it referenced the deleted activity.
+      if (deck && deck.activeActivityId === activity.id) {
+        await storage.updateSignalDeck(deck.id, { activeActivityId: null });
+        broadcastToSpace(spaceId, { type: "signal_activity_changed", data: { deckId: deck.id, activeActivityId: null } });
+      }
+      broadcastToSpace(spaceId, { type: "signal_activities_updated", data: { deckId: activity.deckId } });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to delete signal activity:", error);
+      res.status(500).json({ error: "Failed to delete signal activity" });
+    }
+  });
+
+  // Get responses for an activity (raw rows for client-side aggregation).
+  app.get("/api/spaces/:spaceId/signal/activities/:id/responses", createWorkspaceAccessMiddleware({}), async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) return res.status(404).json({ error: "Workspace not found" });
+
+      const activity = await storage.getSignalActivity(req.params.id);
+      if (!activity || activity.spaceId !== spaceId) {
+        return res.status(404).json({ error: "Activity not found" });
+      }
+
+      const responses = await storage.getSignalResponses(activity.id);
+      // Strip participant identity — Signal aggregation is anonymous.
+      res.json(responses.map((r) => ({
+        id: r.id,
+        valueText: r.valueText,
+        valueNumber: r.valueNumber,
+        optionId: r.optionId,
+        createdAt: r.createdAt,
+      })));
+    } catch (error) {
+      console.error("Failed to fetch signal responses:", error);
+      res.status(500).json({ error: "Failed to fetch signal responses" });
+    }
+  });
+
+  // Submit a response to an activity.
+  app.post("/api/spaces/:spaceId/signal/activities/:id/responses", createWorkspaceAccessMiddleware({ requireOpen: false }), async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) return res.status(404).json({ error: "Workspace not found" });
+
+      const activity = await storage.getSignalActivity(req.params.id);
+      if (!activity || activity.spaceId !== spaceId) {
+        return res.status(404).json({ error: "Activity not found" });
+      }
+      const deck = await storage.getSignalDeck(spaceId);
+      if (!deck) return res.status(404).json({ error: "Signal deck not found" });
+
+      const facilitator = isFacilitatorUser(req);
+      let participantId: string | null = null;
+      if (!facilitator) {
+        // Participants: workspace must be open, responses must be open, and this
+        // must be the live activity.
+        const space = await storage.getSpace(spaceId);
+        if (space && space.status !== "open") {
+          return res.status(403).json({ error: "This workspace is not currently open for participation", code: "WORKSPACE_NOT_OPEN" });
+        }
+        if (!deck.responsesOpen || deck.activeActivityId !== activity.id) {
+          return res.status(403).json({ error: "Responses are not currently being accepted for this activity" });
+        }
+        participantId = req.session?.participantId ?? null;
+        if (!participantId) return res.status(401).json({ error: "No participant session found" });
+      }
+
+      const baseRow = { activityId: activity.id, deckId: deck.id, spaceId, participantId };
+      const cfg = activity.config as any;
+
+      if (activity.type === "word_cloud") {
+        const wcCfg = signalWordCloudConfigSchema.parse(cfg ?? {});
+        const rawWords: string[] = Array.isArray(req.body?.words)
+          ? req.body.words
+          : (typeof req.body?.text === "string" ? [req.body.text] : []);
+        let words = rawWords
+          .map((w) => String(w).trim())
+          .filter((w) => w.length > 0 && w.length <= 80)
+          .map((w) => (wcCfg.normalizeCase ? w.toLowerCase() : w));
+        if (words.length === 0) return res.status(400).json({ error: "At least one word is required" });
+
+        // Enforce the per-participant cap.
+        if (participantId) {
+          const already = await storage.countParticipantSignalResponses(activity.id, participantId);
+          const remaining = Math.max(0, wcCfg.maxEntriesPerParticipant - already);
+          words = words.slice(0, remaining);
+          if (words.length === 0) {
+            return res.status(403).json({ error: `You can submit at most ${wcCfg.maxEntriesPerParticipant} words` });
+          }
+        }
+        for (const w of words) {
+          await storage.createSignalResponse({ ...baseRow, valueText: w });
+        }
+      } else if (activity.type === "numeric") {
+        const numCfg = signalNumericConfigSchema.parse(cfg ?? {});
+        const value = Number(req.body?.value);
+        if (!Number.isFinite(value) || value < numCfg.min || value > numCfg.max) {
+          return res.status(400).json({ error: `value must be a number between ${numCfg.min} and ${numCfg.max}` });
+        }
+        if (participantId) await storage.deleteParticipantSignalResponses(activity.id, participantId);
+        await storage.createSignalResponse({ ...baseRow, valueNumber: value });
+      } else {
+        // multiple_choice
+        const mcCfg = signalMultipleChoiceConfigSchema.parse(cfg ?? {});
+        const validIds = new Set(mcCfg.options.map((o) => o.id));
+        let optionIds: string[] = Array.isArray(req.body?.optionIds)
+          ? req.body.optionIds
+          : (typeof req.body?.optionId === "string" ? [req.body.optionId] : []);
+        optionIds = optionIds.filter((id) => validIds.has(id));
+        if (optionIds.length === 0) return res.status(400).json({ error: "A valid option is required" });
+        if (!mcCfg.allowMultiple) optionIds = optionIds.slice(0, 1);
+        if (participantId) await storage.deleteParticipantSignalResponses(activity.id, participantId);
+        for (const optionId of optionIds) {
+          await storage.createSignalResponse({ ...baseRow, optionId });
+        }
+      }
+
+      void storage.recordPulseActivity(spaceId, "signal", participantId);
+      broadcastToSpace(spaceId, { type: "signal_response_added", data: { activityId: activity.id } });
+      res.status(201).json({ success: true });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      console.error("Failed to submit signal response:", error);
+      res.status(500).json({ error: "Failed to submit response" });
+    }
+  });
+
+  // Reset (clear) all responses for an activity.
+  app.post("/api/spaces/:spaceId/signal/activities/:id/reset", requireFacilitator, async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) return res.status(404).json({ error: "Workspace not found" });
+
+      const activity = await storage.getSignalActivity(req.params.id);
+      if (!activity || activity.spaceId !== spaceId) {
+        return res.status(404).json({ error: "Activity not found" });
+      }
+      const deleted = await storage.deleteSignalResponsesByActivity(activity.id);
+      broadcastToSpace(spaceId, { type: "signal_response_added", data: { activityId: activity.id, reset: true } });
+      res.json({ success: true, deleted });
+    } catch (error) {
+      console.error("Failed to reset signal responses:", error);
+      res.status(500).json({ error: "Failed to reset responses" });
+    }
+  });
+
   // Votes
   app.get("/api/spaces/:spaceId/votes", async (req, res) => {
     try {
@@ -7934,6 +8268,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'priority-matrix': 'Position ideas on the priority matrix.',
         'staircase': 'Rate ideas on the staircase scale.',
         'starship': 'Plot ideas on the starship as propulsion, destinations, or black holes.',
+        'signal': 'Respond live — word clouds, polls, and quick numeric check-ins.',
         'results': 'View the results and insights from the session.',
       };
 

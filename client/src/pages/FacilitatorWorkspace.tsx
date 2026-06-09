@@ -65,6 +65,7 @@ import {
   Grid3x3,
   TrendingUp,
   Rocket,
+  Radio,
   Share2,
   Copy,
   ExternalLink,
@@ -87,6 +88,7 @@ import ModuleConfiguration from "@/components/ModuleConfiguration";
 import PriorityMatrix from "@/components/PriorityMatrix";
 import StaircaseModule from "@/components/StaircaseModule";
 import StarshipModule from "@/components/StarshipModule";
+import SignalFacilitator from "@/components/SignalFacilitator";
 import { NotificationPanel } from "@/components/NotificationPanel";
 import { CountdownTimer } from "@/components/CountdownTimer";
 import { isPhaseActive } from "@/lib/phaseUtils";
@@ -337,6 +339,7 @@ export default function FacilitatorWorkspace() {
     'matrix_position_updated',
     'staircase_position_updated',
     'starship_position_updated',
+    'signal_response_added',
     'survey_response_submitted',
     'survey_questions_updated',
     'participant_joined', 'participant_left',
@@ -415,6 +418,14 @@ export default function FacilitatorWorkspace() {
         // Placing a note assigns it a zone category, so refresh notes/categories too.
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/notes`] });
         queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/categories`] });
+        break;
+      case 'signal_deck_updated':
+      case 'signal_activities_updated':
+      case 'signal_activity_changed':
+      case 'signal_response_added':
+        queryClient.invalidateQueries({
+          predicate: (query) => query.queryKey.some(k => typeof k === 'string' && k.includes('/signal'))
+        });
         break;
       case 'survey_question_created':
       case 'survey_question_updated':
@@ -620,6 +631,8 @@ export default function FacilitatorWorkspace() {
             return { value: "staircase", label: "Staircase", icon: TrendingUp };
           case "starship":
             return { value: "starship", label: "Starship", icon: Rocket };
+          case "signal":
+            return { value: "signal", label: "Signal", icon: Radio };
           case "survey":
             return { value: "survey", label: "Survey", icon: ClipboardList };
           case "pairwise-voting":
@@ -742,7 +755,7 @@ export default function FacilitatorWorkspace() {
 
   // Navigate participants mutation
   const navigateParticipantsMutation = useMutation({
-    mutationFn: async (phase: "vote" | "rank" | "marketplace" | "ideate" | "results" | "priority-matrix" | "staircase" | "starship" | "survey") => {
+    mutationFn: async (phase: "vote" | "rank" | "marketplace" | "ideate" | "results" | "priority-matrix" | "staircase" | "starship" | "signal" | "survey") => {
       const response = await apiRequest("POST", `/api/spaces/${params.space}/navigate-participants`, {
         phase,
       });
@@ -1494,6 +1507,29 @@ export default function FacilitatorWorkspace() {
         </div>
       </div>
       <StarshipModule spaceId={space.id} isFacilitator={true} />
+    </div>
+  );
+
+  const renderSignalTab = () => (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="text-2xl font-bold">Signal</h2>
+          <p className="text-muted-foreground mt-1">
+            Run live word clouds, polls, and numeric check-ins — open the presenter screen on the projector
+          </p>
+        </div>
+        <Button
+          variant="default"
+          onClick={() => navigateParticipantsMutation.mutate("signal")}
+          disabled={navigateParticipantsMutation.isPending}
+          data-testid="button-navigate-to-signal"
+        >
+          <Users className="mr-2 h-4 w-4" />
+          Bring Participants Here
+        </Button>
+      </div>
+      <SignalFacilitator spaceId={space.id} orgSlug={org?.slug} />
     </div>
   );
 
@@ -2467,6 +2503,7 @@ export default function FacilitatorWorkspace() {
     "priority-matrix": renderPriorityMatrixTab,
     "staircase": renderStaircaseTab,
     "starship": renderStarshipTab,
+    "signal": renderSignalTab,
     "survey": renderSurveyTab,
     "voting": renderVotingTab,
     "ranking": renderRankingTab,
