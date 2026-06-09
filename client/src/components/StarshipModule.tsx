@@ -430,25 +430,110 @@ export default function StarshipModule({
               <div className="absolute left-0 top-[60%] w-[60%] h-px bg-border" />
             </div>
 
-            {/* Decorative starship sketch, nosed right (the ship travels left to right) */}
+            {/* ── Thrust-zone cue: warp-speed vibration ripples (upper-left) ── */}
             <svg
-              className="absolute pointer-events-none opacity-30"
-              style={{ left: '22%', top: '36%', width: '36%', height: '26%' }}
+              className="absolute pointer-events-none"
+              style={{ left: '2%', top: '3%', width: '30%', height: '50%', opacity: 0.18 }}
+              viewBox="0 0 90 130"
+              fill="none"
+              aria-hidden="true"
+            >
+              {[10, 23, 36, 49, 62, 75, 88, 101, 114].map((y, i) => (
+                <path
+                  key={y}
+                  d={`M0 ${y} C14 ${y - 5} 22 ${y + 5} 36 ${y} S58 ${y - 5} 72 ${y} S84 ${y + 3} 90 ${y}`}
+                  stroke="#3B82F6"
+                  strokeWidth={i % 3 === 0 ? '2' : '1.2'}
+                  opacity={(0.95 - i * 0.08).toString()}
+                />
+              ))}
+            </svg>
+
+            {/* ── Destination-zone cue: ringed planet + moon (right strip) ── */}
+            <svg
+              className="absolute pointer-events-none"
+              style={{ right: '2%', top: '4%', width: '32%', height: '80%', opacity: 0.20 }}
+              viewBox="0 0 100 220"
+              fill="none"
+              aria-hidden="true"
+            >
+              {/* large planet body */}
+              <circle cx="58" cy="80" r="32" fill="#10B981" opacity="0.55" />
+              {/* surface bands */}
+              <ellipse cx="58" cy="71" rx="32" ry="6" fill="#10B981" opacity="0.25" />
+              <ellipse cx="58" cy="84" rx="32" ry="5" fill="#10B981" opacity="0.20" />
+              {/* orbital ring (behind planet — drawn first) */}
+              <ellipse cx="58" cy="80" rx="52" ry="13" stroke="#10B981" strokeWidth="3" fill="none" opacity="0.60" />
+              {/* ring overlap clip: redraw planet centre over ring */}
+              <circle cx="58" cy="80" r="32" fill="#10B981" opacity="0.55" />
+              {/* ring front arc */}
+              <path d="M6 80 Q 58 93 110 80" stroke="#10B981" strokeWidth="3" fill="none" opacity="0.60" />
+              {/* small moon */}
+              <circle cx="22" cy="155" r="12" fill="#10B981" opacity="0.40" />
+              {/* tiny star specks */}
+              <circle cx="80" cy="175" r="2" fill="#10B981" opacity="0.50" />
+              <circle cx="15" cy="200" r="1.5" fill="#10B981" opacity="0.40" />
+              <circle cx="90" cy="210" r="1.8" fill="#10B981" opacity="0.45" />
+            </svg>
+
+            {/* ── Drag-zone cue: black-hole vortex (lower-left) ── */}
+            <svg
+              className="absolute pointer-events-none"
+              style={{ left: '4%', bottom: '4%', width: '28%', height: '36%', opacity: 0.20 }}
+              viewBox="0 0 100 90"
+              fill="none"
+              aria-hidden="true"
+            >
+              {/* accretion rings — fading outward */}
+              {[38, 28, 20, 13, 7].map((r, i) => (
+                <circle key={r} cx="50" cy="45" r={r} stroke="#EF4444" strokeWidth={i === 0 ? '1' : '1.5'} fill="none" opacity={(0.25 + i * 0.14).toString()} />
+              ))}
+              {/* event horizon */}
+              <circle cx="50" cy="45" r="6" fill="#EF4444" opacity="0.75" />
+              {/* spiral infall arms */}
+              <path d="M50 45 Q68 28 75 10" stroke="#EF4444" strokeWidth="1.5" fill="none" opacity="0.55" />
+              <path d="M50 45 Q32 28 25 10" stroke="#EF4444" strokeWidth="1.5" fill="none" opacity="0.55" />
+              <path d="M50 45 Q68 62 75 80" stroke="#EF4444" strokeWidth="1.5" fill="none" opacity="0.55" />
+              <path d="M50 45 Q32 62 25 80" stroke="#EF4444" strokeWidth="1.5" fill="none" opacity="0.55" />
+              {/* tidal stretch lines */}
+              <line x1="50" y1="7" x2="50" y2="19" stroke="#EF4444" strokeWidth="1" opacity="0.35" />
+              <line x1="50" y1="71" x2="50" y2="83" stroke="#EF4444" strokeWidth="1" opacity="0.35" />
+              <line x1="12" y1="45" x2="24" y2="45" stroke="#EF4444" strokeWidth="1" opacity="0.35" />
+              <line x1="76" y1="45" x2="88" y2="45" stroke="#EF4444" strokeWidth="1" opacity="0.35" />
+            </svg>
+
+            {/* ── Decorative starship sketch (2.5× larger), nosed right ── */}
+            <svg
+              className="absolute pointer-events-none"
+              style={{ left: '5%', top: '17%', width: '88%', height: '62%', opacity: 0.22 }}
               viewBox="0 0 220 120"
               fill="none"
               aria-hidden="true"
             >
-              {/* exhaust */}
-              <path d="M40 50 L8 60 L40 70 Z" fill="currentColor" opacity="0.45" />
-              {/* fins */}
-              <path d="M70 50 L46 30 L86 50 Z" fill="currentColor" opacity="0.5" />
-              <path d="M70 70 L46 90 L86 70 Z" fill="currentColor" opacity="0.5" />
-              {/* body */}
-              <rect x="40" y="48" width="120" height="24" rx="12" fill="currentColor" opacity="0.6" />
+              {/* exhaust plume */}
+              <path d="M40 50 L8 60 L40 70 Z" fill="currentColor" opacity="0.50" />
+              {/* engine glow rings */}
+              <ellipse cx="40" cy="60" rx="5" ry="8" stroke="currentColor" strokeWidth="1.5" fill="none" opacity="0.35" />
+              {/* upper fin */}
+              <path d="M70 50 L46 30 L86 50 Z" fill="currentColor" opacity="0.55" />
+              {/* lower fin */}
+              <path d="M70 70 L46 90 L86 70 Z" fill="currentColor" opacity="0.55" />
+              {/* secondary upper fin detail */}
+              <path d="M80 52 L62 40 L88 52 Z" fill="currentColor" opacity="0.30" />
+              {/* secondary lower fin detail */}
+              <path d="M80 68 L62 80 L88 68 Z" fill="currentColor" opacity="0.30" />
+              {/* main body */}
+              <rect x="40" y="48" width="120" height="24" rx="12" fill="currentColor" opacity="0.65" />
+              {/* body panel lines */}
+              <line x1="90" y1="48" x2="90" y2="72" stroke="hsl(var(--background))" strokeWidth="1" opacity="0.25" />
+              <line x1="130" y1="48" x2="130" y2="72" stroke="hsl(var(--background))" strokeWidth="1" opacity="0.20" />
               {/* nose cone */}
-              <path d="M160 44 L160 76 L205 60 Z" fill="currentColor" opacity="0.7" />
-              {/* window */}
-              <circle cx="120" cy="60" r="6" fill="hsl(var(--background))" opacity="0.9" />
+              <path d="M160 44 L160 76 L205 60 Z" fill="currentColor" opacity="0.75" />
+              {/* nose detail ridge */}
+              <path d="M160 60 L205 60" stroke="hsl(var(--background))" strokeWidth="1" opacity="0.20" />
+              {/* porthole window */}
+              <circle cx="110" cy="60" r="7" fill="hsl(var(--background))" opacity="0.85" />
+              <circle cx="110" cy="60" r="5" fill="hsl(var(--background))" opacity="0.50" />
             </svg>
 
             {/* Zone labels */}
