@@ -8,6 +8,23 @@ interface BrandingConfig {
   primaryColor?: string; // Hex color
 }
 
+export interface BoardNoteData {
+  id: string;
+  text: string;
+  xCoord: number; // 0-100
+  yCoord: number; // 0-100
+  zone?: string;
+  color: string;
+}
+
+export interface BoardPageData {
+  type: 'starship' | 'matrix';
+  title: string;
+  notes: BoardNoteData[];
+  starshipLabels?: { thrust: string; destination: string; drag: string };
+  matrixLabels?: { xAxis: string; yAxis: string };
+}
+
 // Font cache - stores base64 font data after first load
 let fontCache: {
   regular: string | null;
@@ -216,13 +233,181 @@ function addFooter(doc: jsPDF, branding: BrandingConfig, fontsAvailable: boolean
 }
 
 /**
+ * Draw a single board (Starship or Priority Matrix) onto a new jsPDF page
+ * using drawing primitives so no canvas/HTML element is needed.
+ */
+function drawBoardPage(
+  doc: jsPDF,
+  board: BoardPageData,
+  branding: BrandingConfig,
+  fontsAvailable: boolean
+): void {
+  doc.addPage();
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const primaryRgb = branding.primaryColor ? hexToRgb(branding.primaryColor) : [139, 92, 246];
+
+  // Page title
+  setBrandFont(doc, true, fontsAvailable);
+  doc.setFontSize(16);
+  doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
+  doc.text(board.title, 15, 20);
+
+  // Board area: left=15, top=28, width=180, height=120 (mm)
+  const BX = 15;
+  const BY = 28;
+  const BW = pageWidth - 30;
+  const BH = 120;
+
+  // Outer border
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.3);
+  doc.rect(BX, BY, BW, BH);
+
+  if (board.type === 'starship') {
+    const labels = board.starshipLabels ?? { thrust: 'Propulsion', destination: 'Destinations', drag: 'Black Holes' };
+
+    // Zone widths/heights in mm
+    const thrustW = BW * 0.60;
+    const destX = BX + thrustW;
+    const destW = BW * 0.40;
+    const thrustH = BH * 0.60;
+    const dragY = BY + thrustH;
+    const dragH = BH * 0.40;
+
+    // Thrust zone (upper-left, blue)
+    doc.setFillColor(219, 234, 254); // blue-100
+    doc.setDrawColor(147, 197, 253); // blue-300
+    doc.setLineWidth(0.3);
+    doc.rect(BX, BY, thrustW, thrustH, 'FD');
+
+    // Destination zone (right, green)
+    doc.setFillColor(209, 250, 229); // emerald-100
+    doc.setDrawColor(110, 231, 183); // emerald-300
+    doc.rect(destX, BY, destW, BH, 'FD');
+
+    // Drag zone (lower-left, red)
+    doc.setFillColor(254, 226, 226); // red-100
+    doc.setDrawColor(252, 165, 165); // red-300
+    doc.rect(BX, dragY, thrustW, dragH, 'FD');
+
+    // Zone labels
+    setBrandFont(doc, true, fontsAvailable);
+    doc.setFontSize(7);
+
+    doc.setTextColor(37, 99, 235); // blue-600
+    doc.text(labels.thrust, BX + 2, BY + 5);
+
+    doc.setTextColor(5, 150, 105); // emerald-600
+    doc.text(labels.destination, destX + 2, BY + 5);
+
+    doc.setTextColor(220, 38, 38); // red-600
+    doc.text(labels.drag, BX + 2, dragY + dragH - 2);
+
+    // Notes
+    board.notes.forEach((note) => {
+      const nx = BX + (note.xCoord / 100) * BW;
+      const ny = BY + (note.yCoord / 100) * BH;
+      drawNoteChip(doc, note, nx, ny, fontsAvailable);
+    });
+
+  } else {
+    // Priority Matrix
+    const mLabels = board.matrixLabels ?? { xAxis: 'Impact', yAxis: 'Effort' };
+
+    // Quadrant lines
+    doc.setDrawColor(150, 150, 150);
+    doc.setLineWidth(0.5);
+    doc.line(BX + BW / 2, BY, BX + BW / 2, BY + BH); // vertical
+    doc.line(BX, BY + BH / 2, BX + BW, BY + BH / 2); // horizontal
+
+    // Axis labels (outside the board area)
+    setBrandFont(doc, false, fontsAvailable);
+    doc.setFontSize(7);
+    doc.setTextColor(100, 100, 100);
+
+    // Top: High yAxis
+    doc.text(`High ${mLabels.yAxis}`, BX + BW / 2, BY - 2, { align: 'center' });
+    // Bottom: Low yAxis
+    doc.text(`Low ${mLabels.yAxis}`, BX + BW / 2, BY + BH + 4, { align: 'center' });
+    // Left: Low xAxis
+    doc.text(`Low ${mLabels.xAxis}`, BX - 1, BY + BH / 2, { align: 'right' });
+    // Right: High xAxis
+    doc.text(`High ${mLabels.xAxis}`, BX + BW + 1, BY + BH / 2);
+
+    // Quadrant corner labels
+    doc.setFontSize(6);
+    doc.setTextColor(130, 130, 130);
+    doc.text(`Low ${mLabels.xAxis} / High ${mLabels.yAxis}`, BX + 2, BY + 4);
+    doc.text(`High ${mLabels.xAxis} / High ${mLabels.yAxis}`, BX + BW - 2, BY + 4, { align: 'right' });
+    doc.text(`Low ${mLabels.xAxis} / Low ${mLabels.yAxis}`, BX + 2, BY + BH - 2);
+    doc.text(`High ${mLabels.xAxis} / Low ${mLabels.yAxis}`, BX + BW - 2, BY + BH - 2, { align: 'right' });
+
+    // Notes — yCoord: 0=bottom, 100=top → screen top = 100-y
+    board.notes.forEach((note) => {
+      const nx = BX + (note.xCoord / 100) * BW;
+      const ny = BY + ((100 - note.yCoord) / 100) * BH;
+      drawNoteChip(doc, note, nx, ny, fontsAvailable);
+    });
+  }
+
+  // Note count
+  setBrandFont(doc, false, fontsAvailable);
+  doc.setFontSize(8);
+  doc.setTextColor(120, 120, 120);
+  doc.text(`${board.notes.length} note${board.notes.length !== 1 ? 's' : ''} placed`, BX, BY + BH + 8);
+}
+
+/**
+ * Draw a small rounded note chip at a given position on the PDF page.
+ * The chip is centered on (cx, cy).
+ */
+function drawNoteChip(
+  doc: jsPDF,
+  note: BoardNoteData,
+  cx: number,
+  cy: number,
+  fontsAvailable: boolean
+): void {
+  const chipW = 22;
+  const chipH = 5;
+  const chipX = cx - chipW / 2;
+  const chipY = cy - chipH / 2;
+
+  // Parse note color (hex) for background
+  let r = 139, g = 92, b = 246;
+  try {
+    const rgb = hexToRgb(note.color);
+    [r, g, b] = rgb;
+  } catch {
+    // use default
+  }
+
+  // Background
+  doc.setFillColor(r, g, b);
+  doc.setDrawColor(r, g, b);
+  doc.roundedRect(chipX, chipY, chipW, chipH, 1, 1, 'F');
+
+  // Text (white, truncated)
+  setBrandFont(doc, false, fontsAvailable);
+  doc.setFontSize(5);
+  doc.setTextColor(255, 255, 255);
+
+  const maxChars = 22;
+  const displayText = note.text.length > maxChars ? note.text.slice(0, maxChars - 1) + '…' : note.text;
+  doc.text(displayText, cx, cy + 0.8, { align: 'center', baseline: 'middle' });
+}
+
+/**
  * Generate branded PDF for cohort results
  */
 export async function generateCohortResultsPDF(
   cohortResult: CohortResult,
   branding: BrandingConfig,
   workspaceName: string,
-  projectName?: string
+  projectName?: string,
+  boards?: BoardPageData[],
+  includeBoards?: boolean
 ): Promise<void> {
   const doc = new jsPDF();
   
@@ -475,6 +660,15 @@ export async function generateCohortResultsPDF(
 
   // Add footer
   addFooter(doc, branding, fontsAvailable);
+
+  // Append one page per board when boards are provided and the flag is on
+  if (includeBoards && boards && boards.length > 0) {
+    for (const board of boards) {
+      if (board.notes.length > 0) {
+        drawBoardPage(doc, board, branding, fontsAvailable);
+      }
+    }
+  }
 
   // Download PDF
   const fileName = `${workspaceName.replace(/[^a-z0-9]/gi, '_')}_Cohort_Results_${new Date().toISOString().split('T')[0]}.pdf`;

@@ -74,13 +74,15 @@ import {
   UserCheck,
   UserX,
 } from "lucide-react";
-import type { Organization, Space, Note, Participant, Category, User, Idea, WorkspaceModule, Project } from "@shared/schema";
+import type { Organization, Space, Note, Participant, Category, User, Idea, WorkspaceModule, Project, Starship, StarshipPosition, PriorityMatrix as PriorityMatrixType, PriorityMatrixPosition } from "@shared/schema";
 import { Leaderboard } from "@/components/Leaderboard";
 import { KnowledgeBaseManager } from "@/components/KnowledgeBaseManager";
 import { ShareLinksDialog } from "@/components/ShareLinksDialog";
 import { SurveyQuestionsManager } from "@/components/SurveyQuestionsManager";
 import { SurveyResultsGrid } from "@/components/SurveyResultsGrid";
-import { generateCohortResultsPDF } from "@/lib/pdfGenerator";
+import { generateCohortResultsPDF, type BoardPageData } from "@/lib/pdfGenerator";
+import BoardSnapshot from "@/components/BoardSnapshot";
+import { Checkbox } from "@/components/ui/checkbox";
 import IdeasHub from "@/components/IdeasHub";
 import SuggestIdeasPanel from "@/components/SuggestIdeasPanel";
 import PulsePanel from "@/components/PulsePanel";
@@ -591,6 +593,28 @@ export default function FacilitatorWorkspace() {
     enabled: !!params.space,
   });
   const hasIdeationModule = workspaceModules.some(m => m.moduleType === 'ideation');
+  const hasStarshipModule = workspaceModules.some(m => m.moduleType === 'starship' && m.enabled);
+  const hasMatrixModule = workspaceModules.some(m => m.moduleType === 'priority-matrix' && m.enabled);
+
+  // Fetch starship board data (only when the module is enabled)
+  const { data: starship } = useQuery<Starship>({
+    queryKey: [`/api/spaces/${params.space}/starship`],
+    enabled: !!params.space && hasStarshipModule,
+  });
+  const { data: starshipPositions = [] } = useQuery<StarshipPosition[]>({
+    queryKey: [`/api/spaces/${params.space}/starship/positions`],
+    enabled: !!params.space && hasStarshipModule,
+  });
+
+  // Fetch priority-matrix board data (only when the module is enabled)
+  const { data: priorityMatrix } = useQuery<PriorityMatrixType>({
+    queryKey: [`/api/spaces/${params.space}/priority-matrix`],
+    enabled: !!params.space && hasMatrixModule,
+  });
+  const { data: matrixPositions = [] } = useQuery<PriorityMatrixPosition[]>({
+    queryKey: [`/api/spaces/${params.space}/priority-matrix/positions`],
+    enabled: !!params.space && hasMatrixModule,
+  });
 
   // Fetch project (if workspace belongs to one)
   const { data: project } = useQuery<Project>({
@@ -661,6 +685,9 @@ export default function FacilitatorWorkspace() {
     return facilitatorTabs.some(t => t.value === tabValue);
   }, [facilitatorTabs]);
 
+  // Board snapshot toggle for PDF
+  const [includeBoardsInPDF, setIncludeBoardsInPDF] = useState(true);
+
   // Active tab state with fallback logic
   const [activeTab, setActiveTab] = useState<string>("modules");
 
@@ -694,6 +721,80 @@ export default function FacilitatorWorkspace() {
     },
   });
 
+  // Note color helper (mirrors StarshipModule / PriorityMatrix logic)
+  const NOTE_COLORS_PALETTE = [
+    '#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444',
+    '#EC4899', '#6366F1', '#14B8A6', '#F97316', '#84CC16',
+  ];
+  const getNoteColor = (note: Note): string => {
+    const cat = note.manualCategoryId
+      ? manualCategories.find(c => c.id === note.manualCategoryId)
+      : null;
+    if (cat?.color) return cat.color;
+    const hash = note.id.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+    return NOTE_COLORS_PALETTE[hash % NOTE_COLORS_PALETTE.length];
+  };
+
+  // Build board page data for PDF export
+  const buildBoardPages = (): BoardPageData[] => {
+    const pages: BoardPageData[] = [];
+
+    if (hasStarshipModule && starshipPositions.length > 0) {
+      const notesMap = new Map(notes.map(n => [n.id, n]));
+      const boardNotes = starshipPositions
+        .filter(p => notesMap.has(p.noteId))
+        .map(p => {
+          const n = notesMap.get(p.noteId)!;
+          return {
+            id: n.id,
+            text: n.content.replace(/<[^>]*>?/gm, ''),
+            xCoord: p.xCoord <= 1 ? p.xCoord * 100 : p.xCoord,
+            yCoord: p.yCoord <= 1 ? p.yCoord * 100 : p.yCoord,
+            zone: p.zone,
+            color: getNoteColor(n),
+          };
+        });
+      if (boardNotes.length > 0) {
+        pages.push({
+          type: 'starship',
+          title: 'Starship Board',
+          notes: boardNotes,
+          starshipLabels: starship
+            ? { thrust: starship.thrustLabel, destination: starship.destinationLabel, drag: starship.dragLabel }
+            : undefined,
+        });
+      }
+    }
+
+    if (hasMatrixModule && matrixPositions.length > 0) {
+      const notesMap = new Map(notes.map(n => [n.id, n]));
+      const boardNotes = matrixPositions
+        .filter(p => notesMap.has(p.noteId))
+        .map(p => {
+          const n = notesMap.get(p.noteId)!;
+          return {
+            id: n.id,
+            text: n.content.replace(/<[^>]*>?/gm, ''),
+            xCoord: p.xCoord,
+            yCoord: p.yCoord,
+            color: getNoteColor(n),
+          };
+        });
+      if (boardNotes.length > 0) {
+        pages.push({
+          type: 'matrix',
+          title: '2×2 Priority Matrix',
+          notes: boardNotes,
+          matrixLabels: priorityMatrix
+            ? { xAxis: priorityMatrix.xAxisLabel, yAxis: priorityMatrix.yAxisLabel }
+            : undefined,
+        });
+      }
+    }
+
+    return pages;
+  };
+
   // Download cohort results as branded PDF
   const handleDownloadCohortPDF = async () => {
     if (!cohortResults || !space || !org) {
@@ -706,6 +807,7 @@ export default function FacilitatorWorkspace() {
     }
 
     try {
+      const boardPages = buildBoardPages();
       await generateCohortResultsPDF(
         cohortResults,
         {
@@ -714,7 +816,9 @@ export default function FacilitatorWorkspace() {
           primaryColor: org.primaryColor || undefined,
         },
         space.name,
-        project?.name
+        project?.name,
+        boardPages,
+        includeBoardsInPDF
       );
       toast({
         title: "PDF Downloaded",
@@ -2336,6 +2440,100 @@ export default function FacilitatorWorkspace() {
               </CardContent>
             </Card>
           )}
+
+          {/* Board Views section — shown when at least one board module has positioned notes */}
+          {(() => {
+            const hasStarshipNotes = hasStarshipModule && starshipPositions.length > 0;
+            const hasMatrixNotes = hasMatrixModule && matrixPositions.length > 0;
+            if (!hasStarshipNotes && !hasMatrixNotes) return null;
+
+            const notesMap = new Map(notes.map(n => [n.id, n]));
+
+            const starshipSnapshotNotes = hasStarshipNotes
+              ? starshipPositions
+                  .filter(p => notesMap.has(p.noteId))
+                  .map(p => {
+                    const n = notesMap.get(p.noteId)!;
+                    return {
+                      id: n.id,
+                      text: n.content.replace(/<[^>]*>?/gm, ''),
+                      xCoord: p.xCoord <= 1 ? p.xCoord * 100 : p.xCoord,
+                      yCoord: p.yCoord <= 1 ? p.yCoord * 100 : p.yCoord,
+                      zone: p.zone,
+                      color: getNoteColor(n),
+                    };
+                  })
+              : [];
+
+            const matrixSnapshotNotes = hasMatrixNotes
+              ? matrixPositions
+                  .filter(p => notesMap.has(p.noteId))
+                  .map(p => {
+                    const n = notesMap.get(p.noteId)!;
+                    return {
+                      id: n.id,
+                      text: n.content.replace(/<[^>]*>?/gm, ''),
+                      xCoord: p.xCoord,
+                      yCoord: p.yCoord,
+                      color: getNoteColor(n),
+                    };
+                  })
+              : [];
+
+            return (
+              <Card data-testid="card-board-views">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Grid3x3 className="h-5 w-5 text-primary" />
+                    Board Views
+                  </CardTitle>
+                  <CardDescription>
+                    Visual snapshot of how ideas were positioned on each board module
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {starshipSnapshotNotes.length > 0 && (
+                    <BoardSnapshot
+                      type="starship"
+                      notes={starshipSnapshotNotes}
+                      starshipLabels={
+                        starship
+                          ? { thrust: starship.thrustLabel, destination: starship.destinationLabel, drag: starship.dragLabel }
+                          : undefined
+                      }
+                      title="Starship Board"
+                    />
+                  )}
+                  {matrixSnapshotNotes.length > 0 && (
+                    <BoardSnapshot
+                      type="matrix"
+                      notes={matrixSnapshotNotes}
+                      matrixLabels={
+                        priorityMatrix
+                          ? { xAxis: priorityMatrix.xAxisLabel, yAxis: priorityMatrix.yAxisLabel }
+                          : undefined
+                      }
+                      title="2×2 Priority Matrix"
+                    />
+                  )}
+                  <div className="flex items-center gap-2 pt-2 border-t">
+                    <Checkbox
+                      id="include-boards-pdf"
+                      checked={includeBoardsInPDF}
+                      onCheckedChange={(checked) => setIncludeBoardsInPDF(!!checked)}
+                      data-testid="checkbox-include-boards-pdf"
+                    />
+                    <label
+                      htmlFor="include-boards-pdf"
+                      className="text-sm text-muted-foreground cursor-pointer select-none"
+                    >
+                      Include board visuals in PDF
+                    </label>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           <div className="flex flex-col gap-4">
             {/* AI Results Toggle */}
