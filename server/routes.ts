@@ -4014,7 +4014,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/notes", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
     try {
-      const data = insertNoteSchema.parse(req.body);
+      const data = insertNoteSchema.extend({ participantId: z.string().optional() }).parse(req.body) as z.infer<typeof insertNoteSchema>;
       
       // Security: Verify participantId ownership
       // Facilitators/admins can create notes on behalf of participants (preloading)
