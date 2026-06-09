@@ -2213,6 +2213,102 @@ export default function FacilitatorWorkspace() {
         </CardContent>
       </Card>
 
+      {/* Board Views — always visible when notes are placed, independent of AI results */}
+      {(() => {
+        const hasStarshipNotes = hasStarshipModule && starshipPositions.length > 0;
+        const hasMatrixNotes = hasMatrixModule && matrixPositions.length > 0;
+        if (!hasStarshipNotes && !hasMatrixNotes) return null;
+
+        const notesMap = new Map(notes.map(n => [n.id, n]));
+
+        const starshipSnapshotNotes = hasStarshipNotes
+          ? starshipPositions
+              .filter(p => notesMap.has(p.noteId))
+              .map(p => {
+                const n = notesMap.get(p.noteId)!;
+                return {
+                  id: n.id,
+                  text: n.content.replace(/<[^>]*>?/gm, ''),
+                  xCoord: p.xCoord <= 1 ? p.xCoord * 100 : p.xCoord,
+                  yCoord: p.yCoord <= 1 ? p.yCoord * 100 : p.yCoord,
+                  zone: p.zone,
+                  color: getNoteColor(n),
+                };
+              })
+          : [];
+
+        const matrixSnapshotNotes = hasMatrixNotes
+          ? matrixPositions
+              .filter(p => notesMap.has(p.noteId))
+              .map(p => {
+                const n = notesMap.get(p.noteId)!;
+                return {
+                  id: n.id,
+                  text: n.content.replace(/<[^>]*>?/gm, ''),
+                  xCoord: p.xCoord,
+                  yCoord: p.yCoord,
+                  color: getNoteColor(n),
+                };
+              })
+          : [];
+
+        if (starshipSnapshotNotes.length === 0 && matrixSnapshotNotes.length === 0) return null;
+
+        return (
+          <Card data-testid="card-board-views">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Grid3x3 className="h-5 w-5 text-primary" />
+                Board Views
+              </CardTitle>
+              <CardDescription>
+                Visual snapshot of how ideas were positioned on each board module
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {starshipSnapshotNotes.length > 0 && (
+                <BoardSnapshot
+                  type="starship"
+                  notes={starshipSnapshotNotes}
+                  starshipLabels={
+                    starship
+                      ? { thrust: starship.thrustLabel, destination: starship.destinationLabel, drag: starship.dragLabel }
+                      : undefined
+                  }
+                  title="Starship Board"
+                />
+              )}
+              {matrixSnapshotNotes.length > 0 && (
+                <BoardSnapshot
+                  type="matrix"
+                  notes={matrixSnapshotNotes}
+                  matrixLabels={
+                    priorityMatrix
+                      ? { xAxis: priorityMatrix.xAxisLabel, yAxis: priorityMatrix.yAxisLabel }
+                      : undefined
+                  }
+                  title="2×2 Priority Matrix"
+                />
+              )}
+              <div className="flex items-center gap-2 pt-2 border-t">
+                <Checkbox
+                  id="include-boards-pdf"
+                  checked={includeBoardsInPDF}
+                  onCheckedChange={(checked) => setIncludeBoardsInPDF(!!checked)}
+                  data-testid="checkbox-include-boards-pdf"
+                />
+                <label
+                  htmlFor="include-boards-pdf"
+                  className="text-sm text-muted-foreground cursor-pointer select-none"
+                >
+                  Include board visuals in PDF
+                </label>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       {cohortResultsLoading ? (
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="flex items-center gap-2 text-muted-foreground">
@@ -2441,99 +2537,6 @@ export default function FacilitatorWorkspace() {
             </Card>
           )}
 
-          {/* Board Views section — shown when at least one board module has positioned notes */}
-          {(() => {
-            const hasStarshipNotes = hasStarshipModule && starshipPositions.length > 0;
-            const hasMatrixNotes = hasMatrixModule && matrixPositions.length > 0;
-            if (!hasStarshipNotes && !hasMatrixNotes) return null;
-
-            const notesMap = new Map(notes.map(n => [n.id, n]));
-
-            const starshipSnapshotNotes = hasStarshipNotes
-              ? starshipPositions
-                  .filter(p => notesMap.has(p.noteId))
-                  .map(p => {
-                    const n = notesMap.get(p.noteId)!;
-                    return {
-                      id: n.id,
-                      text: n.content.replace(/<[^>]*>?/gm, ''),
-                      xCoord: p.xCoord <= 1 ? p.xCoord * 100 : p.xCoord,
-                      yCoord: p.yCoord <= 1 ? p.yCoord * 100 : p.yCoord,
-                      zone: p.zone,
-                      color: getNoteColor(n),
-                    };
-                  })
-              : [];
-
-            const matrixSnapshotNotes = hasMatrixNotes
-              ? matrixPositions
-                  .filter(p => notesMap.has(p.noteId))
-                  .map(p => {
-                    const n = notesMap.get(p.noteId)!;
-                    return {
-                      id: n.id,
-                      text: n.content.replace(/<[^>]*>?/gm, ''),
-                      xCoord: p.xCoord,
-                      yCoord: p.yCoord,
-                      color: getNoteColor(n),
-                    };
-                  })
-              : [];
-
-            return (
-              <Card data-testid="card-board-views">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Grid3x3 className="h-5 w-5 text-primary" />
-                    Board Views
-                  </CardTitle>
-                  <CardDescription>
-                    Visual snapshot of how ideas were positioned on each board module
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  {starshipSnapshotNotes.length > 0 && (
-                    <BoardSnapshot
-                      type="starship"
-                      notes={starshipSnapshotNotes}
-                      starshipLabels={
-                        starship
-                          ? { thrust: starship.thrustLabel, destination: starship.destinationLabel, drag: starship.dragLabel }
-                          : undefined
-                      }
-                      title="Starship Board"
-                    />
-                  )}
-                  {matrixSnapshotNotes.length > 0 && (
-                    <BoardSnapshot
-                      type="matrix"
-                      notes={matrixSnapshotNotes}
-                      matrixLabels={
-                        priorityMatrix
-                          ? { xAxis: priorityMatrix.xAxisLabel, yAxis: priorityMatrix.yAxisLabel }
-                          : undefined
-                      }
-                      title="2×2 Priority Matrix"
-                    />
-                  )}
-                  <div className="flex items-center gap-2 pt-2 border-t">
-                    <Checkbox
-                      id="include-boards-pdf"
-                      checked={includeBoardsInPDF}
-                      onCheckedChange={(checked) => setIncludeBoardsInPDF(!!checked)}
-                      data-testid="checkbox-include-boards-pdf"
-                    />
-                    <label
-                      htmlFor="include-boards-pdf"
-                      className="text-sm text-muted-foreground cursor-pointer select-none"
-                    >
-                      Include board visuals in PDF
-                    </label>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })()}
 
           <div className="flex flex-col gap-4">
             {/* AI Results Toggle */}
