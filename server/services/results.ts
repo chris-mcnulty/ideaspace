@@ -31,7 +31,7 @@ const CohortResultSchema = z.object({
   summary: coercedString,
   keyThemes: z.array(z.string()),
   topIdeas: z.array(z.object({
-    noteId: z.union([z.string(), z.number()]).transform(v => String(v)),
+    noteId: z.union([z.string(), z.number()]).nullable().transform(v => (v !== null && v !== undefined) ? String(v) : null),
     content: z.string(),
     category: z.string().optional().nullable(),
     pairwiseWins: z.number().optional().nullable().transform(v => v ?? undefined),
@@ -57,7 +57,7 @@ const PersonalizedResultSchema = z.object({
   personalSummary: coercedString,
   alignmentScore: z.number().min(0).max(100),
   topContributions: z.array(z.object({
-    noteId: z.union([z.string(), z.number()]).transform(v => String(v)),
+    noteId: z.union([z.string(), z.number()]).nullable().transform(v => (v !== null && v !== undefined) ? String(v) : null),
     content: z.string(),
     impact: z.string(),
   })),
@@ -622,7 +622,7 @@ Please provide your analysis in the following JSON format:
   "recommendations": "Format as a numbered list:\\n\\n1. First recommendation\\n\\n2. Second recommendation\\n\\n3. Third recommendation\\n\\nEach recommendation must be actionable and specific. Where a KNOWLEDGE BASE CONTEXT block was provided, every recommendation must explicitly connect to or build upon concepts from that material — name the relevant framework, principle, or approach from the knowledge base."
 }
 
-${allNotes.length > 0 ? 'Include ALL ideas in the topIdeas array, ranked by combined score (highest to lowest). Only include fields for modules that were enabled. Use null for ideas that don\'t have data for a particular module (e.g. not positioned on matrix).' : 'This session has no captured ideas — set topIdeas to an empty array []. Base your summary, keyThemes, insights, and recommendations entirely on the Signal and/or Starship interaction data provided above.'}
+${allNotes.length > 0 ? 'Include ALL ideas in the topIdeas array, ranked by combined score (highest to lowest). IMPORTANT: "noteId" must always be the exact idea ID string from the data above — never null or omitted. Only include optional module-specific fields (pairwiseWins, bordaScore, etc.) for modules that were enabled; omit or set to null only those optional numeric fields when an idea has no data for that module.' : 'This session has no captured ideas — set topIdeas to an empty array []. Base your summary, keyThemes, insights, and recommendations entirely on the Signal and/or Starship interaction data provided above.'}
 ${kbChunks.length > 0 ? `\nIMPORTANT: ${kbChunks.length} knowledge base excerpt(s) are embedded in the session data above under "KNOWLEDGE BASE CONTEXT". You must ground your analysis in this material — do not ignore it.` : ''}`,
       },
     ],
@@ -637,7 +637,12 @@ ${kbChunks.length > 0 ? `\nIMPORTANT: ${kbChunks.length} knowledge base excerpt(
 
   // Parse and validate AI response
   const parsed = JSON.parse(rawResponse);
-  const validated = CohortResultSchema.parse(parsed);
+  const validatedRaw = CohortResultSchema.parse(parsed);
+  // Guard against the AI incorrectly setting noteId to null (e.g. in Starship-only spaces)
+  const validated = {
+    ...validatedRaw,
+    topIdeas: validatedRaw.topIdeas.filter((idea): idea is typeof idea & { noteId: string } => idea.noteId !== null),
+  };
 
   // Track AI token usage for cost monitoring.
   const usage = extractUsageMetrics(completion);
