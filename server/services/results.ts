@@ -1,6 +1,6 @@
 import { openai } from "./openai";
 import { db } from "../db";
-import { notes, votes, rankings, marketplaceAllocations, participants, spaces, knowledgeBaseDocuments, cohortResults, personalizedResults, categories, workspaceModules, priorityMatrices, priorityMatrixPositions, staircaseModules, staircasePositions, surveyQuestions, surveyResponses } from "@shared/schema";
+import { notes, votes, rankings, marketplaceAllocations, participants, spaces, knowledgeBaseDocuments, cohortResults, personalizedResults, categories, workspaceModules, priorityMatrices, priorityMatrixPositions, staircaseModules, staircasePositions, surveyQuestions, surveyResponses, starships, starshipPositions, signalDecks, signalActivities, signalResponses } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { CohortResult, PersonalizedResult } from "@shared/schema";
@@ -99,10 +99,8 @@ export async function generateCohortResults(
   const hasSurvey = enabledModuleTypes.includes('survey');
   const hasPriorityMatrix = enabledModuleTypes.includes('priority-matrix');
   const hasStaircase = enabledModuleTypes.includes('staircase');
-
-  if (allNotes.length === 0) {
-    throw new Error("No notes found for this workspace");
-  }
+  const hasStarship = enabledModuleTypes.includes('starship');
+  const hasSignal = enabledModuleTypes.includes('signal');
 
   const noteCount = allNotes.length;
 
@@ -122,6 +120,9 @@ export async function generateCohortResults(
     id: string; minLabel: string; maxLabel: string; minScore: number; maxScore: number;
   };
   type SurveyQuestionRow = { id: string; questionText: string; sortOrder: number };
+  type StarshipRow = { id: string; thrustLabel: string; destinationLabel: string; dragLabel: string };
+  type SignalActivityRow = { id: string; type: string; prompt: string; orderIndex: number; config: unknown };
+  type SignalResponseRow = { activityId: string; valueText: string | null; valueNumber: number | null; optionId: string | null };
   const [
     pairwiseTallies,
     rankingAggregates,
@@ -131,9 +132,12 @@ export async function generateCohortResults(
     matrixRow,
     staircaseRow,
     surveyQuestionsRows,
+    starshipRow,
+    signalActivitiesRows,
+    signalResponsesRows,
   ] = await Promise.all([
     storage.getPairwiseTalliesBySpace(spaceId),
-    storage.getRankingAggregatesBySpace(spaceId, noteCount),
+    noteCount > 0 ? storage.getRankingAggregatesBySpace(spaceId, noteCount) : Promise.resolve([]),
     // Distinct ranking-participant count for the analytics narrative —
     // preserves the legacy "Total Rankings Submitted" semantics (one row
     // per participant, not per ranking row).
@@ -151,6 +155,15 @@ export async function generateCohortResults(
     hasSurvey
       ? (db.select().from(surveyQuestions).where(eq(surveyQuestions.spaceId, spaceId)) as Promise<SurveyQuestionRow[]>)
       : Promise.resolve<SurveyQuestionRow[]>([]),
+    hasStarship
+      ? (db.select().from(starships).where(eq(starships.spaceId, spaceId)).limit(1) as Promise<StarshipRow[]>)
+      : Promise.resolve<StarshipRow[]>([]),
+    hasSignal
+      ? (db.select({ id: signalActivities.id, type: signalActivities.type, prompt: signalActivities.prompt, orderIndex: signalActivities.orderIndex, config: signalActivities.config }).from(signalActivities).where(eq(signalActivities.spaceId, spaceId)) as Promise<SignalActivityRow[]>)
+      : Promise.resolve<SignalActivityRow[]>([]),
+    hasSignal
+      ? (db.select({ activityId: signalResponses.activityId, valueText: signalResponses.valueText, valueNumber: signalResponses.valueNumber, optionId: signalResponses.optionId }).from(signalResponses).where(eq(signalResponses.spaceId, spaceId)) as Promise<SignalResponseRow[]>)
+      : Promise.resolve<SignalResponseRow[]>([]),
   ]);
 
   // Aggregate-derived per-note score Maps. Pre-filter against the *current*
@@ -171,18 +184,23 @@ export async function generateCohortResults(
 
   const matrix = matrixRow[0];
   const staircase = staircaseRow[0];
+  const starship = starshipRow[0];
 
-  // Priority Matrix + Staircase positions fan out in parallel once we know
-  // their parent module rows exist.
+  // Priority Matrix + Staircase + Starship positions fan out in parallel once
+  // we know their parent module rows exist.
   type MatrixPosRow = { noteId: string; xCoord: number; yCoord: number };
   type StaircasePosRow = { noteId: string; score: number };
-  const [matrixPositions, stPositions] = await Promise.all([
+  type StarshipPosRow = { noteId: string; zone: string };
+  const [matrixPositions, stPositions, starshipPosRows] = await Promise.all([
     matrix
       ? (db.select().from(priorityMatrixPositions).where(eq(priorityMatrixPositions.matrixId, matrix.id)) as Promise<MatrixPosRow[]>)
       : Promise.resolve<MatrixPosRow[]>([]),
     staircase
       ? (db.select().from(staircasePositions).where(eq(staircasePositions.staircaseId, staircase.id)) as Promise<StaircasePosRow[]>)
       : Promise.resolve<StaircasePosRow[]>([]),
+    starship
+      ? (db.select({ noteId: starshipPositions.noteId, zone: starshipPositions.zone }).from(starshipPositions).where(eq(starshipPositions.starshipId, starship.id)) as Promise<StarshipPosRow[]>)
+      : Promise.resolve<StarshipPosRow[]>([]),
   ]);
 
   // Priority Matrix
@@ -214,6 +232,72 @@ export async function generateCohortResults(
     stPositions.forEach((pos) => {
       staircaseScoresByNote.set(pos.noteId, pos.score);
     });
+  }
+
+  // Starship: build zone → note[] map for the AI summary.
+  const starshipZoneByNote = new Map<string, string>(); // noteId → zone
+  const starshipZoneCounts: Record<string, number> = { thrust: 0, destination: 0, drag: 0 };
+  let starshipThrustLabel = 'Propulsion';
+  let starshipDestLabel = 'Destinations';
+  let starshipDragLabel = 'Black Holes';
+  if (starship) {
+    starshipThrustLabel = starship.thrustLabel;
+    starshipDestLabel = starship.destinationLabel;
+    starshipDragLabel = starship.dragLabel;
+    for (const pos of starshipPosRows) {
+      starshipZoneByNote.set(pos.noteId, pos.zone);
+      if (pos.zone in starshipZoneCounts) starshipZoneCounts[pos.zone as keyof typeof starshipZoneCounts]++;
+    }
+  }
+
+  // Signal: aggregate responses per activity for the AI summary.
+  // For word-cloud: top-10 words by frequency.
+  // For multiple-choice: option counts (labels come from activity config).
+  // For numeric: mean response.
+  type SignalActivitySummary = {
+    orderIndex: number; type: string; prompt: string;
+    wordFreqs?: Array<{ word: string; count: number }>;
+    optionCounts?: Array<{ label: string; count: number }>;
+    numericMean?: number; numericCount?: number;
+    responseCount: number;
+  };
+  const signalActivitySummaries: SignalActivitySummary[] = [];
+  if (hasSignal && signalActivitiesRows.length > 0) {
+    // Group responses by activityId.
+    const responsesByActivity = new Map<string, typeof signalResponsesRows>();
+    for (const r of signalResponsesRows) {
+      let bucket = responsesByActivity.get(r.activityId);
+      if (!bucket) { bucket = []; responsesByActivity.set(r.activityId, bucket); }
+      bucket.push(r);
+    }
+    for (const act of [...signalActivitiesRows].sort((a, b) => a.orderIndex - b.orderIndex)) {
+      const responses = responsesByActivity.get(act.id) ?? [];
+      const summary: SignalActivitySummary = { orderIndex: act.orderIndex, type: act.type, prompt: act.prompt, responseCount: responses.length };
+      if (act.type === 'word-cloud') {
+        const freq = new Map<string, number>();
+        for (const r of responses) {
+          if (r.valueText) { const w = r.valueText.trim().toLowerCase(); freq.set(w, (freq.get(w) ?? 0) + 1); }
+        }
+        summary.wordFreqs = [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15).map(([word, count]) => ({ word, count }));
+      } else if (act.type === 'multiple-choice') {
+        const cfg = act.config as { options?: Array<{ id: string; text: string }> } ?? {};
+        const optionMap = new Map<string, string>((cfg.options ?? []).map(o => [o.id, o.text]));
+        const counts = new Map<string, number>();
+        for (const r of responses) {
+          if (r.optionId) counts.set(r.optionId, (counts.get(r.optionId) ?? 0) + 1);
+        }
+        summary.optionCounts = [...counts.entries()]
+          .map(([id, count]) => ({ label: optionMap.get(id) ?? id, count }))
+          .sort((a, b) => b.count - a.count);
+      } else if (act.type === 'numeric') {
+        const nums = responses.map(r => r.valueNumber).filter((v): v is number => v != null);
+        if (nums.length > 0) {
+          summary.numericMean = nums.reduce((a, b) => a + b, 0) / nums.length;
+          summary.numericCount = nums.length;
+        }
+      }
+      signalActivitySummaries.push(summary);
+    }
   }
 
   // Survey: derive per-note + per-(note,question) averages from SQL aggregates.
@@ -398,12 +482,15 @@ export async function generateCohortResults(
 
   // Build module-aware data summary
   const enabledModulesDescription = [
+    enabledModuleTypes.includes('ideation') && 'Ideation (collaborative idea capture)',
     hasPairwiseVoting && 'Pairwise Voting',
     hasStackRanking && 'Stack Ranking (Borda Count)',
     hasMarketplace && 'Marketplace Allocation',
     hasSurvey && 'Survey',
     hasPriorityMatrix && '2x2 Priority Matrix',
     hasStaircase && 'Staircase Rating',
+    hasStarship && 'Starship Envisioning (zone-based idea placement)',
+    hasSignal && 'Signal (live audience interaction)',
   ].filter(Boolean).join(', ');
 
   // Sanitize all user-controlled fields. The structured analytics shape is
@@ -436,10 +523,20 @@ Notes rated on staircase: ${staircaseScoresByNote.size}` : ''}
 ${hasSurvey && surveyQuestionsList.length > 0 ? `Survey Questions (participants rated each idea 1-5 on these):
 ${surveyQuestionsList.map((q, i) => `  Q${i + 1}: ${sfQuestion(q.questionText)}`).join('\n')}
 Total survey responses: ${surveyAvgByNote.size} ideas rated` : ''}
+${hasStarship && starship ? `
+STARSHIP ENVISIONING — Zone breakdown:
+  Zone "${sfShort(starshipThrustLabel)}" (Propulsion — drivers/enablers): ${starshipZoneCounts.thrust} idea(s)
+  Zone "${sfShort(starshipDestLabel)}" (Destinations — goals/outcomes): ${starshipZoneCounts.destination} idea(s)
+  Zone "${sfShort(starshipDragLabel)}" (Black Holes — blockers/barriers): ${starshipZoneCounts.drag} idea(s)
+  Total ideas placed: ${starshipPosRows.length}` : ''}
+${hasSignal && signalActivitySummaries.length > 0 ? `
+SIGNAL (LIVE INTERACTION) — ${signalActivitySummaries.length} activit${signalActivitySummaries.length === 1 ? 'y' : 'ies'}:
+${signalActivitySummaries.map((a, i) => `Activity ${i + 1} [${a.type}]: "${sfQuestion(a.prompt)}" — ${a.responseCount} response(s)${a.wordFreqs && a.wordFreqs.length > 0 ? `\n  Top words: ${a.wordFreqs.map(w => `"${sfShort(w.word)}" (${w.count})`).join(', ')}` : ''}${a.optionCounts && a.optionCounts.length > 0 ? `\n  Results: ${a.optionCounts.map(o => `"${sfShort(o.label)}" → ${o.count}`).join(', ')}` : ''}${a.numericMean != null ? `\n  Mean score: ${a.numericMean.toFixed(2)} (${a.numericCount} responses)` : ''}`).join('\n')}` : ''}
 
-All Ideas Ranked by Combined Score:
+${allNotes.length > 0 ? `All Ideas Ranked by Combined Score:
 ${notesWithScores.map((note: any, idx: any) => `
-${idx + 1}. "${sfNote(note.content)}" (Category: ${note.manualCategoryId ? sfShort(categoryMap.get(note.manualCategoryId) || 'Uncategorized') : 'Uncategorized'})${hasPairwiseVoting ? `
+${idx + 1}. "${sfNote(note.content)}" (Category: ${note.manualCategoryId ? sfShort(categoryMap.get(note.manualCategoryId) || 'Uncategorized') : 'Uncategorized'})${hasStarship && starshipZoneByNote.has(note.id) ? `
+   - Starship Zone: ${starshipZoneByNote.get(note.id) === 'thrust' ? sfShort(starshipThrustLabel) : starshipZoneByNote.get(note.id) === 'destination' ? sfShort(starshipDestLabel) : sfShort(starshipDragLabel)}` : ''}${hasPairwiseVoting ? `
    - Pairwise Wins: ${note.pairwiseWins}` : ''}${hasStackRanking ? `
    - Borda Score: ${note.bordaScore}` : ''}${hasMarketplace ? `
    - Marketplace Coins: ${note.marketplaceCoins}` : ''}${hasPriorityMatrix && matrixPositionsByNote.has(note.id) ? `
@@ -463,7 +560,7 @@ ${Object.entries(
   ).map(([category, ideas]: any) => `
 ${sfShort(category)} (${ideas.length} ideas):
 ${ideas.map((idea: any) => `  - ${sfNote(idea)}`).join('\n')}
-`).join('\n')}`,
+`).join('\n')}` : '(No ideas were captured in this session — analysis is based on Signal and/or Starship interaction data above.)'}`,
     80000,
   )}`;
 
@@ -513,11 +610,11 @@ Please provide your analysis in the following JSON format:
     }
   ],
   ${hasSurvey ? '"surveyAnalysis": "A paragraph analyzing survey response patterns across questions and ideas. What dimensions scored highest/lowest? Any surprising patterns?",' : ''}
-  "insights": "3-4 paragraphs of deep insights about patterns, alignment, diversity of thought, and key findings. Use \\n\\n between paragraphs for readability. Focus only on enabled modules.${hasPriorityMatrix ? ' Include analysis of where ideas fall on the priority matrix quadrants.' : ''}${hasStaircase ? ' Include analysis of staircase rating distributions.' : ''}${hasSurvey ? ' Include analysis of survey response patterns.' : ''}",
+  "insights": "3-4 paragraphs of deep insights about patterns, alignment, diversity of thought, and key findings. Use \\n\\n between paragraphs for readability. Focus only on enabled modules.${hasPriorityMatrix ? ' Include analysis of where ideas fall on the priority matrix quadrants.' : ''}${hasStaircase ? ' Include analysis of staircase rating distributions.' : ''}${hasSurvey ? ' Include analysis of survey response patterns.' : ''}${hasStarship ? ' Include analysis of how ideas were distributed across the three Starship zones (Propulsion/Destinations/Black Holes) and what that reveals about the group\'s strategic thinking.' : ''}${hasSignal ? ' Include analysis of the live Signal interaction results — key themes from word clouds, patterns in multiple-choice selections, and numeric response averages.' : ''}",
   "recommendations": "Format as a numbered list:\\n\\n1. First recommendation\\n\\n2. Second recommendation\\n\\n3. Third recommendation\\n\\nEach recommendation must be actionable and specific. Where a KNOWLEDGE BASE CONTEXT block was provided, every recommendation must explicitly connect to or build upon concepts from that material — name the relevant framework, principle, or approach from the knowledge base."
 }
 
-Include ALL ideas in the topIdeas array, ranked by combined score (highest to lowest). Only include fields for modules that were enabled. Use null for ideas that don't have data for a particular module (e.g. not positioned on matrix).
+${allNotes.length > 0 ? 'Include ALL ideas in the topIdeas array, ranked by combined score (highest to lowest). Only include fields for modules that were enabled. Use null for ideas that don\'t have data for a particular module (e.g. not positioned on matrix).' : 'This session has no captured ideas — set topIdeas to an empty array []. Base your summary, keyThemes, insights, and recommendations entirely on the Signal and/or Starship interaction data provided above.'}
 ${kbChunks.length > 0 ? `\nIMPORTANT: ${kbChunks.length} knowledge base excerpt(s) are embedded in the session data above under "KNOWLEDGE BASE CONTEXT". You must ground your analysis in this material — do not ignore it.` : ''}`,
       },
     ],
@@ -1113,7 +1210,7 @@ export async function getCurrentCohortInputsHash(spaceId: string): Promise<strin
     surveyQRows,
   ] = await Promise.all([
     storage.getPairwiseTalliesBySpace(spaceId),
-    storage.getRankingAggregatesBySpace(spaceId, noteCount),
+    noteCount > 0 ? storage.getRankingAggregatesBySpace(spaceId, noteCount) : Promise.resolve([]),
     storage.getMarketplaceTalliesBySpace(spaceId),
     hasSurvey
       ? storage.getSurveyAggregatesBySpace(spaceId)
