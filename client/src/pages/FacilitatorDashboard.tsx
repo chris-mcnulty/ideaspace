@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Users, StickyNote, ArrowRight, Plus, FolderKanban, ChevronDown, ChevronRight, Building2, User, Archive, ArchiveRestore, UserCheck, UserX } from "lucide-react";
+import { Users, StickyNote, ArrowRight, Plus, FolderKanban, FolderPlus, ChevronDown, ChevronRight, Building2, User, Archive, ArchiveRestore, UserCheck, UserX } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
@@ -15,6 +15,7 @@ import { QueryErrorState } from "@/components/QueryErrorState";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { NewWorkspaceDialog } from "@/components/NewWorkspaceDialog";
+import { NewProjectDialog } from "@/components/NewProjectDialog";
 import { SynozurAppSwitcher } from "@/components/SynozurAppSwitcher";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -86,6 +87,11 @@ export default function FacilitatorDashboard() {
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
   const [showOnlyMine, setShowOnlyMine] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [newProjectDialog, setNewProjectDialog] = useState<{
+    open: boolean;
+    orgId: string;
+    orgName: string;
+  }>({ open: false, orgId: "", orgName: "" });
 
   useEffect(() => {
     document.title = "Nebula - Dashboard | The Synozur Alliance";
@@ -327,6 +333,29 @@ export default function FacilitatorDashboard() {
                   Show archived
                 </Label>
               </div>
+              <Link href="/projects">
+                <Button variant="outline" data-testid="button-my-projects">
+                  <FolderKanban className="h-4 w-4 mr-2" />
+                  My Projects
+                </Button>
+              </Link>
+              {(user.role === "global_admin" || user.role === "company_admin") && (() => {
+                const newProjOrg = selectedOrgId
+                  ? organizations?.find(o => o.id === selectedOrgId)
+                  : organizations?.[0];
+                return newProjOrg ? (
+                  <Button
+                    variant="outline"
+                    data-testid="button-new-project"
+                    onClick={() =>
+                      setNewProjectDialog({ open: true, orgId: newProjOrg.id, orgName: newProjOrg.name })
+                    }
+                  >
+                    <FolderPlus className="h-4 w-4 mr-2" />
+                    New Project
+                  </Button>
+                ) : null;
+              })()}
               {(user.role === "global_admin" || user.role === "company_admin" || user.role === "facilitator") && (() => {
                 const targetOrg = selectedOrgId 
                   ? organizations?.find(o => o.id === selectedOrgId) 
@@ -617,6 +646,17 @@ export default function FacilitatorDashboard() {
           </div>
         )}
       </div>
+
+      <NewProjectDialog
+        open={newProjectDialog.open}
+        onOpenChange={(open) => setNewProjectDialog((s) => ({ ...s, open }))}
+        organizationId={newProjectDialog.orgId}
+        organizationName={newProjectDialog.orgName}
+        onCreated={() => {
+          queryClient.invalidateQueries({ queryKey: ["/api/my-workspaces"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/my-organizations"] });
+        }}
+      />
     </div>
   );
 }

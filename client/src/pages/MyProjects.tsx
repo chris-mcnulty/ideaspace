@@ -7,6 +7,7 @@ import {
   FolderKanban,
   Building2,
   Layers,
+  ChevronDown,
   ChevronRight,
   User,
   Plus,
@@ -23,6 +24,7 @@ import { OrgSwitcher } from "@/components/OrgSwitcher";
 import { QueryErrorState } from "@/components/QueryErrorState";
 import { NewWorkspaceDialog } from "@/components/NewWorkspaceDialog";
 import { NewProjectDialog } from "@/components/NewProjectDialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { SynozurAppSwitcher } from "@/components/SynozurAppSwitcher";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
@@ -158,6 +160,16 @@ export default function MyProjects() {
     orgId: string;
     orgName: string;
   }>({ open: false, orgId: "", orgName: "" });
+  const [expandedOrgs, setExpandedOrgs] = useState<Set<string>>(new Set());
+
+  const toggleOrg = (orgId: string) => {
+    setExpandedOrgs((prev) => {
+      const next = new Set(prev);
+      if (next.has(orgId)) next.delete(orgId);
+      else next.add(orgId);
+      return next;
+    });
+  };
 
   useEffect(() => {
     document.title = "My Projects - Nebula | The Synozur Alliance";
@@ -364,21 +376,36 @@ export default function MyProjects() {
           <div className="space-y-8">
             {Object.entries(projectsByOrg).map(
               ([orgId, { organization, projects: orgProjects }]) => (
-                <div key={orgId} className="space-y-4">
+                <Collapsible
+                  key={orgId}
+                  open={expandedOrgs.has(orgId)}
+                  onOpenChange={() => toggleOrg(orgId)}
+                  className="space-y-4"
+                >
                   {/* Org section header */}
                   <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-2">
-                      <Building2 className="h-5 w-5 text-muted-foreground" />
-                      <h2
-                        className="text-xl font-semibold"
-                        data-testid={`text-org-name-${orgId}`}
+                    <CollapsibleTrigger asChild>
+                      <button
+                        className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                        data-testid={`button-toggle-org-${orgId}`}
                       >
-                        {organization.name}
-                      </h2>
-                      <Badge variant="secondary" className="ml-2">
-                        {orgProjects.length} project{orgProjects.length !== 1 ? "s" : ""}
-                      </Badge>
-                    </div>
+                        {expandedOrgs.has(orgId) ? (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        )}
+                        <Building2 className="h-5 w-5 text-muted-foreground" />
+                        <h2
+                          className="text-xl font-semibold"
+                          data-testid={`text-org-name-${orgId}`}
+                        >
+                          {organization.name}
+                        </h2>
+                        <Badge variant="secondary" className="ml-2">
+                          {orgProjects.length} project{orgProjects.length !== 1 ? "s" : ""}
+                        </Badge>
+                      </button>
+                    </CollapsibleTrigger>
 
                     {/* New Project button — admins only */}
                     {isAdmin && (
@@ -400,6 +427,7 @@ export default function MyProjects() {
                     )}
                   </div>
 
+                  <CollapsibleContent>
                   {/* Project cards grid */}
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {orgProjects.map((project) => (
@@ -504,7 +532,8 @@ export default function MyProjects() {
                       </Card>
                     ))}
                   </div>
-                </div>
+                  </CollapsibleContent>
+                </Collapsible>
               ),
             )}
           </div>
