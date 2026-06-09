@@ -43,6 +43,14 @@ interface DraggedNote {
   currentY: number;
 }
 
+interface TrayDrag {
+  noteId: string;
+  startClientX: number;
+  startClientY: number;
+  clientX: number;
+  clientY: number;
+}
+
 const ZONE_META: Record<StarshipZone, { icon: typeof Globe; color: string; helper: string }> = {
   thrust: { icon: Flame, color: '#3B82F6', helper: "What's propelling us forward" },
   destination: { icon: Globe, color: '#10B981', helper: "Where we're headed" },
@@ -83,6 +91,9 @@ export default function StarshipModule({
   const [thrustLabel, setThrustLabel] = useState('Propulsion');
   const [dragLabel, setDragLabel] = useState('Black Holes');
   const [newIdea, setNewIdea] = useState('');
+  const [trayDrag, setTrayDrag] = useState<TrayDrag | null>(null);
+  const trayDragRef = useRef<TrayDrag | null>(null);
+  const [hoverZone, setHoverZone] = useState<StarshipZone | null>(null);
 
   const { data: notes = [], isLoading: notesLoading } = useQuery<Note[]>({
     queryKey: [`/api/spaces/${spaceId}/notes`],
@@ -322,6 +333,66 @@ export default function StarshipModule({
     addIdeaMutation.mutate(text);
   };
 
+  const handleTrayPointerDown = (e: React.PointerEvent, noteId: string) => {
+    if (isReadOnly) return;
+    const pos = localPositions.get(noteId);
+    if (pos) {
+      handleNotePointerDown(e, noteId);
+      return;
+    }
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const drag: TrayDrag = {
+      noteId,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      clientX: e.clientX,
+      clientY: e.clientY,
+    };
+    trayDragRef.current = drag;
+    setTrayDrag(drag);
+    e.preventDefault();
+  };
+
+  const handleTrayPointerMove = (e: React.PointerEvent) => {
+    if (!trayDragRef.current) return;
+    const drag = { ...trayDragRef.current, clientX: e.clientX, clientY: e.clientY };
+    trayDragRef.current = drag;
+    setTrayDrag(drag);
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (rect && e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) {
+      const x = ((e.clientX - rect.left) / rect.width) * 100;
+      const y = ((e.clientY - rect.top) / rect.height) * 100;
+      setHoverZone(zoneFromPoint(x, y));
+    } else {
+      setHoverZone(null);
+    }
+  };
+
+  const handleTrayPointerUp = (e: React.PointerEvent) => {
+    const drag = trayDragRef.current;
+    if (!drag) return;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const overCanvas = rect &&
+      e.clientX >= rect.left && e.clientX <= rect.right &&
+      e.clientY >= rect.top && e.clientY <= rect.bottom;
+    if (overCanvas) {
+      const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+      const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+      const zone = zoneFromPoint(x, y);
+      persistPlacement(drag.noteId, { zone, x, y });
+      announce(`Placed in ${labels[zone]}.`, 'polite');
+    } else {
+      const moved = Math.abs(e.clientX - drag.startClientX) + Math.abs(e.clientY - drag.startClientY);
+      if (moved < 8) {
+        setSelectedNoteId(prev => (prev === drag.noteId ? null : drag.noteId));
+      }
+    }
+    trayDragRef.current = null;
+    setTrayDrag(null);
+    setHoverZone(null);
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ok */ }
+  };
+
   const noteColor = (note: Note): string => {
     const category = note.manualCategoryId ? categories.find(c => c.id === note.manualCategoryId) : null;
     if (category?.color) return category.color;
@@ -373,9 +444,11 @@ export default function StarshipModule({
         </div>
       )}
 
-      {selectedNoteId && !isReadOnly && (
+      {!isReadOnly && !trayDrag && unplacedNotes.length > 0 && (
         <div className="text-xs sm:text-sm text-muted-foreground bg-muted/50 rounded-md p-3" data-testid="text-starship-hint">
-          Tap a zone on the starship to place the selected idea (or press 1 = propulsion, 2 = destination, 3 = black hole).
+          {selectedNoteId
+            ? 'Tap a zone on the starship to place the selected idea (or press 1 = propulsion, 2 = destination, 3 = black hole).'
+            : 'Drag ideas from the tray onto the starship, or tap an idea then tap a zone to place it.'}
         </div>
       )}
 
@@ -392,11 +465,13 @@ export default function StarshipModule({
                 <button
                   key={note.id}
                   type="button"
-                  className={`text-left rounded-md bg-card px-2 py-1 text-sm shadow-sm max-w-[220px] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${isSelected ? 'ring-2 ring-primary' : ''}`}
+                  className={`text-left rounded-md bg-card px-2 py-1 text-sm shadow-sm max-w-[220px] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary cursor-grab active:cursor-grabbing select-none ${isSelected ? 'ring-2 ring-primary' : ''}`}
                   style={{ borderWidth: '2px', borderStyle: 'solid', borderColor: color }}
-                  onPointerDown={(e) => handleNotePointerDown(e, note.id)}
+                  onPointerDown={(e) => handleTrayPointerDown(e, note.id)}
+                  onPointerMove={handleTrayPointerMove}
+                  onPointerUp={handleTrayPointerUp}
                   onKeyDown={(e) => handleTrayKeyDown(e, note.id)}
-                  aria-label={`${text}. Press 1 for ${labels.thrust}, 2 for ${labels.destination}, 3 for ${labels.drag}.`}
+                  aria-label={`${text}. Drag onto the starship, or press 1 for ${labels.thrust}, 2 for ${labels.destination}, 3 for ${labels.drag}.`}
                   data-testid={`tray-note-${note.id}`}
                 >
                   <span className="line-clamp-2">{text}</span>
@@ -414,8 +489,8 @@ export default function StarshipModule({
             ref={canvasRef}
             className="relative w-full h-full min-h-[440px] sm:min-h-[560px]"
             style={{
-              cursor: draggedNote ? 'grabbing' : (selectedNoteId ? 'crosshair' : 'default'),
-              touchAction: draggedNote ? 'none' : 'auto',
+              cursor: draggedNote ? 'grabbing' : (trayDrag ? 'copy' : (selectedNoteId ? 'crosshair' : 'default')),
+              touchAction: (draggedNote || trayDrag) ? 'none' : 'auto',
               background: 'radial-gradient(ellipse at 30% 95%, hsl(280 70% 40% / 0.35) 0%, transparent 55%), linear-gradient(to bottom, hsl(var(--muted)/0.45) 0%, hsl(var(--muted)/0.35) 55%, hsl(270 50% 25% / 0.30) 100%)',
             }}
             onPointerMove={handlePointerMove}
@@ -429,6 +504,20 @@ export default function StarshipModule({
               <div className="absolute left-[60%] top-0 bottom-0 w-px bg-border" />
               <div className="absolute left-0 top-[60%] w-[60%] h-px bg-border" />
             </div>
+
+            {/* Zone highlight during tray drag */}
+            {trayDrag && hoverZone && (
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  background: hoverZone === 'destination'
+                    ? 'linear-gradient(to left, rgba(16,185,129,0.18) 40%, transparent 60%)'
+                    : hoverZone === 'thrust'
+                    ? 'linear-gradient(135deg, rgba(59,130,246,0.18) 0%, transparent 50%)'
+                    : 'linear-gradient(to top, rgba(239,68,68,0.18) 0%, transparent 50%)',
+                }}
+              />
+            )}
 
             {/* ── Thrust-zone cue: warp-speed vibration ripples (upper-left) ── */}
             <svg
@@ -605,6 +694,32 @@ export default function StarshipModule({
           </div>
         </CardContent>
       </Card>
+
+      {/* Ghost chip that follows the cursor during a tray drag */}
+      {trayDrag && (() => {
+        const dragNote = notes.find(n => n.id === trayDrag.noteId);
+        if (!dragNote) return null;
+        const ghostText = dragNote.content.replace(/<[^>]*>?/gm, '');
+        const ghostColor = noteColor(dragNote);
+        return (
+          <div
+            className="fixed pointer-events-none rounded-md px-2 py-1 text-sm shadow-lg bg-card select-none"
+            style={{
+              left: trayDrag.clientX + 12,
+              top: trayDrag.clientY + 4,
+              zIndex: 9999,
+              borderWidth: '2px',
+              borderStyle: 'solid',
+              borderColor: ghostColor,
+              transform: 'rotate(2deg)',
+              opacity: 0.9,
+              maxWidth: '200px',
+            }}
+          >
+            <span className="line-clamp-2">{ghostText}</span>
+          </div>
+        );
+      })()}
 
       {notes.length === 0 && (
         <Card>
