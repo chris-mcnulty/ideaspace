@@ -340,7 +340,7 @@ export default function StarshipModule({
       handleNotePointerDown(e, noteId);
       return;
     }
-    e.currentTarget.setPointerCapture(e.pointerId);
+    e.preventDefault();
     const drag: TrayDrag = {
       noteId,
       startClientX: e.clientX,
@@ -350,48 +350,61 @@ export default function StarshipModule({
     };
     trayDragRef.current = drag;
     setTrayDrag(drag);
-    e.preventDefault();
   };
 
-  const handleTrayPointerMove = (e: React.PointerEvent) => {
-    if (!trayDragRef.current) return;
-    const drag = { ...trayDragRef.current, clientX: e.clientX, clientY: e.clientY };
-    trayDragRef.current = drag;
-    setTrayDrag(drag);
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (rect && e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) {
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
-      setHoverZone(zoneFromPoint(x, y));
-    } else {
-      setHoverZone(null);
-    }
-  };
+  // Native window listeners for tray drag — synthetic React events on the
+  // button are unreliable once the pointer leaves the originating element.
+  useEffect(() => {
+    if (!trayDrag) return;
 
-  const handleTrayPointerUp = (e: React.PointerEvent) => {
-    const drag = trayDragRef.current;
-    if (!drag) return;
-    const rect = canvasRef.current?.getBoundingClientRect();
-    const overCanvas = rect &&
-      e.clientX >= rect.left && e.clientX <= rect.right &&
-      e.clientY >= rect.top && e.clientY <= rect.bottom;
-    if (overCanvas) {
-      const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
-      const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
-      const zone = zoneFromPoint(x, y);
-      persistPlacement(drag.noteId, { zone, x, y });
-      announce(`Placed in ${labels[zone]}.`, 'polite');
-    } else {
-      const moved = Math.abs(e.clientX - drag.startClientX) + Math.abs(e.clientY - drag.startClientY);
-      if (moved < 8) {
-        setSelectedNoteId(prev => (prev === drag.noteId ? null : drag.noteId));
+    const onMove = (e: PointerEvent) => {
+      if (!trayDragRef.current) return;
+      const next = { ...trayDragRef.current, clientX: e.clientX, clientY: e.clientY };
+      trayDragRef.current = next;
+      setTrayDrag({ ...next });
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (rect && e.clientX >= rect.left && e.clientX <= rect.right &&
+          e.clientY >= rect.top && e.clientY <= rect.bottom) {
+        const x = ((e.clientX - rect.left) / rect.width) * 100;
+        const y = ((e.clientY - rect.top) / rect.height) * 100;
+        setHoverZone(zoneFromPoint(x, y));
+      } else {
+        setHoverZone(null);
       }
-    }
-    trayDragRef.current = null;
-    setTrayDrag(null);
-    setHoverZone(null);
-    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ok */ }
-  };
+    };
+
+    const onUp = (e: PointerEvent) => {
+      const drag = trayDragRef.current;
+      if (!drag) return;
+      const rect = canvasRef.current?.getBoundingClientRect();
+      const overCanvas = rect &&
+        e.clientX >= rect.left && e.clientX <= rect.right &&
+        e.clientY >= rect.top && e.clientY <= rect.bottom;
+      if (overCanvas) {
+        const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+        const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+        const zone = zoneFromPoint(x, y);
+        persistPlacement(drag.noteId, { zone, x, y });
+        announce(`Placed in ${labels[zone]}.`, 'polite');
+      } else {
+        const moved = Math.abs(e.clientX - drag.startClientX) + Math.abs(e.clientY - drag.startClientY);
+        if (moved < 8) {
+          setSelectedNoteId(prev => (prev === drag.noteId ? null : drag.noteId));
+        }
+      }
+      trayDragRef.current = null;
+      setTrayDrag(null);
+      setHoverZone(null);
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trayDrag !== null]);
 
   const noteColor = (note: Note): string => {
     const category = note.manualCategoryId ? categories.find(c => c.id === note.manualCategoryId) : null;
@@ -466,10 +479,8 @@ export default function StarshipModule({
                   key={note.id}
                   type="button"
                   className={`text-left rounded-md bg-card px-2 py-1 text-sm shadow-sm max-w-[220px] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary cursor-grab active:cursor-grabbing select-none ${isSelected ? 'ring-2 ring-primary' : ''}`}
-                  style={{ borderWidth: '2px', borderStyle: 'solid', borderColor: color }}
+                  style={{ borderWidth: '2px', borderStyle: 'solid', borderColor: color, touchAction: 'none' }}
                   onPointerDown={(e) => handleTrayPointerDown(e, note.id)}
-                  onPointerMove={handleTrayPointerMove}
-                  onPointerUp={handleTrayPointerUp}
                   onKeyDown={(e) => handleTrayKeyDown(e, note.id)}
                   aria-label={`${text}. Drag onto the starship, or press 1 for ${labels.thrust}, 2 for ${labels.destination}, 3 for ${labels.drag}.`}
                   data-testid={`tray-note-${note.id}`}
