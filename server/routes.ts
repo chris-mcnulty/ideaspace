@@ -5414,6 +5414,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/priority-matrices", requireFacilitator, async (req, res) => {
     try {
       const matrixData = insertPriorityMatrixSchema.parse(req.body);
+
+      // Workspace-scoped authorization: this route takes spaceId in the body
+      // (no :spaceId param), so assert the caller is a facilitator/admin for
+      // that specific workspace.
+      const resolvedSpaceId = await resolveWorkspaceId(matrixData.spaceId);
+      const space = resolvedSpaceId ? await storage.getSpace(resolvedSpaceId) : undefined;
+      if (!space) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      if (!(await assertFacilitatorForSpace(req, res, space))) return;
+      matrixData.spaceId = resolvedSpaceId!;
+
       const matrix = await storage.createPriorityMatrix(matrixData);
       
       // Broadcast configuration
@@ -5639,11 +5651,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create or update staircase configuration
   app.put("/api/spaces/:spaceId/staircase", requireFacilitator, async (req, res) => {
     try {
-      const spaceId = await resolveWorkspaceId(req.params.spaceId);
-      if (!spaceId) {
-        return res.status(404).json({ error: "Workspace not found" });
-      }
-      
+      const spaceId = await requireSpaceFacilitator(req, res);
+      if (!spaceId) return;
+
       const staircaseData = insertStaircaseModuleSchema.parse({
         ...req.body,
         spaceId
@@ -5831,8 +5841,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Resolve the workspace and assert the caller is a facilitator/admin *for that
   // specific workspace* (not just any facilitator). Returns the spaceId, or null
-  // after having written the error response. Used by Starship + Signal
-  // facilitator-only routes.
+  // after having written the error response. Used by Starship, Signal, and
+  // Staircase facilitator-only routes that carry a :spaceId param.
   async function requireSpaceFacilitator(req: ExpressRequest, res: ExpressResponse): Promise<string | null> {
     const spaceId = await resolveWorkspaceId(req.params.spaceId);
     if (!spaceId) {
