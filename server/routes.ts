@@ -8,7 +8,7 @@ import { getUserIdFromUpgradeRequest } from "./session";
 import oauthRoutes from "./routes/auth-oauth";
 import entraRoutes from "./routes/auth-entra";
 import { db } from "./db";
-import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, type Space, type InsertSpace, organizations, users, companyAdmins as companyAdminsTable, knowledgeBaseDocuments, workspaceTemplates, workspaceTemplateNotes, aiUsageLog, insertIdeaSchema, insertWorkspaceModuleSchema, insertWorkspaceModuleRunSchema, insertPriorityMatrixSchema, insertPriorityMatrixPositionSchema, insertStaircaseModuleSchema, insertStaircasePositionSchema, projectMembers, categories, notes, participants, projects, spaces, NOTIFICATION_TYPES, NOTIFICATION_TYPE_DEFAULTS, type NotificationType, updateNotificationPreferencesSchema } from "@shared/schema";
+import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, type Space, type InsertSpace, organizations, users, companyAdmins as companyAdminsTable, knowledgeBaseDocuments, workspaceTemplates, workspaceTemplateNotes, aiUsageLog, insertIdeaSchema, insertWorkspaceModuleSchema, insertWorkspaceModuleRunSchema, insertPriorityMatrixSchema, insertPriorityMatrixPositionSchema, insertStaircaseModuleSchema, insertStaircasePositionSchema, insertSailboatSchema, insertSailboatPositionSchema, SAILBOAT_ZONES, type SailboatZone, projectMembers, categories, notes, participants, projects, spaces, NOTIFICATION_TYPES, NOTIFICATION_TYPE_DEFAULTS, type NotificationType, updateNotificationPreferencesSchema } from "@shared/schema";
 import { CSV_IMPORT_TYPES, csvConfirmTemplatesBodySchema, csvConfirmUsersBodySchema, csvConfirmIdeasBodySchema, type CsvImportType, type TemplateCsvRow, type UserCsvRow, type IdeaCsvRow } from "@shared/csvImport";
 import { buildCsvPreview, buildErrorReportCsv } from "./services/csvImport";
 import { uploadImage, validateImageFile, cleanupTempFile } from "./middleware/uploadMiddleware";
@@ -89,8 +89,9 @@ function isWorkspaceOpenForParticipation(status: string): boolean {
     'ranking', 'rank', 
     'marketplace', 'market',
     'survey', 
-    'priority-matrix', 'priority', 
+    'priority-matrix', 'priority',
     'staircase',
+    'sailboat',
     'results'
   ];
   
@@ -2133,10 +2134,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Protected: Navigate all participants to a specific phase
   app.post("/api/spaces/:id/navigate-participants", requireFacilitator, async (req, res) => {
     try {
-      const { phase } = req.body as { phase: "vote" | "rank" | "marketplace" | "ideate" | "results" | "priority-matrix" | "staircase" | "survey" };
-      
-      if (!phase || !["vote", "rank", "marketplace", "ideate", "results", "priority-matrix", "staircase", "survey"].includes(phase)) {
-        return res.status(400).json({ error: "Invalid phase. Must be one of: vote, rank, marketplace, ideate, results, priority-matrix, staircase, survey" });
+      const { phase } = req.body as { phase: "vote" | "rank" | "marketplace" | "ideate" | "results" | "priority-matrix" | "staircase" | "sailboat" | "survey" };
+
+      if (!phase || !["vote", "rank", "marketplace", "ideate", "results", "priority-matrix", "staircase", "sailboat", "survey"].includes(phase)) {
+        return res.status(400).json({ error: "Invalid phase. Must be one of: vote, rank, marketplace, ideate, results, priority-matrix, staircase, sailboat, survey" });
       }
       
       // Resolve workspace code to UUID
@@ -2187,6 +2188,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           break;
         case "priority-matrix":
         case "staircase":
+        case "sailboat":
         case "results":
           // These modules don't need time window updates
           // Just broadcast the navigation
@@ -4039,12 +4041,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(404).json({ error: "Workspace not found" });
         }
         
-        // Check if ideation phase is active by status OR time window
-        const statusBasedActive = ['ideation', 'ideate'].includes(space.status.toLowerCase());
-        const timeWindowActive = space.ideationStartsAt && space.ideationEndsAt && 
-          new Date() >= new Date(space.ideationStartsAt) && 
+        // Check if ideation phase is active by status OR time window. The
+        // sailboat module also lets participants generate new ideas directly on
+        // the board, so its phase is treated as an idea-creation window too.
+        const statusBasedActive = ['ideation', 'ideate', 'sailboat'].includes(space.status.toLowerCase());
+        const timeWindowActive = space.ideationStartsAt && space.ideationEndsAt &&
+          new Date() >= new Date(space.ideationStartsAt) &&
           new Date() <= new Date(space.ideationEndsAt);
-        
+
         if (!statusBasedActive && !timeWindowActive) {
           return res.status(403).json({ error: "Ideation phase is not currently active. New ideas cannot be added at this time." });
         }
@@ -5812,6 +5816,279 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success });
     } catch (error) {
       console.error("Failed to unlock position:", error);
+      res.status(500).json({ error: "Failed to unlock position" });
+    }
+  });
+
+  // ============================================
+  // Sailboat Envisioning Module API Routes
+  // ============================================
+
+  // Default labels for a brand-new sailboat (kept in sync with the schema defaults).
+  const SAILBOAT_DEFAULTS = {
+    goalLabel: "Goal / Destination",
+    windLabel: "Driving Forces",
+    anchorLabel: "Anchors / Holding Back",
+    assignZoneAsCategory: true,
+  };
+
+  // Map a zone to a stable category color (semantic: goal = positive/green,
+  // wind = forward/blue, anchor = blocker/red).
+  const SAILBOAT_ZONE_COLORS: Record<SailboatZone, string> = {
+    goal: "#10B981",
+    wind: "#3B82F6",
+    anchor: "#EF4444",
+  };
+
+  // Return the configured label for a given zone.
+  const sailboatZoneLabel = (sailboat: { goalLabel: string; windLabel: string; anchorLabel: string }, zone: SailboatZone): string => {
+    if (zone === "goal") return sailboat.goalLabel;
+    if (zone === "wind") return sailboat.windLabel;
+    return sailboat.anchorLabel;
+  };
+
+  // Find-or-create the category that mirrors a sailboat zone, returning its id.
+  // Matches by the zone's current label so the three zone categories are reused.
+  async function resolveSailboatZoneCategory(
+    spaceId: string,
+    sailboat: { goalLabel: string; windLabel: string; anchorLabel: string },
+    zone: SailboatZone,
+  ): Promise<string> {
+    const label = sailboatZoneLabel(sailboat, zone);
+    const existing = await storage.getCategoriesBySpace(spaceId);
+    const match = existing.find((c) => c.name === label);
+    if (match) return match.id;
+    const created = await storage.createCategory({
+      spaceId,
+      name: label,
+      color: SAILBOAT_ZONE_COLORS[zone],
+    });
+    return created.id;
+  }
+
+  // Get sailboat configuration (returns defaults if none exists yet)
+  app.get("/api/spaces/:spaceId/sailboat", createWorkspaceAccessMiddleware({}), async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      const sailboat = await storage.getSailboat(spaceId);
+      if (!sailboat) {
+        return res.json(SAILBOAT_DEFAULTS);
+      }
+
+      res.json(sailboat);
+    } catch (error) {
+      console.error("Failed to fetch sailboat config:", error);
+      res.status(500).json({ error: "Failed to fetch sailboat configuration" });
+    }
+  });
+
+  // Create or update sailboat configuration (facilitator only)
+  app.put("/api/spaces/:spaceId/sailboat", requireFacilitator, async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      const sailboatData = insertSailboatSchema.parse({
+        ...req.body,
+        spaceId,
+      });
+
+      const existing = await storage.getSailboat(spaceId);
+      let sailboat;
+      if (existing) {
+        sailboat = await storage.updateSailboat(existing.id, sailboatData);
+      } else {
+        sailboat = await storage.createSailboat(sailboatData);
+      }
+
+      broadcastToSpace(spaceId, { type: "sailboat_configured", data: sailboat });
+      res.json(sailboat);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Failed to update sailboat config:", error);
+      res.status(500).json({ error: "Failed to update sailboat configuration" });
+    }
+  });
+
+  // Get all note positions on the sailboat (client-friendly: 0-100 coordinates)
+  app.get("/api/spaces/:spaceId/sailboat/positions", createWorkspaceAccessMiddleware({}), async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      const sailboat = await storage.getSailboat(spaceId);
+      if (!sailboat) {
+        return res.json([]);
+      }
+
+      const positions = await storage.getSailboatPositions(sailboat.id);
+      const clientPositions = positions.map((pos) => ({
+        ...pos,
+        xCoord: pos.xCoord * 100,
+        yCoord: pos.yCoord * 100,
+      }));
+      res.json(clientPositions);
+    } catch (error) {
+      console.error("Failed to fetch sailboat positions:", error);
+      res.status(500).json({ error: "Failed to fetch sailboat positions" });
+    }
+  });
+
+  // Upsert a note position / zone on the sailboat (client sends 0-100 coords)
+  app.put("/api/spaces/:spaceId/sailboat/positions", createWorkspaceAccessMiddleware({ requireOpen: false }), async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      // Get or create sailboat for this workspace
+      let sailboat = await storage.getSailboat(spaceId);
+      if (!sailboat) {
+        sailboat = await storage.createSailboat({ spaceId, ...SAILBOAT_DEFAULTS });
+      }
+
+      const { noteId, ideaId, zone, xCoord, yCoord } = req.body as {
+        noteId?: string; ideaId?: string; zone?: string; xCoord?: number; yCoord?: number;
+      };
+      const resolvedNoteId = noteId || ideaId;
+
+      if (!resolvedNoteId) {
+        return res.status(400).json({ error: "noteId is required" });
+      }
+      if (!zone || !SAILBOAT_ZONES.includes(zone as SailboatZone)) {
+        return res.status(400).json({ error: `zone must be one of: ${SAILBOAT_ZONES.join(", ")}` });
+      }
+      const xPct = typeof xCoord === "number" ? xCoord : 50;
+      const yPct = typeof yCoord === "number" ? yCoord : 50;
+      if (xPct < 0 || xPct > 100 || yPct < 0 || yPct > 100) {
+        return res.status(400).json({ error: "Coordinates must be between 0 and 100" });
+      }
+
+      const positionData: any = {
+        sailboatId: sailboat.id,
+        noteId: resolvedNoteId,
+        zone,
+        xCoord: xPct / 100,
+        yCoord: yPct / 100,
+      };
+
+      // Facilitators can always update; participants need an open workspace + session
+      const user = req.user as User | undefined;
+      const isFacilitator = user && ["facilitator", "company_admin", "global_admin"].includes(user.role);
+      if (!isFacilitator) {
+        const space = await storage.getSpace(spaceId);
+        if (space && space.status !== "open") {
+          return res.status(403).json({
+            error: "This workspace is not currently open for participation",
+            code: "WORKSPACE_NOT_OPEN",
+          });
+        }
+        const participantId = req.session?.participantId;
+        if (!participantId) {
+          return res.status(401).json({ error: "No participant session found" });
+        }
+        positionData.participantId = participantId;
+      }
+
+      const position = await storage.upsertSailboatPosition(positionData);
+
+      // Mirror the zone onto the underlying note's category so the grouping
+      // flows into downstream DLT modules and results.
+      if (sailboat.assignZoneAsCategory) {
+        try {
+          const categoryId = await resolveSailboatZoneCategory(spaceId, sailboat, zone as SailboatZone);
+          await storage.updateNote(resolvedNoteId, { manualCategoryId: categoryId, isManualOverride: true });
+        } catch (catErr) {
+          console.error("Failed to assign sailboat zone category:", catErr);
+        }
+      }
+
+      void storage.recordPulseActivity(spaceId, "sailboat", position.participantId ?? null);
+      broadcastToSpace(spaceId, { type: "sailboat_position_updated", data: position });
+
+      res.json(position);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Failed to update sailboat position:", error);
+      res.status(500).json({ error: "Failed to update sailboat position" });
+    }
+  });
+
+  // Remove a note from the sailboat (return it to the idea tray)
+  app.delete("/api/spaces/:spaceId/sailboat/positions/:noteId", createWorkspaceAccessMiddleware({ requireOpen: false }), async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      const sailboat = await storage.getSailboat(spaceId);
+      if (!sailboat) {
+        return res.json({ success: false });
+      }
+
+      const success = await storage.deleteSailboatPosition(sailboat.id, req.params.noteId);
+      if (success) {
+        broadcastToSpace(spaceId, { type: "sailboat_position_removed", data: { noteId: req.params.noteId } });
+      }
+      res.json({ success });
+    } catch (error) {
+      console.error("Failed to remove sailboat position:", error);
+      res.status(500).json({ error: "Failed to remove sailboat position" });
+    }
+  });
+
+  // Lock a sailboat position for dragging
+  app.patch("/api/spaces/:spaceId/sailboat/positions/:id/lock", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      const { id } = req.params;
+      const participantId = req.session?.participantId || req.body.participantId;
+      if (!participantId) {
+        return res.status(401).json({ error: "No participant session found" });
+      }
+      const success = await storage.lockSailboatPosition(id, participantId);
+      if (success) {
+        broadcastToSpace(spaceId, { type: "sailboat_position_locked", data: { positionId: id, lockedBy: participantId } });
+      }
+      res.json({ success });
+    } catch (error) {
+      console.error("Failed to lock sailboat position:", error);
+      res.status(500).json({ error: "Failed to lock position" });
+    }
+  });
+
+  // Unlock a sailboat position
+  app.patch("/api/spaces/:spaceId/sailboat/positions/:id/unlock", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+      const { id } = req.params;
+      const success = await storage.unlockSailboatPosition(id);
+      if (success) {
+        broadcastToSpace(spaceId, { type: "sailboat_position_unlocked", data: { positionId: id } });
+      }
+      res.json({ success });
+    } catch (error) {
+      console.error("Failed to unlock sailboat position:", error);
       res.status(500).json({ error: "Failed to unlock position" });
     }
   });
@@ -7656,6 +7933,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'survey': 'Rate the ideas on the survey questions.',
         'priority-matrix': 'Position ideas on the priority matrix.',
         'staircase': 'Rate ideas on the staircase scale.',
+        'sailboat': 'Place ideas on the sailboat as goals, driving forces, or anchors.',
         'results': 'View the results and insights from the session.',
       };
 

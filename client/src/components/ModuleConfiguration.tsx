@@ -8,10 +8,10 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { 
-  Settings, Save, RotateCcw, GripVertical, 
-  FileText, Vote, TrendingUp, ShoppingCart, 
+  Settings, Save, RotateCcw, GripVertical,
+  FileText, Vote, TrendingUp, ShoppingCart,
   Grid3x3, ClipboardList, ChevronUp, ChevronDown,
-  Info, Lock
+  Info, Lock, Sailboat
 } from 'lucide-react';
 import {
   DndContext,
@@ -137,6 +137,19 @@ const MODULE_METADATA = {
       allowDecimals: false,
       collaborative: true,
       showDistribution: true
+    }
+  },
+  'sailboat': {
+    name: 'Sailboat',
+    icon: Sailboat,
+    description: 'Place ideas as goals, driving forces, or anchors on a sailboat',
+    configurable: true,
+    config: {
+      goalLabel: 'Goal / Destination',
+      windLabel: 'Driving Forces',
+      anchorLabel: 'Anchors / Holding Back',
+      collaborative: true,
+      assignZoneAsCategory: true
     }
   }
 } as const satisfies Record<ModuleType, {

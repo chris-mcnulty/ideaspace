@@ -34,6 +34,7 @@ const WORKSPACE_SECTIONS = [
   { value: "marketplace", label: "Marketplace Allocation", path: "/marketplace" },
   { value: "priority-matrix", label: "2x2 Priority Matrix", path: "/priority-matrix" },
   { value: "staircase", label: "Staircase Rating", path: "/staircase" },
+  { value: "sailboat", label: "Sailboat", path: "/sailboat" },
   { value: "survey", label: "Survey", path: "/survey" },
   { value: "results", label: "Results", path: "/results" },
   { value: "public-results", label: "Public Results (No Login)", path: "/public-results" },

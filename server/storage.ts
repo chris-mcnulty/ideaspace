@@ -69,6 +69,10 @@ import {
   type InsertStaircaseModule,
   type StaircasePosition,
   type InsertStaircasePosition,
+  type Sailboat,
+  type InsertSailboat,
+  type SailboatPosition,
+  type InsertSailboatPosition,
   type Notification,
   type InsertNotification,
   type NotificationPreference,
@@ -119,6 +123,8 @@ import {
   priorityMatrixPositions,
   staircaseModules,
   staircasePositions,
+  sailboats,
+  sailboatPositions,
   notifications,
   notificationPreferences,
   clientErrors,
@@ -497,6 +503,18 @@ export interface IStorage {
   upsertStaircasePosition(position: InsertStaircasePosition): Promise<StaircasePosition>;
   lockStaircasePosition(id: string, participantId: string): Promise<boolean>;
   unlockStaircasePosition(id: string): Promise<boolean>;
+
+  // Sailboat Envisioning
+  getSailboat(spaceId: string): Promise<Sailboat | undefined>;
+  createSailboat(sailboat: InsertSailboat): Promise<Sailboat>;
+  updateSailboat(id: string, sailboat: Partial<InsertSailboat>): Promise<Sailboat | undefined>;
+
+  // Sailboat Positions
+  getSailboatPositions(sailboatId: string): Promise<SailboatPosition[]>;
+  upsertSailboatPosition(position: InsertSailboatPosition): Promise<SailboatPosition>;
+  deleteSailboatPosition(sailboatId: string, noteId: string): Promise<boolean>;
+  lockSailboatPosition(id: string, participantId: string): Promise<boolean>;
+  unlockSailboatPosition(id: string): Promise<boolean>;
 
   // Notifications (in-app)
   createNotification(notification: InsertNotification): Promise<Notification>;
@@ -986,6 +1004,7 @@ export class DbStorage implements IStorage {
       safeDelete(db.delete(ideas).where(eq(ideas.spaceId, id))),
       safeDelete(db.delete(staircaseModules).where(eq(staircaseModules.spaceId, id))),
       safeDelete(db.delete(priorityMatrices).where(eq(priorityMatrices.spaceId, id))),
+      safeDelete(db.delete(sailboats).where(eq(sailboats.spaceId, id))),
       safeDelete(db.delete(surveyQuestions).where(eq(surveyQuestions.spaceId, id))),
       safeDelete(db.delete(workspaceModuleRuns).where(eq(workspaceModuleRuns.spaceId, id))),
       safeDelete(db.delete(workspaceModules).where(eq(workspaceModules.spaceId, id))),
@@ -2808,6 +2827,81 @@ export class DbStorage implements IStorage {
     const result = await db.update(staircasePositions)
       .set({ lockedBy: null, lockedAt: null })
       .where(eq(staircasePositions.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Sailboat Envisioning
+  async getSailboat(spaceId: string): Promise<Sailboat | undefined> {
+    const [sailboat] = await db.select().from(sailboats)
+      .where(eq(sailboats.spaceId, spaceId))
+      .orderBy(desc(sailboats.createdAt))
+      .limit(1);
+    return sailboat;
+  }
+
+  async createSailboat(sailboat: InsertSailboat): Promise<Sailboat> {
+    const [created] = await db.insert(sailboats).values(sailboat).returning();
+    return created;
+  }
+
+  async updateSailboat(id: string, sailboat: Partial<InsertSailboat>): Promise<Sailboat | undefined> {
+    const [updated] = await db.update(sailboats)
+      .set({ ...sailboat, updatedAt: new Date() })
+      .where(eq(sailboats.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Sailboat Positions
+  async getSailboatPositions(sailboatId: string): Promise<SailboatPosition[]> {
+    return db.select().from(sailboatPositions)
+      .where(eq(sailboatPositions.sailboatId, sailboatId));
+  }
+
+  async upsertSailboatPosition(position: InsertSailboatPosition): Promise<SailboatPosition> {
+    const [upsertedPosition] = await db.insert(sailboatPositions)
+      .values(position)
+      .onConflictDoUpdate({
+        target: [
+          sailboatPositions.sailboatId,
+          sailboatPositions.noteId,
+          sailboatPositions.moduleRunId
+        ],
+        set: {
+          zone: sql`excluded.zone`,
+          xCoord: sql`excluded.x_coord`,
+          yCoord: sql`excluded.y_coord`,
+          lockedBy: sql`excluded.locked_by`,
+          lockedAt: sql`excluded.locked_at`,
+          participantId: sql`excluded.participant_id`,
+          updatedAt: sql`now()`
+        }
+      })
+      .returning();
+
+    return upsertedPosition;
+  }
+
+  async deleteSailboatPosition(sailboatId: string, noteId: string): Promise<boolean> {
+    const result = await db.delete(sailboatPositions)
+      .where(and(
+        eq(sailboatPositions.sailboatId, sailboatId),
+        eq(sailboatPositions.noteId, noteId)
+      ));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async lockSailboatPosition(id: string, participantId: string): Promise<boolean> {
+    const result = await db.update(sailboatPositions)
+      .set({ lockedBy: participantId, lockedAt: new Date() })
+      .where(eq(sailboatPositions.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async unlockSailboatPosition(id: string): Promise<boolean> {
+    const result = await db.update(sailboatPositions)
+      .set({ lockedBy: null, lockedAt: null })
+      .where(eq(sailboatPositions.id, id));
     return result.rowCount ? result.rowCount > 0 : false;
   }
 

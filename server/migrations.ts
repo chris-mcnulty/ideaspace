@@ -272,6 +272,49 @@ export async function ensureOrganisationApiKeysTable(): Promise<void> {
   `);
 }
 
+/**
+ * Ensure the sailboat envisioning module tables exist. Mirrors the priority
+ * matrix tables: one config row per space plus a positions table that records
+ * which zone (goal/wind/anchor) each note was dropped into and its normalized
+ * x/y coordinate on the sketch. Idempotent and safe to run on every startup.
+ */
+export async function ensureSailboatTables(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sailboats (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      space_id varchar NOT NULL REFERENCES spaces(id),
+      module_run_id varchar REFERENCES workspace_module_runs(id) ON DELETE CASCADE,
+      goal_label text NOT NULL DEFAULT 'Goal / Destination',
+      wind_label text NOT NULL DEFAULT 'Driving Forces',
+      anchor_label text NOT NULL DEFAULT 'Anchors / Holding Back',
+      assign_zone_as_category boolean NOT NULL DEFAULT true,
+      created_at timestamp NOT NULL DEFAULT now(),
+      updated_at timestamp NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sailboat_positions (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      sailboat_id varchar NOT NULL REFERENCES sailboats(id) ON DELETE CASCADE,
+      note_id varchar NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+      module_run_id varchar REFERENCES workspace_module_runs(id) ON DELETE CASCADE,
+      zone text NOT NULL,
+      x_coord real NOT NULL DEFAULT 0.5 CHECK (x_coord >= 0 AND x_coord <= 1),
+      y_coord real NOT NULL DEFAULT 0.5 CHECK (y_coord >= 0 AND y_coord <= 1),
+      locked_by varchar REFERENCES participants(id),
+      locked_at timestamp,
+      participant_id varchar REFERENCES participants(id),
+      created_at timestamp NOT NULL DEFAULT now(),
+      updated_at timestamp NOT NULL DEFAULT now(),
+      CONSTRAINT sailboat_positions_unique_note UNIQUE (sailboat_id, note_id, module_run_id)
+    );
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_sailboat_positions_sailboat
+    ON sailboat_positions(sailboat_id);
+  `);
+}
+
 export async function runStartupMigrations(): Promise<void> {
   await ensureNotificationsTable();
   await ensureClientErrorsTable();
@@ -279,4 +322,5 @@ export async function runStartupMigrations(): Promise<void> {
   await ensureParticipantsSpaceUserUniqueIndex();
   await ensureNotificationPreferencesTable();
   await ensureOrganisationApiKeysTable();
+  await ensureSailboatTables();
 }

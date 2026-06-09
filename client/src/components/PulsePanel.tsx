@@ -15,6 +15,7 @@ import {
   ClipboardList,
   Grid3x3,
   TrendingUp,
+  Sailboat,
   Trophy,
   Activity,
 } from "lucide-react";
@@ -76,6 +77,7 @@ const MODULE_LABELS: Record<string, { label: string; icon: LucideIcon }> = {
   survey: { label: "Survey", icon: ClipboardList },
   "priority-matrix": { label: "Priority Matrix", icon: Grid3x3 },
   staircase: { label: "Staircase", icon: TrendingUp },
+  sailboat: { label: "Sailboat", icon: Sailboat },
 };
 
 function Tile({
@@ -176,6 +178,7 @@ const HEATMAP_MODULE_ORDER = [
   "survey",
   "priority-matrix",
   "staircase",
+  "sailboat",
 ] as const;
 
 const HEATMAP_MODULE_HUE: Record<string, number> = {
@@ -186,6 +189,7 @@ const HEATMAP_MODULE_HUE: Record<string, number> = {
   survey: 165,
   "priority-matrix": 350,
   staircase: 130,
+  sailboat: 200,
 };
 
 function ActivityHeatmap({
@@ -337,6 +341,7 @@ const EVENT_MODULE_MAP: Record<string, string> = {
   survey_response_submitted: "survey",
   matrix_position_updated: "priority-matrix",
   staircase_position_updated: "staircase",
+  sailboat_position_updated: "sailboat",
 };
 
 function bumpActivitySeries(

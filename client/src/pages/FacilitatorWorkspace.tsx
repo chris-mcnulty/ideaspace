@@ -64,6 +64,7 @@ import {
   Settings,
   Grid3x3,
   TrendingUp,
+  Sailboat,
   Share2,
   Copy,
   ExternalLink,
@@ -85,6 +86,7 @@ import PulsePanel from "@/components/PulsePanel";
 import ModuleConfiguration from "@/components/ModuleConfiguration";
 import PriorityMatrix from "@/components/PriorityMatrix";
 import StaircaseModule from "@/components/StaircaseModule";
+import SailboatModule from "@/components/SailboatModule";
 import { NotificationPanel } from "@/components/NotificationPanel";
 import { CountdownTimer } from "@/components/CountdownTimer";
 import { isPhaseActive } from "@/lib/phaseUtils";
@@ -334,6 +336,7 @@ export default function FacilitatorWorkspace() {
     'marketplace_allocation_submitted',
     'matrix_position_updated',
     'staircase_position_updated',
+    'sailboat_position_updated',
     'survey_response_submitted',
     'survey_questions_updated',
     'participant_joined', 'participant_left',
@@ -402,6 +405,16 @@ export default function FacilitatorWorkspace() {
         queryClient.invalidateQueries({
           predicate: (query) => query.queryKey.some(k => typeof k === 'string' && (k.includes('/staircase') || k === 'staircase-positions'))
         });
+        break;
+      case 'sailboat_configured':
+      case 'sailboat_position_updated':
+      case 'sailboat_position_removed':
+        queryClient.invalidateQueries({
+          predicate: (query) => query.queryKey.some(k => typeof k === 'string' && k.includes('/sailboat'))
+        });
+        // Placing a note assigns it a zone category, so refresh notes/categories too.
+        queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/notes`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/categories`] });
         break;
       case 'survey_question_created':
       case 'survey_question_updated':
@@ -605,6 +618,8 @@ export default function FacilitatorWorkspace() {
             return { value: "priority-matrix", label: "Priority Matrix", icon: Grid3x3 };
           case "staircase":
             return { value: "staircase", label: "Staircase", icon: TrendingUp };
+          case "sailboat":
+            return { value: "sailboat", label: "Sailboat", icon: Sailboat };
           case "survey":
             return { value: "survey", label: "Survey", icon: ClipboardList };
           case "pairwise-voting":
@@ -727,7 +742,7 @@ export default function FacilitatorWorkspace() {
 
   // Navigate participants mutation
   const navigateParticipantsMutation = useMutation({
-    mutationFn: async (phase: "vote" | "rank" | "marketplace" | "ideate" | "results" | "priority-matrix" | "staircase" | "survey") => {
+    mutationFn: async (phase: "vote" | "rank" | "marketplace" | "ideate" | "results" | "priority-matrix" | "staircase" | "sailboat" | "survey") => {
       const response = await apiRequest("POST", `/api/spaces/${params.space}/navigate-participants`, {
         phase,
       });
@@ -1442,6 +1457,43 @@ export default function FacilitatorWorkspace() {
         </div>
       </div>
       <StaircaseModule spaceId={space.id} isFacilitator={true} />
+    </div>
+  );
+
+  const renderSailboatTab = () => (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="text-2xl font-bold">Sailboat</h2>
+          <p className="text-muted-foreground mt-1">
+            Place ideas as goals, driving forces, or anchors on the sailboat
+          </p>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={() => {
+              navigateParticipantsMutation.mutate("ideate");
+              setActiveTab("ideas");
+            }}
+            disabled={navigateParticipantsMutation.isPending}
+            data-testid="button-sailboat-return-to-ideation"
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Return to Ideation
+          </Button>
+          <Button
+            variant="default"
+            onClick={() => navigateParticipantsMutation.mutate("sailboat")}
+            disabled={navigateParticipantsMutation.isPending}
+            data-testid="button-navigate-to-sailboat"
+          >
+            <Users className="mr-2 h-4 w-4" />
+            Bring Participants Here
+          </Button>
+        </div>
+      </div>
+      <SailboatModule spaceId={space.id} isFacilitator={true} />
     </div>
   );
 
@@ -2414,6 +2466,7 @@ export default function FacilitatorWorkspace() {
     "participants": renderParticipantsTab,
     "priority-matrix": renderPriorityMatrixTab,
     "staircase": renderStaircaseTab,
+    "sailboat": renderSailboatTab,
     "survey": renderSurveyTab,
     "voting": renderVotingTab,
     "ranking": renderRankingTab,

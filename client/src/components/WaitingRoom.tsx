@@ -11,8 +11,8 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 
 type LifecycleStatus = "draft" | "open" | "closed" | "processing" | "archived";
-type SessionPhase = "ideation" | "ideate" | "voting" | "vote" | "ranking" | "rank" | 
-  "marketplace" | "survey" | "results" | "priority-matrix" | "staircase";
+type SessionPhase = "ideation" | "ideate" | "voting" | "vote" | "ranking" | "rank" |
+  "marketplace" | "survey" | "results" | "priority-matrix" | "staircase" | "sailboat";
 
 interface WaitingRoomProps {
   orgName: string;
@@ -25,8 +25,8 @@ interface WaitingRoomProps {
 }
 
 const isActiveStatus = (status: string): boolean => {
-  const activeStatuses = ["open", "ideation", "ideate", "voting", "vote", "ranking", "rank", 
-    "marketplace", "survey", "results", "priority-matrix", "staircase"];
+  const activeStatuses = ["open", "ideation", "ideate", "voting", "vote", "ranking", "rank",
+    "marketplace", "survey", "results", "priority-matrix", "staircase", "sailboat"];
   return activeStatuses.includes(status);
 };
 

@@ -28,6 +28,7 @@ export function useModuleNavigation({ spaceId, orgSlug, onMessage }: UseModuleNa
             survey: `/o/${orgSlug}/s/${spaceId}/survey`,
             'priority-matrix': `/o/${orgSlug}/s/${spaceId}/priority-matrix`,
             staircase: `/o/${orgSlug}/s/${spaceId}/staircase`,
+            sailboat: `/o/${orgSlug}/s/${spaceId}/sailboat`,
             ideate: `/o/${orgSlug}/s/${spaceId}/participate`,
             results: `/o/${orgSlug}/s/${spaceId}/results`,
           };

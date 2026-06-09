@@ -508,14 +508,24 @@ export const ideaContributions = pgTable("idea_contributions", {
 // Module type and config definitions
 export const MODULE_TYPES = [
   "ideation",
-  "pairwise-voting", 
+  "pairwise-voting",
   "stack-ranking",
   "marketplace",
   "priority-matrix",
   "survey",
-  "staircase"
+  "staircase",
+  "sailboat"
 ] as const;
 export type ModuleType = typeof MODULE_TYPES[number];
+
+// Sailboat envisioning zones. The zone a note is dropped into expresses how it
+// relates to the team's journey, following the classic "sailboat" retrospective /
+// envisioning exercise:
+//   - goal:   the destination/objective the boat is sailing toward (in front)
+//   - wind:   the forces pushing the boat forward (behind the sail)
+//   - anchor: the things holding the boat back (attached to the anchor)
+export const SAILBOAT_ZONES = ["goal", "wind", "anchor"] as const;
+export type SailboatZone = typeof SAILBOAT_ZONES[number];
 
 // Module config schemas
 const ideationConfigSchema = z.object({
@@ -567,6 +577,17 @@ const staircaseConfigSchema = z.object({
   showDistribution: z.boolean().default(true)
 });
 
+const sailboatConfigSchema = z.object({
+  goalLabel: z.string().default("Goal / Destination"),
+  windLabel: z.string().default("Driving Forces"),
+  anchorLabel: z.string().default("Anchors / Holding Back"),
+  collaborative: z.boolean().default(true),
+  // When true, dropping a note into a zone tags the underlying idea with a
+  // matching category (Goal / Driving Force / Anchor) so the grouping flows
+  // into downstream DLT modules and results.
+  assignZoneAsCategory: z.boolean().default(true)
+});
+
 export const moduleConfigSchemas = {
   "ideation": ideationConfigSchema,
   "pairwise-voting": pairwiseVotingConfigSchema,
@@ -574,7 +595,8 @@ export const moduleConfigSchemas = {
   "marketplace": marketplaceConfigSchema,
   "priority-matrix": priorityMatrixConfigSchema,
   "survey": surveyConfigSchema,
-  "staircase": staircaseConfigSchema
+  "staircase": staircaseConfigSchema,
+  "sailboat": sailboatConfigSchema
 } satisfies Record<ModuleType, z.ZodTypeAny>;
 
 export type ModuleConfigMap = {
@@ -680,6 +702,42 @@ export const staircasePositions = pgTable("staircase_positions", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   uniqueStaircaseNote: unique().on(table.staircaseId, table.noteId, table.moduleRunId),
+}));
+
+// Sailboat Envisioning: Configuration for the sailboat module. One row per
+// space (mirrors priority matrices). Holds the editable labels for the three
+// zones drawn on the sailboat sketch.
+export const sailboats = pgTable("sailboats", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  spaceId: varchar("space_id").notNull().references(() => spaces.id),
+  moduleRunId: varchar("module_run_id").references(() => workspaceModuleRuns.id, { onDelete: "cascade" }),
+  goalLabel: text("goal_label").notNull().default("Goal / Destination"), // In front of the boat
+  windLabel: text("wind_label").notNull().default("Driving Forces"), // Behind the sail (wind)
+  anchorLabel: text("anchor_label").notNull().default("Anchors / Holding Back"), // Attached to the anchor
+  assignZoneAsCategory: boolean("assign_zone_as_category").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Sailboat Positions: Track which zone each note was dropped into, plus the
+// normalized x/y coordinate so the visual placement on the sketch persists.
+export const sailboatPositions = pgTable("sailboat_positions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sailboatId: varchar("sailboat_id").notNull().references(() => sailboats.id, { onDelete: "cascade" }),
+  noteId: varchar("note_id").notNull().references(() => notes.id, { onDelete: "cascade" }),
+  moduleRunId: varchar("module_run_id").references(() => workspaceModuleRuns.id, { onDelete: "cascade" }),
+  zone: text("zone").notNull().$type<SailboatZone>(), // 'goal' | 'wind' | 'anchor'
+  xCoord: real("x_coord").notNull().default(0.5), // Normalized float (0.0 - 1.0)
+  yCoord: real("y_coord").notNull().default(0.5), // Normalized float (0.0 - 1.0)
+  lockedBy: varchar("locked_by").references(() => participants.id),
+  lockedAt: timestamp("locked_at"),
+  participantId: varchar("participant_id").references(() => participants.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  uniqueSailboatNote: unique().on(table.sailboatId, table.noteId, table.moduleRunId),
+  checkXCoord: sql`CHECK (x_coord >= 0 AND x_coord <= 1)`,
+  checkYCoord: sql`CHECK (y_coord >= 0 AND y_coord <= 1)`,
 }));
 
 // Append-only event log for the Pulse heatmap. One row per participation
@@ -958,6 +1016,10 @@ const moduleInsertVariants = [
   z.object({
     moduleType: z.literal("staircase" as const),
     config: moduleConfigSchemas["staircase"]
+  }),
+  z.object({
+    moduleType: z.literal("sailboat" as const),
+    config: moduleConfigSchemas["sailboat"]
   })
 ] as const;
 
@@ -991,6 +1053,20 @@ export const insertStaircaseModuleSchema = createInsertSchema(staircaseModules).
 });
 
 export const insertStaircasePositionSchema = createInsertSchema(staircasePositions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertSailboatSchema = createInsertSchema(sailboats).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertSailboatPositionSchema = createInsertSchema(sailboatPositions, {
+  zone: z.enum(SAILBOAT_ZONES),
+}).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -1110,6 +1186,12 @@ export type InsertStaircaseModule = z.infer<typeof insertStaircaseModuleSchema>;
 
 export type StaircasePosition = typeof staircasePositions.$inferSelect;
 export type InsertStaircasePosition = z.infer<typeof insertStaircasePositionSchema>;
+
+export type Sailboat = typeof sailboats.$inferSelect;
+export type InsertSailboat = z.infer<typeof insertSailboatSchema>;
+
+export type SailboatPosition = typeof sailboatPositions.$inferSelect;
+export type InsertSailboatPosition = z.infer<typeof insertSailboatPositionSchema>;
 
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
