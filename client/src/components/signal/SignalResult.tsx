@@ -8,7 +8,7 @@ import {
   type SignalResponseLite,
 } from './aggregation';
 
-interface SignalResultProps {
+export interface SignalResultProps {
   activity: SignalActivity;
   responses: SignalResponseLite[];
   height?: number;

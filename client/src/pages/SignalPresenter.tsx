@@ -1,9 +1,10 @@
 import { useParams } from 'wouter';
 import { useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Radio } from 'lucide-react';
+import { Radio, Lock, Loader2 } from 'lucide-react';
+import { useAuth } from '@/hooks/use-auth';
 import { useSignalDeck, useSignalResponses, useSignalRealtime } from '@/components/signal/useSignal';
-import SignalResult from '@/components/signal/SignalResult';
+import SignalResult from '@/components/signal/SignalResultLazy';
 import { entryCount } from '@/components/signal/aggregation';
 import type { Space, SignalActivity } from '@shared/schema';
 
@@ -13,9 +14,12 @@ export default function SignalPresenter() {
   const params = useParams<{ org: string; space: string }>();
   const spaceId = params.space!;
 
+  const { user, isLoading: authLoading } = useAuth();
+  const canPresent = !!user && ["facilitator", "company_admin", "global_admin"].includes(user.role);
+
   useSignalRealtime(spaceId);
   const { data: space } = useQuery<Space>({ queryKey: [`/api/spaces/${spaceId}`] });
-  const { data: signal } = useSignalDeck(spaceId);
+  const { data: signal } = useSignalDeck(spaceId, canPresent);
 
   const deck = signal?.deck ?? null;
   const activities = signal?.activities ?? [];
@@ -23,13 +27,33 @@ export default function SignalPresenter() {
     () => activities.find((a) => a.id === deck?.activeActivityId) ?? null,
     [activities, deck?.activeActivityId],
   );
-  const { data: responses = [] } = useSignalResponses(spaceId, active?.id, !!active);
+  const { data: responses = [] } = useSignalResponses(spaceId, active?.id, !!active && canPresent);
 
   useEffect(() => {
     document.title = `Signal — ${space?.name ?? 'Presenter'} | Nebula`;
   }, [space]);
 
   const liveIndex = active ? activities.findIndex((a) => a.id === active.id) : -1;
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!canPresent) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 text-center">
+        <Lock className="mb-4 h-10 w-10 text-muted-foreground" />
+        <h1 className="text-2xl font-semibold">Presenter screen</h1>
+        <p className="mt-1 max-w-sm text-muted-foreground">
+          The Signal presenter view is only available to facilitators. Please sign in with a facilitator account.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-background">

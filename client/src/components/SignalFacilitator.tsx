@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,11 +20,13 @@ import {
   Cloud, BarChart3, Hash, Pencil, Loader2,
 } from 'lucide-react';
 import { useSignalDeck, useSignalResponses, useSignalRealtime } from '@/components/signal/useSignal';
-import SignalResult from '@/components/signal/SignalResult';
+import SignalResult from '@/components/signal/SignalResultLazy';
 import { entryCount } from '@/components/signal/aggregation';
 import {
   SIGNAL_ACTIVITY_TYPES, type SignalActivity, type SignalActivityType,
+  type Note, type Category,
 } from '@shared/schema';
+import { Sparkles } from 'lucide-react';
 
 const TYPE_META: Record<SignalActivityType, { label: string; icon: typeof Cloud }> = {
   word_cloud: { label: 'Word cloud', icon: Cloud },
@@ -81,6 +83,17 @@ export default function SignalFacilitator({ spaceId, orgSlug }: { spaceId: strin
   const resetResponses = useMutation({
     mutationFn: (id: string) => apiRequest('POST', `/api/spaces/${spaceId}/signal/activities/${id}/reset`, {}),
     onSuccess: () => toast({ title: 'Responses cleared' }),
+  });
+  const pushToIdeas = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest('POST', `/api/spaces/${spaceId}/signal/activities/${id}/push-to-ideas`, {});
+      return res.json() as Promise<{ created: number }>;
+    },
+    onSuccess: (r) => toast({
+      title: r.created > 0 ? `Added ${r.created} idea${r.created === 1 ? '' : 's'}` : 'No new ideas',
+      description: r.created > 0 ? 'New words were added to the workspace ideas.' : 'All words already exist as ideas.',
+    }),
+    onError: (e: any) => toast({ title: 'Could not push to ideas', description: e?.message, variant: 'destructive' }),
   });
 
   const goLive = (id: string) => updateDeck.mutate({ activeActivityId: id, responsesOpen: true });
@@ -188,9 +201,23 @@ export default function SignalFacilitator({ spaceId, orgSlug }: { spaceId: strin
             {active ? (
               <>
                 <h3 className="mb-1 text-center text-xl font-semibold">{active.prompt || 'Live responses'}</h3>
-                <p className="mb-4 text-center text-sm text-muted-foreground">
+                <p className="mb-3 text-center text-sm text-muted-foreground">
                   {entryCount(active, responses as any)} response{responses.length === 1 ? '' : 's'}
                 </p>
+                {active.type === 'word_cloud' && responses.length > 0 && (
+                  <div className="mb-3 text-center">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => pushToIdeas.mutate(active.id)}
+                      disabled={pushToIdeas.isPending}
+                      data-testid="button-push-to-ideas"
+                    >
+                      {pushToIdeas.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                      Send words to Ideas
+                    </Button>
+                  </div>
+                )}
                 <SignalResult activity={active} responses={responses as any} height={360} />
               </>
             ) : (
@@ -232,6 +259,36 @@ function ActivityDialog({
   const [config, setConfig] = useState<DraftConfig>(
     activity ? { ...(activity.config as DraftConfig) } : defaultConfig(type),
   );
+  const [seedCategory, setSeedCategory] = useState<string>('all');
+
+  // v2 hook — seed multiple-choice options from existing workspace ideas.
+  const isMC = type === 'multiple_choice';
+  const { data: categories = [] } = useQuery<Category[]>({ queryKey: [`/api/spaces/${spaceId}/categories`], enabled: isMC });
+  const { data: notes = [] } = useQuery<Note[]>({ queryKey: [`/api/spaces/${spaceId}/notes`], enabled: isMC });
+
+  const seedFromIdeas = () => {
+    const pool = seedCategory === 'all' ? notes : notes.filter((n) => n.manualCategoryId === seedCategory);
+    const existingLabels = new Set((config.options ?? []).map((o) => o.label.trim().toLowerCase()).filter(Boolean));
+    const additions: { id: string; label: string }[] = [];
+    for (const n of pool) {
+      const label = (n.content ?? '').replace(/<[^>]*>?/gm, '').trim().slice(0, 80);
+      const key = label.toLowerCase();
+      if (!label || existingLabels.has(key)) continue;
+      existingLabels.add(key);
+      additions.push({ id: '', label });
+      if (additions.length >= 20) break;
+    }
+    if (additions.length === 0) {
+      toast({ title: 'No new ideas to add', description: 'No matching ideas, or they are already options.' });
+      return;
+    }
+    // Replace empty placeholder options, then append the seeded ones.
+    setConfig((c) => {
+      const kept = (c.options ?? []).filter((o) => o.label.trim().length > 0);
+      return { ...c, options: [...kept, ...additions] };
+    });
+    toast({ title: `Added ${additions.length} option${additions.length === 1 ? '' : 's'} from ideas` });
+  };
 
   const save = useMutation({
     mutationFn: () => {
@@ -304,6 +361,21 @@ function ActivityDialog({
 
           {type === 'multiple_choice' && (
             <div className="space-y-2">
+              <div className="flex items-end gap-2 rounded-md border bg-muted/30 p-2">
+                <div className="flex-1 space-y-1">
+                  <Label className="text-xs text-muted-foreground">Seed options from workspace ideas</Label>
+                  <Select value={seedCategory} onValueChange={setSeedCategory}>
+                    <SelectTrigger data-testid="select-seed-category"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All ideas</SelectItem>
+                      {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button variant="outline" size="sm" onClick={seedFromIdeas} data-testid="button-seed-from-ideas">
+                  <Sparkles className="mr-1.5 h-4 w-4" /> Add from ideas
+                </Button>
+              </div>
               <Label>Options</Label>
               {(config.options ?? []).map((o, i) => (
                 <div key={i} className="flex items-center gap-2">

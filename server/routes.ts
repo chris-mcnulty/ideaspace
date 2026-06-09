@@ -6294,7 +6294,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get responses for an activity (raw rows for client-side aggregation).
-  app.get("/api/spaces/:spaceId/signal/activities/:id/responses", createWorkspaceAccessMiddleware({}), async (req, res) => {
+  // Facilitator-only: aggregated results are shown on the presenter screen.
+  app.get("/api/spaces/:spaceId/signal/activities/:id/responses", requireFacilitator, async (req, res) => {
     try {
       const spaceId = await resolveWorkspaceId(req.params.spaceId);
       if (!spaceId) return res.status(404).json({ error: "Workspace not found" });
@@ -6424,6 +6425,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Failed to reset signal responses:", error);
       res.status(500).json({ error: "Failed to reset responses" });
+    }
+  });
+
+  // v2 hook — push a word cloud's collected words back into the workspace as
+  // ideas, an alternative way of driving ideation. Dedupes against existing
+  // ideas; frequency is preserved in metadata.
+  app.post("/api/spaces/:spaceId/signal/activities/:id/push-to-ideas", requireFacilitator, async (req, res) => {
+    try {
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) return res.status(404).json({ error: "Workspace not found" });
+
+      const activity = await storage.getSignalActivity(req.params.id);
+      if (!activity || activity.spaceId !== spaceId) {
+        return res.status(404).json({ error: "Activity not found" });
+      }
+      if (activity.type !== "word_cloud") {
+        return res.status(400).json({ error: "Only word cloud activities can be pushed to ideas" });
+      }
+
+      const responses = await storage.getSignalResponses(activity.id);
+      const counts = new Map<string, number>();
+      for (const r of responses) {
+        const w = (r.valueText ?? "").trim();
+        if (w) counts.set(w, (counts.get(w) ?? 0) + 1);
+      }
+      if (counts.size === 0) return res.json({ created: 0 });
+
+      // Dedupe against existing ideas (case-insensitive on plain content).
+      const existingIdeas = await storage.getIdeasBySpace(spaceId);
+      const existing = new Set(
+        existingIdeas.map((i) => (i.contentPlain ?? i.content ?? "").trim().toLowerCase()),
+      );
+
+      const user = req.user as User;
+      let created = 0;
+      for (const [word, count] of Array.from(counts.entries())) {
+        if (existing.has(word.toLowerCase())) continue;
+        const idea = await storage.createIdea({
+          spaceId,
+          content: word,
+          contentPlain: word,
+          contentType: "text",
+          sourceType: "imported",
+          createdByUserId: user.id,
+          showOnIdeationBoard: true,
+          metadata: { source: "signal", activityId: activity.id, frequency: count },
+        });
+        broadcastToSpace(spaceId, { type: "idea_created", data: idea });
+        created += 1;
+      }
+
+      res.json({ created });
+    } catch (error) {
+      console.error("Failed to push signal words to ideas:", error);
+      res.status(500).json({ error: "Failed to push words to ideas" });
     }
   });
 
