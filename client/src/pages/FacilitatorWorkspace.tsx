@@ -590,6 +590,7 @@ export default function FacilitatorWorkspace() {
     queryKey: [`/api/spaces/${params.space}/modules`],
     enabled: !!params.space,
   });
+  const hasIdeationModule = workspaceModules.some(m => m.moduleType === 'ideation');
 
   // Fetch project (if workspace belongs to one)
   const { data: project } = useQuery<Project>({
@@ -1409,6 +1410,7 @@ export default function FacilitatorWorkspace() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          {hasIdeationModule && (
           <Button
             variant="outline"
             onClick={() => {
@@ -1421,6 +1423,7 @@ export default function FacilitatorWorkspace() {
             <ArrowLeft className="mr-2 h-4 w-4" />
             Return to Ideation
           </Button>
+          )}
           <Button
             variant="default"
             onClick={() => navigateParticipantsMutation.mutate("priority-matrix")}
@@ -1446,6 +1449,7 @@ export default function FacilitatorWorkspace() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          {hasIdeationModule && (
           <Button
             variant="outline"
             onClick={() => {
@@ -1458,6 +1462,7 @@ export default function FacilitatorWorkspace() {
             <ArrowLeft className="mr-2 h-4 w-4" />
             Return to Ideation
           </Button>
+          )}
           <Button
             variant="default"
             onClick={() => navigateParticipantsMutation.mutate("staircase")}
@@ -1483,6 +1488,7 @@ export default function FacilitatorWorkspace() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          {hasIdeationModule && (
           <Button
             variant="outline"
             onClick={() => {
@@ -1495,6 +1501,7 @@ export default function FacilitatorWorkspace() {
             <ArrowLeft className="mr-2 h-4 w-4" />
             Return to Ideation
           </Button>
+          )}
           <Button
             variant="default"
             onClick={() => navigateParticipantsMutation.mutate("starship")}
@@ -1543,6 +1550,7 @@ export default function FacilitatorWorkspace() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          {hasIdeationModule && (
           <Button
             variant="outline"
             onClick={() => {
@@ -1555,6 +1563,7 @@ export default function FacilitatorWorkspace() {
             <ArrowLeft className="mr-2 h-4 w-4" />
             Return to Ideation
           </Button>
+          )}
           <Button
             variant="default"
             onClick={() => navigateParticipantsMutation.mutate("survey")}
@@ -2052,6 +2061,7 @@ export default function FacilitatorWorkspace() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          {hasIdeationModule && (
           <Button
             variant="outline"
             onClick={() => {
@@ -2064,6 +2074,7 @@ export default function FacilitatorWorkspace() {
             <ArrowLeft className="mr-2 h-4 w-4" />
             Return to Ideation
           </Button>
+          )}
           <Button
             variant="default"
             onClick={() => navigateParticipantsMutation.mutate("results")}

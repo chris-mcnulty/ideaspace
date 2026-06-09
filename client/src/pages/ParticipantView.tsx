@@ -105,7 +105,7 @@ export default function ParticipantView() {
   });
 
   // Fetch workspace modules to get ideation configuration
-  const { data: workspaceModules = [] } = useQuery<WorkspaceModule[]>({
+  const { data: workspaceModules = [], isLoading: modulesLoading } = useQuery<WorkspaceModule[]>({
     queryKey: [`/api/spaces/${params.space}/modules`],
     enabled: !!params.space,
   });
@@ -521,6 +521,18 @@ export default function ParticipantView() {
 
       {/* WHITEBOARD AREA - with proper dark mode support */}
       <main id="main-content" tabIndex={-1} className="flex-1 overflow-hidden bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none">
+        {/* No ideation module configured — show a holding screen instead of a blank whiteboard */}
+        {!modulesLoading && !ideationModule ? (
+          <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center text-gray-900 dark:text-gray-100">
+            <Clock className="h-12 w-12 text-gray-400 dark:text-gray-500" />
+            <div>
+              <p className="text-2xl font-semibold">Waiting for the next activity</p>
+              <p className="mt-2 max-w-sm text-base text-gray-500 dark:text-gray-400">
+                The facilitator will guide you to the next step. No action needed right now.
+              </p>
+            </div>
+          </div>
+        ) : (
         <div className="h-full overflow-auto p-8">
           <div className="mx-auto max-w-7xl">
             {/* Create Note Button (floating on white) - Only show when ideation is active */}
@@ -673,6 +685,7 @@ export default function ParticipantView() {
             )}
           </div>
         </div>
+        )}
       </main>
 
       {/* Dark Footer with Navigation */}

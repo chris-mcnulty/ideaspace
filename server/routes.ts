@@ -2162,6 +2162,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       switch (phase) {
         case "ideate":
+          if (!ideationModule) {
+            return res.status(400).json({ error: "This workspace does not have an ideation module configured. Add one in Module Configuration before sending participants to ideation." });
+          }
           updates.ideationStartsAt = now;
           // If timer is enabled, set end time based on configured duration
           if (ideationConfig?.timerEnabled && ideationConfig?.timerDurationMinutes) {
