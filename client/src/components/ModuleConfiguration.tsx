@@ -11,7 +11,7 @@ import {
   Settings, Save, RotateCcw, GripVertical,
   FileText, Vote, TrendingUp, ShoppingCart,
   Grid3x3, ClipboardList, ChevronUp, ChevronDown,
-  Info, Lock, Sailboat
+  Info, Lock, Rocket
 } from 'lucide-react';
 import {
   DndContext,
@@ -139,15 +139,15 @@ const MODULE_METADATA = {
       showDistribution: true
     }
   },
-  'sailboat': {
-    name: 'Sailboat',
-    icon: Sailboat,
-    description: 'Place ideas as goals, driving forces, or anchors on a sailboat',
+  'starship': {
+    name: 'Starship',
+    icon: Rocket,
+    description: 'Plot ideas as propulsion, destinations, or black holes on a starship',
     configurable: true,
     config: {
-      goalLabel: 'Goal / Destination',
-      windLabel: 'Driving Forces',
-      anchorLabel: 'Anchors / Holding Back',
+      destinationLabel: 'Destinations',
+      thrustLabel: 'Propulsion',
+      dragLabel: 'Black Holes',
       collaborative: true,
       assignZoneAsCategory: true
     }

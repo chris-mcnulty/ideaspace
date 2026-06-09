@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Settings2, Sailboat as SailboatIcon, Plus, X, Flag, Wind, Anchor } from 'lucide-react';
+import { Loader2, Settings2, Rocket as StarshipIcon, Plus, X, Globe, Flame, CircleDot } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -17,10 +17,10 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { SAILBOAT_ZONES, type SailboatZone } from '@shared/schema';
-import type { Note, Sailboat, SailboatPosition, Category } from '@shared/schema';
+import { STARSHIP_ZONES, type StarshipZone } from '@shared/schema';
+import type { Note, Starship, StarshipPosition, Category } from '@shared/schema';
 
-interface SailboatModuleProps {
+interface StarshipModuleProps {
   spaceId: string;
   participantId?: string;
   isReadOnly?: boolean;
@@ -28,7 +28,7 @@ interface SailboatModuleProps {
 }
 
 interface PlacedPosition {
-  zone: SailboatZone;
+  zone: StarshipZone;
   x: number; // 0-100 (from left)
   y: number; // 0-100 (from top)
 }
@@ -43,19 +43,20 @@ interface DraggedNote {
   currentY: number;
 }
 
-const ZONE_META: Record<SailboatZone, { icon: typeof Flag; color: string; helper: string }> = {
-  goal: { icon: Flag, color: '#10B981', helper: "What we're sailing toward" },
-  wind: { icon: Wind, color: '#3B82F6', helper: "What's pushing us forward" },
-  anchor: { icon: Anchor, color: '#EF4444', helper: "What's holding us back" },
+const ZONE_META: Record<StarshipZone, { icon: typeof Globe; color: string; helper: string }> = {
+  thrust: { icon: Flame, color: '#3B82F6', helper: "What's propelling us forward" },
+  destination: { icon: Globe, color: '#10B981', helper: "Where we're headed" },
+  drag: { icon: CircleDot, color: '#EF4444', helper: "What's dragging us down" },
 };
 
-// Partition the canvas into three non-overlapping zones that evoke the
-// sailboat metaphor: the destination is ahead (right strip), the wind drives
-// from behind the sail (upper-left), and the anchor holds back below (lower-left).
-function zoneFromPoint(x: number, y: number): SailboatZone {
-  if (x >= 60) return 'goal';
-  if (y < 60) return 'wind';
-  return 'anchor';
+// Partition the canvas into three non-overlapping zones that evoke the starship
+// metaphor (the ship travels left to right): destinations lie ahead (right
+// strip), propulsion drives from behind (upper-left), and black holes drag the
+// ship down below (lower-left).
+function zoneFromPoint(x: number, y: number): StarshipZone {
+  if (x >= 60) return 'destination';
+  if (y < 60) return 'thrust';
+  return 'drag';
 }
 
 const NOTE_COLORS = [
@@ -63,12 +64,12 @@ const NOTE_COLORS = [
   '#EC4899', '#6366F1', '#14B8A6', '#F97316', '#84CC16',
 ];
 
-export default function SailboatModule({
+export default function StarshipModule({
   spaceId,
   participantId,
   isReadOnly = false,
   isFacilitator = false,
-}: SailboatModuleProps) {
+}: StarshipModuleProps) {
   const { toast } = useToast();
   const { announce } = useAnnouncer();
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -78,9 +79,9 @@ export default function SailboatModule({
   const [draggedNote, setDraggedNote] = useState<DraggedNote | null>(null);
   const draggedNoteRef = useRef<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [goalLabel, setGoalLabel] = useState('Goal / Destination');
-  const [windLabel, setWindLabel] = useState('Driving Forces');
-  const [anchorLabel, setAnchorLabel] = useState('Anchors / Holding Back');
+  const [destinationLabel, setDestinationLabel] = useState('Destinations');
+  const [thrustLabel, setThrustLabel] = useState('Propulsion');
+  const [dragLabel, setDragLabel] = useState('Black Holes');
   const [newIdea, setNewIdea] = useState('');
 
   const { data: notes = [], isLoading: notesLoading } = useQuery<Note[]>({
@@ -93,30 +94,30 @@ export default function SailboatModule({
     enabled: !!spaceId,
   });
 
-  const { data: sailboat, isLoading: sailboatLoading } = useQuery<Sailboat>({
-    queryKey: [`/api/spaces/${spaceId}/sailboat`],
+  const { data: starship, isLoading: starshipLoading } = useQuery<Starship>({
+    queryKey: [`/api/spaces/${spaceId}/starship`],
     enabled: !!spaceId,
   });
 
-  const { data: positions = [], isLoading: positionsLoading } = useQuery<SailboatPosition[]>({
-    queryKey: [`/api/spaces/${spaceId}/sailboat/positions`],
+  const { data: positions = [], isLoading: positionsLoading } = useQuery<StarshipPosition[]>({
+    queryKey: [`/api/spaces/${spaceId}/starship/positions`],
     enabled: !!spaceId,
     staleTime: 0,
   });
 
-  const sailboatId = sailboat?.id;
+  const starshipId = starship?.id;
   useEffect(() => {
-    if (!sailboat) return;
-    setGoalLabel(sailboat.goalLabel);
-    setWindLabel(sailboat.windLabel);
-    setAnchorLabel(sailboat.anchorLabel);
+    if (!starship) return;
+    setDestinationLabel(starship.destinationLabel);
+    setThrustLabel(starship.thrustLabel);
+    setDragLabel(starship.dragLabel);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sailboatId]);
+  }, [starshipId]);
 
-  const labels: Record<SailboatZone, string> = {
-    goal: sailboat?.goalLabel ?? goalLabel,
-    wind: sailboat?.windLabel ?? windLabel,
-    anchor: sailboat?.anchorLabel ?? anchorLabel,
+  const labels: Record<StarshipZone, string> = {
+    destination: starship?.destinationLabel ?? destinationLabel,
+    thrust: starship?.thrustLabel ?? thrustLabel,
+    drag: starship?.dragLabel ?? dragLabel,
   };
 
   // Sync server positions into local state.
@@ -141,7 +142,7 @@ export default function SailboatModule({
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (data.type === 'sailboat_position_updated' && data.data?.noteId) {
+        if (data.type === 'starship_position_updated' && data.data?.noteId) {
           const p = data.data;
           const x = typeof p.xCoord === 'number' ? (p.xCoord <= 1 ? p.xCoord * 100 : p.xCoord) : 50;
           const y = typeof p.yCoord === 'number' ? (p.yCoord <= 1 ? p.yCoord * 100 : p.yCoord) : 50;
@@ -153,7 +154,7 @@ export default function SailboatModule({
           });
           queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/notes`] });
           queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/categories`] });
-        } else if (data.type === 'sailboat_position_removed' && data.data?.noteId) {
+        } else if (data.type === 'starship_position_removed' && data.data?.noteId) {
           setLocalPositions(prev => {
             const next = new Map(prev);
             next.delete(data.data.noteId);
@@ -164,18 +165,18 @@ export default function SailboatModule({
           queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/notes`] });
         }
       } catch (error) {
-        console.error('[SailboatModule] WebSocket message error:', error);
+        console.error('[StarshipModule] WebSocket message error:', error);
       }
     };
     return () => ws.close();
   }, [spaceId, isReadOnly]);
 
   const updateConfigMutation = useMutation({
-    mutationFn: (data: { goalLabel: string; windLabel: string; anchorLabel: string }) =>
-      apiRequest('PUT', `/api/spaces/${spaceId}/sailboat`, data),
+    mutationFn: (data: { destinationLabel: string; thrustLabel: string; dragLabel: string }) =>
+      apiRequest('PUT', `/api/spaces/${spaceId}/starship`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/sailboat`] });
-      toast({ title: 'Sailboat Updated', description: 'Zone labels have been saved.' });
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/starship`] });
+      toast({ title: 'Starship Updated', description: 'Zone labels have been saved.' });
       setShowSettings(false);
     },
     onError: () => {
@@ -184,10 +185,10 @@ export default function SailboatModule({
   });
 
   const updatePositionMutation = useMutation({
-    mutationFn: (data: { noteId: string; zone: SailboatZone; xCoord: number; yCoord: number }) =>
-      apiRequest('PUT', `/api/spaces/${spaceId}/sailboat/positions`, data),
+    mutationFn: (data: { noteId: string; zone: StarshipZone; xCoord: number; yCoord: number }) =>
+      apiRequest('PUT', `/api/spaces/${spaceId}/starship/positions`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/sailboat/positions`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/starship/positions`] });
       queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/notes`] });
       queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/categories`] });
     },
@@ -198,9 +199,9 @@ export default function SailboatModule({
 
   const removePositionMutation = useMutation({
     mutationFn: (noteId: string) =>
-      apiRequest('DELETE', `/api/spaces/${spaceId}/sailboat/positions/${noteId}`),
+      apiRequest('DELETE', `/api/spaces/${spaceId}/starship/positions/${noteId}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/sailboat/positions`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/starship/positions`] });
     },
   });
 
@@ -210,7 +211,7 @@ export default function SailboatModule({
     onSuccess: () => {
       setNewIdea('');
       queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/notes`] });
-      toast({ title: 'Idea Added', description: 'Drag or tap it onto the sailboat.' });
+      toast({ title: 'Idea Added', description: 'Drag or tap it onto the starship.' });
     },
     onError: () => {
       toast({ title: 'Could Not Add Idea', description: 'New ideas can only be added while the workspace is open.', variant: 'destructive' });
@@ -298,11 +299,11 @@ export default function SailboatModule({
 
   const handleTrayKeyDown = (e: React.KeyboardEvent, noteId: string) => {
     if (isReadOnly) return;
-    // Keyboard placement: 1 = goal, 2 = wind, 3 = anchor (centered in the zone).
+    // Keyboard placement: 1 = propulsion, 2 = destination, 3 = black hole (centered in the zone).
     const centers: Record<string, PlacedPosition> = {
-      '1': { zone: 'goal', x: 80, y: 50 },
-      '2': { zone: 'wind', x: 30, y: 30 },
-      '3': { zone: 'anchor', x: 30, y: 80 },
+      '1': { zone: 'thrust', x: 30, y: 30 },
+      '2': { zone: 'destination', x: 80, y: 50 },
+      '3': { zone: 'drag', x: 30, y: 80 },
     };
     if (centers[e.key]) {
       e.preventDefault();
@@ -325,7 +326,7 @@ export default function SailboatModule({
     return NOTE_COLORS[hash % NOTE_COLORS.length];
   };
 
-  const isLoading = notesLoading || sailboatLoading || positionsLoading;
+  const isLoading = notesLoading || starshipLoading || positionsLoading;
   if (isLoading) {
     return (
       <Card className="w-full h-full flex items-center justify-center min-h-[400px]">
@@ -341,12 +342,12 @@ export default function SailboatModule({
     <div className="w-full h-full flex flex-col gap-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <SailboatIcon className="h-5 w-5" />
-          <h2 className="text-lg sm:text-xl font-semibold">Sailboat</h2>
-          <Badge variant="secondary" data-testid="badge-sailboat-placed">{placedCount}/{notes.length} placed</Badge>
+          <StarshipIcon className="h-5 w-5" />
+          <h2 className="text-lg sm:text-xl font-semibold">Starship</h2>
+          <Badge variant="secondary" data-testid="badge-starship-placed">{placedCount}/{notes.length} placed</Badge>
         </div>
         {isFacilitator && (
-          <Button variant="outline" size="sm" onClick={() => setShowSettings(true)} data-testid="button-sailboat-settings">
+          <Button variant="outline" size="sm" onClick={() => setShowSettings(true)} data-testid="button-starship-settings">
             <Settings2 className="h-4 w-4 mr-2" />
             Configure Zones
           </Button>
@@ -354,15 +355,15 @@ export default function SailboatModule({
       </div>
 
       {!isReadOnly && !isFacilitator && (
-        <div className="flex items-center gap-2" data-testid="sailboat-add-idea">
+        <div className="flex items-center gap-2" data-testid="starship-add-idea">
           <Input
             value={newIdea}
             onChange={(e) => setNewIdea(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleAddIdea(); }}
             placeholder="Add a new idea…"
-            data-testid="input-sailboat-new-idea"
+            data-testid="input-starship-new-idea"
           />
-          <Button onClick={handleAddIdea} disabled={addIdeaMutation.isPending || !newIdea.trim()} data-testid="button-sailboat-add-idea">
+          <Button onClick={handleAddIdea} disabled={addIdeaMutation.isPending || !newIdea.trim()} data-testid="button-starship-add-idea">
             {addIdeaMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             <span className="ml-2 hidden sm:inline">Add idea</span>
           </Button>
@@ -370,14 +371,14 @@ export default function SailboatModule({
       )}
 
       {selectedNoteId && !isReadOnly && (
-        <div className="text-xs sm:text-sm text-muted-foreground bg-muted/50 rounded-md p-3" data-testid="text-sailboat-hint">
-          Tap a zone on the sailboat to place the selected idea (or press 1 = goal, 2 = wind, 3 = anchor).
+        <div className="text-xs sm:text-sm text-muted-foreground bg-muted/50 rounded-md p-3" data-testid="text-starship-hint">
+          Tap a zone on the starship to place the selected idea (or press 1 = propulsion, 2 = destination, 3 = black hole).
         </div>
       )}
 
       {/* Idea tray */}
       {!isReadOnly && unplacedNotes.length > 0 && (
-        <div className="rounded-md border p-3" data-testid="sailboat-tray">
+        <div className="rounded-md border p-3" data-testid="starship-tray">
           <p className="text-xs font-medium text-muted-foreground mb-2">Ideas to place</p>
           <div className="flex flex-wrap gap-2">
             {unplacedNotes.map(note => {
@@ -392,7 +393,7 @@ export default function SailboatModule({
                   style={{ borderWidth: '2px', borderStyle: 'solid', borderColor: color }}
                   onPointerDown={(e) => handleNotePointerDown(e, note.id)}
                   onKeyDown={(e) => handleTrayKeyDown(e, note.id)}
-                  aria-label={`${text}. Press 1 for ${labels.goal}, 2 for ${labels.wind}, 3 for ${labels.anchor}.`}
+                  aria-label={`${text}. Press 1 for ${labels.thrust}, 2 for ${labels.destination}, 3 for ${labels.drag}.`}
                   data-testid={`tray-note-${note.id}`}
                 >
                   <span className="line-clamp-2">{text}</span>
@@ -403,7 +404,7 @@ export default function SailboatModule({
         </div>
       )}
 
-      {/* Sailboat canvas */}
+      {/* Starship canvas */}
       <Card className="flex-1 relative overflow-hidden">
         <CardContent className="p-0 h-full overflow-hidden">
           <div
@@ -412,13 +413,13 @@ export default function SailboatModule({
             style={{
               cursor: draggedNote ? 'grabbing' : (selectedNoteId ? 'crosshair' : 'default'),
               touchAction: draggedNote ? 'none' : 'auto',
-              background: 'linear-gradient(to bottom, hsl(var(--muted)/0.4) 0%, hsl(var(--muted)/0.4) 60%, hsl(217 60% 50% / 0.18) 60%, hsl(217 70% 40% / 0.28) 100%)',
+              background: 'radial-gradient(ellipse at 30% 95%, hsl(280 70% 40% / 0.35) 0%, transparent 55%), linear-gradient(to bottom, hsl(var(--muted)/0.45) 0%, hsl(var(--muted)/0.35) 55%, hsl(270 50% 25% / 0.30) 100%)',
             }}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
             onClick={handleCanvasClick}
-            data-testid="sailboat-canvas"
+            data-testid="starship-canvas"
           >
             {/* Zone dividers */}
             <div className="absolute inset-0 pointer-events-none">
@@ -426,35 +427,42 @@ export default function SailboatModule({
               <div className="absolute left-0 top-[60%] w-[60%] h-px bg-border" />
             </div>
 
-            {/* Decorative sailboat sketch (center-left) */}
+            {/* Decorative starship sketch, nosed right (the ship travels left to right) */}
             <svg
               className="absolute pointer-events-none opacity-30"
-              style={{ left: '14%', top: '14%', width: '34%', height: '52%' }}
-              viewBox="0 0 200 220"
+              style={{ left: '22%', top: '36%', width: '36%', height: '26%' }}
+              viewBox="0 0 220 120"
               fill="none"
               aria-hidden="true"
             >
-              <line x1="100" y1="20" x2="100" y2="160" stroke="currentColor" strokeWidth="4" />
-              <path d="M100 24 L100 150 L30 150 Z" fill="currentColor" opacity="0.5" />
-              <path d="M104 30 L160 140 L104 140 Z" fill="currentColor" opacity="0.35" />
-              <path d="M40 160 L160 160 L140 195 L60 195 Z" fill="currentColor" opacity="0.7" />
+              {/* exhaust */}
+              <path d="M40 50 L8 60 L40 70 Z" fill="currentColor" opacity="0.45" />
+              {/* fins */}
+              <path d="M70 50 L46 30 L86 50 Z" fill="currentColor" opacity="0.5" />
+              <path d="M70 70 L46 90 L86 70 Z" fill="currentColor" opacity="0.5" />
+              {/* body */}
+              <rect x="40" y="48" width="120" height="24" rx="12" fill="currentColor" opacity="0.6" />
+              {/* nose cone */}
+              <path d="M160 44 L160 76 L205 60 Z" fill="currentColor" opacity="0.7" />
+              {/* window */}
+              <circle cx="120" cy="60" r="6" fill="hsl(var(--background))" opacity="0.9" />
             </svg>
 
             {/* Zone labels */}
-            {SAILBOAT_ZONES.map((zone) => {
+            {STARSHIP_ZONES.map((zone) => {
               const meta = ZONE_META[zone];
               const ZoneIcon = meta.icon;
-              const placement: Record<SailboatZone, React.CSSProperties> = {
-                wind: { left: '2%', top: '2%' },
-                goal: { right: '2%', top: '2%' },
-                anchor: { left: '2%', bottom: '2%' },
+              const placement: Record<StarshipZone, React.CSSProperties> = {
+                thrust: { left: '2%', top: '2%' },
+                destination: { right: '2%', top: '2%' },
+                drag: { left: '2%', bottom: '2%' },
               };
               return (
                 <div
                   key={zone}
                   className="absolute pointer-events-none flex items-center gap-1.5 rounded-md px-2 py-1"
                   style={{ ...placement[zone], backgroundColor: `${meta.color}1A`, color: meta.color }}
-                  data-testid={`sailboat-zone-label-${zone}`}
+                  data-testid={`starship-zone-label-${zone}`}
                 >
                   <ZoneIcon className="h-4 w-4" />
                   <div className="leading-tight">
@@ -483,7 +491,7 @@ export default function SailboatModule({
                   tabIndex={isReadOnly ? -1 : 0}
                   role={isReadOnly ? undefined : 'button'}
                   aria-label={`${text}. In ${labels[pos.zone]}.`}
-                  data-testid={`sailboat-note-${note.id}`}
+                  data-testid={`starship-note-${note.id}`}
                 >
                   <div
                     className={`relative bg-card rounded-lg p-2 shadow-sm min-w-[100px] max-w-[180px] min-h-[44px] ${isDragging ? 'shadow-lg scale-105' : 'hover:shadow-md'}`}
@@ -496,7 +504,7 @@ export default function SailboatModule({
                         className="absolute top-0.5 right-0.5 rounded p-0.5 text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                         onPointerDown={(e) => e.stopPropagation()}
                         onClick={(e) => { e.stopPropagation(); removePositionMutation.mutate(note.id); }}
-                        aria-label={`Remove ${text} from the sailboat`}
+                        aria-label={`Remove ${text} from the starship`}
                         data-testid={`button-remove-${note.id}`}
                       >
                         <X className="h-3 w-3" />
@@ -514,7 +522,7 @@ export default function SailboatModule({
         <Card>
           <CardContent className="text-center py-8">
             <p className="text-muted-foreground">
-              No ideas yet. Add ideas above, then place them on the sailboat as goals, driving forces, or anchors.
+              No ideas yet. Add ideas above, then plot them on the starship as propulsion, destinations, or black holes.
             </p>
           </CardContent>
         </Card>
@@ -524,31 +532,31 @@ export default function SailboatModule({
       <Dialog open={showSettings} onOpenChange={setShowSettings}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Configure Sailboat Zones</DialogTitle>
+            <DialogTitle>Configure Starship Zones</DialogTitle>
             <DialogDescription>
-              Customize the labels for the three zones of the sailboat.
+              Customize the labels for the three zones of the starship.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="goal-label">Goal (destination ahead)</Label>
-              <Input id="goal-label" value={goalLabel} onChange={(e) => setGoalLabel(e.target.value)} data-testid="input-goal-label" />
+              <Label htmlFor="thrust-label">Propulsion (rockets / warp drives, upper-left)</Label>
+              <Input id="thrust-label" value={thrustLabel} onChange={(e) => setThrustLabel(e.target.value)} data-testid="input-thrust-label" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="wind-label">Wind (driving forces)</Label>
-              <Input id="wind-label" value={windLabel} onChange={(e) => setWindLabel(e.target.value)} data-testid="input-wind-label" />
+              <Label htmlFor="destination-label">Destinations (planets ahead, upper-right)</Label>
+              <Input id="destination-label" value={destinationLabel} onChange={(e) => setDestinationLabel(e.target.value)} data-testid="input-destination-label" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="anchor-label">Anchor (holding back)</Label>
-              <Input id="anchor-label" value={anchorLabel} onChange={(e) => setAnchorLabel(e.target.value)} data-testid="input-anchor-label" />
+              <Label htmlFor="drag-label">Black Holes (dragging you down, bottom)</Label>
+              <Input id="drag-label" value={dragLabel} onChange={(e) => setDragLabel(e.target.value)} data-testid="input-drag-label" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSettings(false)} data-testid="button-cancel-sailboat-settings">Cancel</Button>
+            <Button variant="outline" onClick={() => setShowSettings(false)} data-testid="button-cancel-starship-settings">Cancel</Button>
             <Button
-              onClick={() => updateConfigMutation.mutate({ goalLabel, windLabel, anchorLabel })}
+              onClick={() => updateConfigMutation.mutate({ destinationLabel, thrustLabel, dragLabel })}
               disabled={updateConfigMutation.isPending}
-              data-testid="button-save-sailboat-settings"
+              data-testid="button-save-starship-settings"
             >
               {updateConfigMutation.isPending ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</>) : 'Save Changes'}
             </Button>

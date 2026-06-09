@@ -8,7 +8,7 @@ import { getUserIdFromUpgradeRequest } from "./session";
 import oauthRoutes from "./routes/auth-oauth";
 import entraRoutes from "./routes/auth-entra";
 import { db } from "./db";
-import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, type Space, type InsertSpace, organizations, users, companyAdmins as companyAdminsTable, knowledgeBaseDocuments, workspaceTemplates, workspaceTemplateNotes, aiUsageLog, insertIdeaSchema, insertWorkspaceModuleSchema, insertWorkspaceModuleRunSchema, insertPriorityMatrixSchema, insertPriorityMatrixPositionSchema, insertStaircaseModuleSchema, insertStaircasePositionSchema, insertSailboatSchema, insertSailboatPositionSchema, SAILBOAT_ZONES, type SailboatZone, projectMembers, categories, notes, participants, projects, spaces, NOTIFICATION_TYPES, NOTIFICATION_TYPE_DEFAULTS, type NotificationType, updateNotificationPreferencesSchema } from "@shared/schema";
+import { insertOrganizationSchema, insertSpaceSchema, createSpaceApiSchema, insertParticipantSchema, insertCategorySchema, insertNoteSchema, insertVoteSchema, insertRankingSchema, insertUserSchema, insertKnowledgeBaseDocumentSchema, type User, type Space, type InsertSpace, organizations, users, companyAdmins as companyAdminsTable, knowledgeBaseDocuments, workspaceTemplates, workspaceTemplateNotes, aiUsageLog, insertIdeaSchema, insertWorkspaceModuleSchema, insertWorkspaceModuleRunSchema, insertPriorityMatrixSchema, insertPriorityMatrixPositionSchema, insertStaircaseModuleSchema, insertStaircasePositionSchema, insertStarshipSchema, insertStarshipPositionSchema, STARSHIP_ZONES, type StarshipZone, projectMembers, categories, notes, participants, projects, spaces, NOTIFICATION_TYPES, NOTIFICATION_TYPE_DEFAULTS, type NotificationType, updateNotificationPreferencesSchema } from "@shared/schema";
 import { CSV_IMPORT_TYPES, csvConfirmTemplatesBodySchema, csvConfirmUsersBodySchema, csvConfirmIdeasBodySchema, type CsvImportType, type TemplateCsvRow, type UserCsvRow, type IdeaCsvRow } from "@shared/csvImport";
 import { buildCsvPreview, buildErrorReportCsv } from "./services/csvImport";
 import { uploadImage, validateImageFile, cleanupTempFile } from "./middleware/uploadMiddleware";
@@ -91,7 +91,7 @@ function isWorkspaceOpenForParticipation(status: string): boolean {
     'survey', 
     'priority-matrix', 'priority',
     'staircase',
-    'sailboat',
+    'starship',
     'results'
   ];
   
@@ -2134,10 +2134,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Protected: Navigate all participants to a specific phase
   app.post("/api/spaces/:id/navigate-participants", requireFacilitator, async (req, res) => {
     try {
-      const { phase } = req.body as { phase: "vote" | "rank" | "marketplace" | "ideate" | "results" | "priority-matrix" | "staircase" | "sailboat" | "survey" };
+      const { phase } = req.body as { phase: "vote" | "rank" | "marketplace" | "ideate" | "results" | "priority-matrix" | "staircase" | "starship" | "survey" };
 
-      if (!phase || !["vote", "rank", "marketplace", "ideate", "results", "priority-matrix", "staircase", "sailboat", "survey"].includes(phase)) {
-        return res.status(400).json({ error: "Invalid phase. Must be one of: vote, rank, marketplace, ideate, results, priority-matrix, staircase, sailboat, survey" });
+      if (!phase || !["vote", "rank", "marketplace", "ideate", "results", "priority-matrix", "staircase", "starship", "survey"].includes(phase)) {
+        return res.status(400).json({ error: "Invalid phase. Must be one of: vote, rank, marketplace, ideate, results, priority-matrix, staircase, starship, survey" });
       }
       
       // Resolve workspace code to UUID
@@ -2188,7 +2188,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           break;
         case "priority-matrix":
         case "staircase":
-        case "sailboat":
+        case "starship":
         case "results":
           // These modules don't need time window updates
           // Just broadcast the navigation
@@ -4042,9 +4042,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         // Check if ideation phase is active by status OR time window. The
-        // sailboat module also lets participants generate new ideas directly on
+        // starship module also lets participants generate new ideas directly on
         // the board, so its phase is treated as an idea-creation window too.
-        const statusBasedActive = ['ideation', 'ideate', 'sailboat'].includes(space.status.toLowerCase());
+        const statusBasedActive = ['ideation', 'ideate', 'starship'].includes(space.status.toLowerCase());
         const timeWindowActive = space.ideationStartsAt && space.ideationEndsAt &&
           new Date() >= new Date(space.ideationStartsAt) &&
           new Date() <= new Date(space.ideationEndsAt);
@@ -5821,117 +5821,117 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ============================================
-  // Sailboat Envisioning Module API Routes
+  // Starship Envisioning Module API Routes
   // ============================================
 
-  // Default labels for a brand-new sailboat (kept in sync with the schema defaults).
-  const SAILBOAT_DEFAULTS = {
-    goalLabel: "Goal / Destination",
-    windLabel: "Driving Forces",
-    anchorLabel: "Anchors / Holding Back",
+  // Default labels for a brand-new starship (kept in sync with the schema defaults).
+  const STARSHIP_DEFAULTS = {
+    destinationLabel: "Destinations",
+    thrustLabel: "Propulsion",
+    dragLabel: "Black Holes",
     assignZoneAsCategory: true,
   };
 
-  // Map a zone to a stable category color (semantic: goal = positive/green,
-  // wind = forward/blue, anchor = blocker/red).
-  const SAILBOAT_ZONE_COLORS: Record<SailboatZone, string> = {
-    goal: "#10B981",
-    wind: "#3B82F6",
-    anchor: "#EF4444",
+  // Map a zone to a stable category color (semantic: destination = positive/green,
+  // thrust = forward/blue, drag = blocker/red).
+  const STARSHIP_ZONE_COLORS: Record<StarshipZone, string> = {
+    destination: "#10B981",
+    thrust: "#3B82F6",
+    drag: "#EF4444",
   };
 
   // Return the configured label for a given zone.
-  const sailboatZoneLabel = (sailboat: { goalLabel: string; windLabel: string; anchorLabel: string }, zone: SailboatZone): string => {
-    if (zone === "goal") return sailboat.goalLabel;
-    if (zone === "wind") return sailboat.windLabel;
-    return sailboat.anchorLabel;
+  const starshipZoneLabel = (starship: { destinationLabel: string; thrustLabel: string; dragLabel: string }, zone: StarshipZone): string => {
+    if (zone === "destination") return starship.destinationLabel;
+    if (zone === "thrust") return starship.thrustLabel;
+    return starship.dragLabel;
   };
 
-  // Find-or-create the category that mirrors a sailboat zone, returning its id.
+  // Find-or-create the category that mirrors a starship zone, returning its id.
   // Matches by the zone's current label so the three zone categories are reused.
-  async function resolveSailboatZoneCategory(
+  async function resolveStarshipZoneCategory(
     spaceId: string,
-    sailboat: { goalLabel: string; windLabel: string; anchorLabel: string },
-    zone: SailboatZone,
+    starship: { destinationLabel: string; thrustLabel: string; dragLabel: string },
+    zone: StarshipZone,
   ): Promise<string> {
-    const label = sailboatZoneLabel(sailboat, zone);
+    const label = starshipZoneLabel(starship, zone);
     const existing = await storage.getCategoriesBySpace(spaceId);
     const match = existing.find((c) => c.name === label);
     if (match) return match.id;
     const created = await storage.createCategory({
       spaceId,
       name: label,
-      color: SAILBOAT_ZONE_COLORS[zone],
+      color: STARSHIP_ZONE_COLORS[zone],
     });
     return created.id;
   }
 
-  // Get sailboat configuration (returns defaults if none exists yet)
-  app.get("/api/spaces/:spaceId/sailboat", createWorkspaceAccessMiddleware({}), async (req, res) => {
+  // Get starship configuration (returns defaults if none exists yet)
+  app.get("/api/spaces/:spaceId/starship", createWorkspaceAccessMiddleware({}), async (req, res) => {
     try {
       const spaceId = await resolveWorkspaceId(req.params.spaceId);
       if (!spaceId) {
         return res.status(404).json({ error: "Workspace not found" });
       }
 
-      const sailboat = await storage.getSailboat(spaceId);
-      if (!sailboat) {
-        return res.json(SAILBOAT_DEFAULTS);
+      const starship = await storage.getStarship(spaceId);
+      if (!starship) {
+        return res.json(STARSHIP_DEFAULTS);
       }
 
-      res.json(sailboat);
+      res.json(starship);
     } catch (error) {
-      console.error("Failed to fetch sailboat config:", error);
-      res.status(500).json({ error: "Failed to fetch sailboat configuration" });
+      console.error("Failed to fetch starship config:", error);
+      res.status(500).json({ error: "Failed to fetch starship configuration" });
     }
   });
 
-  // Create or update sailboat configuration (facilitator only)
-  app.put("/api/spaces/:spaceId/sailboat", requireFacilitator, async (req, res) => {
+  // Create or update starship configuration (facilitator only)
+  app.put("/api/spaces/:spaceId/starship", requireFacilitator, async (req, res) => {
     try {
       const spaceId = await resolveWorkspaceId(req.params.spaceId);
       if (!spaceId) {
         return res.status(404).json({ error: "Workspace not found" });
       }
 
-      const sailboatData = insertSailboatSchema.parse({
+      const starshipData = insertStarshipSchema.parse({
         ...req.body,
         spaceId,
       });
 
-      const existing = await storage.getSailboat(spaceId);
-      let sailboat;
+      const existing = await storage.getStarship(spaceId);
+      let starship;
       if (existing) {
-        sailboat = await storage.updateSailboat(existing.id, sailboatData);
+        starship = await storage.updateStarship(existing.id, starshipData);
       } else {
-        sailboat = await storage.createSailboat(sailboatData);
+        starship = await storage.createStarship(starshipData);
       }
 
-      broadcastToSpace(spaceId, { type: "sailboat_configured", data: sailboat });
-      res.json(sailboat);
+      broadcastToSpace(spaceId, { type: "starship_configured", data: starship });
+      res.json(starship);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: error.errors });
       }
-      console.error("Failed to update sailboat config:", error);
-      res.status(500).json({ error: "Failed to update sailboat configuration" });
+      console.error("Failed to update starship config:", error);
+      res.status(500).json({ error: "Failed to update starship configuration" });
     }
   });
 
-  // Get all note positions on the sailboat (client-friendly: 0-100 coordinates)
-  app.get("/api/spaces/:spaceId/sailboat/positions", createWorkspaceAccessMiddleware({}), async (req, res) => {
+  // Get all note positions on the starship (client-friendly: 0-100 coordinates)
+  app.get("/api/spaces/:spaceId/starship/positions", createWorkspaceAccessMiddleware({}), async (req, res) => {
     try {
       const spaceId = await resolveWorkspaceId(req.params.spaceId);
       if (!spaceId) {
         return res.status(404).json({ error: "Workspace not found" });
       }
 
-      const sailboat = await storage.getSailboat(spaceId);
-      if (!sailboat) {
+      const starship = await storage.getStarship(spaceId);
+      if (!starship) {
         return res.json([]);
       }
 
-      const positions = await storage.getSailboatPositions(sailboat.id);
+      const positions = await storage.getStarshipPositions(starship.id);
       const clientPositions = positions.map((pos) => ({
         ...pos,
         xCoord: pos.xCoord * 100,
@@ -5939,23 +5939,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }));
       res.json(clientPositions);
     } catch (error) {
-      console.error("Failed to fetch sailboat positions:", error);
-      res.status(500).json({ error: "Failed to fetch sailboat positions" });
+      console.error("Failed to fetch starship positions:", error);
+      res.status(500).json({ error: "Failed to fetch starship positions" });
     }
   });
 
-  // Upsert a note position / zone on the sailboat (client sends 0-100 coords)
-  app.put("/api/spaces/:spaceId/sailboat/positions", createWorkspaceAccessMiddleware({ requireOpen: false }), async (req, res) => {
+  // Upsert a note position / zone on the starship (client sends 0-100 coords)
+  app.put("/api/spaces/:spaceId/starship/positions", createWorkspaceAccessMiddleware({ requireOpen: false }), async (req, res) => {
     try {
       const spaceId = await resolveWorkspaceId(req.params.spaceId);
       if (!spaceId) {
         return res.status(404).json({ error: "Workspace not found" });
       }
 
-      // Get or create sailboat for this workspace
-      let sailboat = await storage.getSailboat(spaceId);
-      if (!sailboat) {
-        sailboat = await storage.createSailboat({ spaceId, ...SAILBOAT_DEFAULTS });
+      // Get or create starship for this workspace
+      let starship = await storage.getStarship(spaceId);
+      if (!starship) {
+        starship = await storage.createStarship({ spaceId, ...STARSHIP_DEFAULTS });
       }
 
       const { noteId, ideaId, zone, xCoord, yCoord } = req.body as {
@@ -5966,8 +5966,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!resolvedNoteId) {
         return res.status(400).json({ error: "noteId is required" });
       }
-      if (!zone || !SAILBOAT_ZONES.includes(zone as SailboatZone)) {
-        return res.status(400).json({ error: `zone must be one of: ${SAILBOAT_ZONES.join(", ")}` });
+      if (!zone || !STARSHIP_ZONES.includes(zone as StarshipZone)) {
+        return res.status(400).json({ error: `zone must be one of: ${STARSHIP_ZONES.join(", ")}` });
       }
       const xPct = typeof xCoord === "number" ? xCoord : 50;
       const yPct = typeof yCoord === "number" ? yCoord : 50;
@@ -5976,7 +5976,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const positionData: any = {
-        sailboatId: sailboat.id,
+        starshipId: starship.id,
         noteId: resolvedNoteId,
         zone,
         xCoord: xPct / 100,
@@ -6001,58 +6001,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
         positionData.participantId = participantId;
       }
 
-      const position = await storage.upsertSailboatPosition(positionData);
+      const position = await storage.upsertStarshipPosition(positionData);
 
       // Mirror the zone onto the underlying note's category so the grouping
       // flows into downstream DLT modules and results.
-      if (sailboat.assignZoneAsCategory) {
+      if (starship.assignZoneAsCategory) {
         try {
-          const categoryId = await resolveSailboatZoneCategory(spaceId, sailboat, zone as SailboatZone);
+          const categoryId = await resolveStarshipZoneCategory(spaceId, starship, zone as StarshipZone);
           await storage.updateNote(resolvedNoteId, { manualCategoryId: categoryId, isManualOverride: true });
         } catch (catErr) {
-          console.error("Failed to assign sailboat zone category:", catErr);
+          console.error("Failed to assign starship zone category:", catErr);
         }
       }
 
-      void storage.recordPulseActivity(spaceId, "sailboat", position.participantId ?? null);
-      broadcastToSpace(spaceId, { type: "sailboat_position_updated", data: position });
+      void storage.recordPulseActivity(spaceId, "starship", position.participantId ?? null);
+      broadcastToSpace(spaceId, { type: "starship_position_updated", data: position });
 
       res.json(position);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: error.errors });
       }
-      console.error("Failed to update sailboat position:", error);
-      res.status(500).json({ error: "Failed to update sailboat position" });
+      console.error("Failed to update starship position:", error);
+      res.status(500).json({ error: "Failed to update starship position" });
     }
   });
 
-  // Remove a note from the sailboat (return it to the idea tray)
-  app.delete("/api/spaces/:spaceId/sailboat/positions/:noteId", createWorkspaceAccessMiddleware({ requireOpen: false }), async (req, res) => {
+  // Remove a note from the starship (return it to the idea tray)
+  app.delete("/api/spaces/:spaceId/starship/positions/:noteId", createWorkspaceAccessMiddleware({ requireOpen: false }), async (req, res) => {
     try {
       const spaceId = await resolveWorkspaceId(req.params.spaceId);
       if (!spaceId) {
         return res.status(404).json({ error: "Workspace not found" });
       }
 
-      const sailboat = await storage.getSailboat(spaceId);
-      if (!sailboat) {
+      const starship = await storage.getStarship(spaceId);
+      if (!starship) {
         return res.json({ success: false });
       }
 
-      const success = await storage.deleteSailboatPosition(sailboat.id, req.params.noteId);
+      const success = await storage.deleteStarshipPosition(starship.id, req.params.noteId);
       if (success) {
-        broadcastToSpace(spaceId, { type: "sailboat_position_removed", data: { noteId: req.params.noteId } });
+        broadcastToSpace(spaceId, { type: "starship_position_removed", data: { noteId: req.params.noteId } });
       }
       res.json({ success });
     } catch (error) {
-      console.error("Failed to remove sailboat position:", error);
-      res.status(500).json({ error: "Failed to remove sailboat position" });
+      console.error("Failed to remove starship position:", error);
+      res.status(500).json({ error: "Failed to remove starship position" });
     }
   });
 
-  // Lock a sailboat position for dragging
-  app.patch("/api/spaces/:spaceId/sailboat/positions/:id/lock", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
+  // Lock a starship position for dragging
+  app.patch("/api/spaces/:spaceId/starship/positions/:id/lock", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
     try {
       const spaceId = await resolveWorkspaceId(req.params.spaceId);
       if (!spaceId) {
@@ -6063,32 +6063,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!participantId) {
         return res.status(401).json({ error: "No participant session found" });
       }
-      const success = await storage.lockSailboatPosition(id, participantId);
+      const success = await storage.lockStarshipPosition(id, participantId);
       if (success) {
-        broadcastToSpace(spaceId, { type: "sailboat_position_locked", data: { positionId: id, lockedBy: participantId } });
+        broadcastToSpace(spaceId, { type: "starship_position_locked", data: { positionId: id, lockedBy: participantId } });
       }
       res.json({ success });
     } catch (error) {
-      console.error("Failed to lock sailboat position:", error);
+      console.error("Failed to lock starship position:", error);
       res.status(500).json({ error: "Failed to lock position" });
     }
   });
 
-  // Unlock a sailboat position
-  app.patch("/api/spaces/:spaceId/sailboat/positions/:id/unlock", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
+  // Unlock a starship position
+  app.patch("/api/spaces/:spaceId/starship/positions/:id/unlock", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
     try {
       const spaceId = await resolveWorkspaceId(req.params.spaceId);
       if (!spaceId) {
         return res.status(404).json({ error: "Workspace not found" });
       }
       const { id } = req.params;
-      const success = await storage.unlockSailboatPosition(id);
+      const success = await storage.unlockStarshipPosition(id);
       if (success) {
-        broadcastToSpace(spaceId, { type: "sailboat_position_unlocked", data: { positionId: id } });
+        broadcastToSpace(spaceId, { type: "starship_position_unlocked", data: { positionId: id } });
       }
       res.json({ success });
     } catch (error) {
-      console.error("Failed to unlock sailboat position:", error);
+      console.error("Failed to unlock starship position:", error);
       res.status(500).json({ error: "Failed to unlock position" });
     }
   });
@@ -7933,7 +7933,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'survey': 'Rate the ideas on the survey questions.',
         'priority-matrix': 'Position ideas on the priority matrix.',
         'staircase': 'Rate ideas on the staircase scale.',
-        'sailboat': 'Place ideas on the sailboat as goals, driving forces, or anchors.',
+        'starship': 'Plot ideas on the starship as propulsion, destinations, or black holes.',
         'results': 'View the results and insights from the session.',
       };
 

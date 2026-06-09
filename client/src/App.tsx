@@ -34,7 +34,7 @@ import Results from "@/pages/Results";
 import PublicResults from "@/pages/PublicResults";
 import PriorityMatrixParticipant from "@/pages/PriorityMatrixParticipant";
 import StaircaseParticipant from "@/pages/StaircaseParticipant";
-import SailboatParticipant from "@/pages/SailboatParticipant";
+import StarshipParticipant from "@/pages/StarshipParticipant";
 import MyProjects from "@/pages/MyProjects";
 import NotificationSettings from "@/pages/NotificationSettings";
 
@@ -84,7 +84,7 @@ const MarketplaceBoundary = withBoundary(Marketplace, "marketplace");
 const SurveyBoundary = withBoundary(Survey, "survey");
 const PriorityMatrixBoundary = withBoundary(PriorityMatrixParticipant, "priority-matrix");
 const StaircaseBoundary = withBoundary(StaircaseParticipant, "staircase");
-const SailboatBoundary = withBoundary(SailboatParticipant, "sailboat");
+const StarshipBoundary = withBoundary(StarshipParticipant, "starship");
 const ResultsBoundary = withBoundary(Results, "results");
 const PublicResultsBoundary = withBoundary(PublicResults, "public-results");
 const FacilitatorWorkspaceBoundary = withBoundary(FacilitatorWorkspace, "facilitator-workspace");
@@ -114,7 +114,7 @@ function Router() {
       <Route path="/o/:org/s/:space/survey" component={SurveyBoundary} />
       <Route path="/o/:org/s/:space/priority-matrix" component={PriorityMatrixBoundary} />
       <Route path="/o/:org/s/:space/staircase" component={StaircaseBoundary} />
-      <Route path="/o/:org/s/:space/sailboat" component={SailboatBoundary} />
+      <Route path="/o/:org/s/:space/starship" component={StarshipBoundary} />
       <Route path="/o/:org/s/:space/results" component={ResultsBoundary} />
       <Route path="/o/:org/s/:space/public-results" component={PublicResultsBoundary} />
       <Route path="/o/:org/s/:space/facilitate" component={FacilitatorWorkspaceBoundary} />

@@ -12,7 +12,7 @@ import { useLocation } from "wouter";
 
 type LifecycleStatus = "draft" | "open" | "closed" | "processing" | "archived";
 type SessionPhase = "ideation" | "ideate" | "voting" | "vote" | "ranking" | "rank" |
-  "marketplace" | "survey" | "results" | "priority-matrix" | "staircase" | "sailboat";
+  "marketplace" | "survey" | "results" | "priority-matrix" | "staircase" | "starship";
 
 interface WaitingRoomProps {
   orgName: string;
@@ -26,7 +26,7 @@ interface WaitingRoomProps {
 
 const isActiveStatus = (status: string): boolean => {
   const activeStatuses = ["open", "ideation", "ideate", "voting", "vote", "ranking", "rank",
-    "marketplace", "survey", "results", "priority-matrix", "staircase", "sailboat"];
+    "marketplace", "survey", "results", "priority-matrix", "staircase", "starship"];
   return activeStatuses.includes(status);
 };
 

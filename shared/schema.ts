@@ -514,18 +514,18 @@ export const MODULE_TYPES = [
   "priority-matrix",
   "survey",
   "staircase",
-  "sailboat"
+  "starship"
 ] as const;
 export type ModuleType = typeof MODULE_TYPES[number];
 
-// Sailboat envisioning zones. The zone a note is dropped into expresses how it
-// relates to the team's journey, following the classic "sailboat" retrospective /
-// envisioning exercise:
-//   - goal:   the destination/objective the boat is sailing toward (in front)
-//   - wind:   the forces pushing the boat forward (behind the sail)
-//   - anchor: the things holding the boat back (attached to the anchor)
-export const SAILBOAT_ZONES = ["goal", "wind", "anchor"] as const;
-export type SailboatZone = typeof SAILBOAT_ZONES[number];
+// Starship envisioning zones. The zone a note is dropped into expresses how it
+// relates to the team's journey. The starship travels left to right:
+//   - thrust:      the forces propelling the ship forward — rockets / warp
+//                  drives (upper-left)
+//   - destination: the worlds / planets the ship is heading toward (upper-right)
+//   - drag:        the forces dragging the ship down — black holes (bottom)
+export const STARSHIP_ZONES = ["thrust", "destination", "drag"] as const;
+export type StarshipZone = typeof STARSHIP_ZONES[number];
 
 // Module config schemas
 const ideationConfigSchema = z.object({
@@ -577,10 +577,10 @@ const staircaseConfigSchema = z.object({
   showDistribution: z.boolean().default(true)
 });
 
-const sailboatConfigSchema = z.object({
-  goalLabel: z.string().default("Goal / Destination"),
-  windLabel: z.string().default("Driving Forces"),
-  anchorLabel: z.string().default("Anchors / Holding Back"),
+const starshipConfigSchema = z.object({
+  destinationLabel: z.string().default("Destinations"),
+  thrustLabel: z.string().default("Propulsion"),
+  dragLabel: z.string().default("Black Holes"),
   collaborative: z.boolean().default(true),
   // When true, dropping a note into a zone tags the underlying idea with a
   // matching category (Goal / Driving Force / Anchor) so the grouping flows
@@ -596,7 +596,7 @@ export const moduleConfigSchemas = {
   "priority-matrix": priorityMatrixConfigSchema,
   "survey": surveyConfigSchema,
   "staircase": staircaseConfigSchema,
-  "sailboat": sailboatConfigSchema
+  "starship": starshipConfigSchema
 } satisfies Record<ModuleType, z.ZodTypeAny>;
 
 export type ModuleConfigMap = {
@@ -704,29 +704,29 @@ export const staircasePositions = pgTable("staircase_positions", {
   uniqueStaircaseNote: unique().on(table.staircaseId, table.noteId, table.moduleRunId),
 }));
 
-// Sailboat Envisioning: Configuration for the sailboat module. One row per
+// Starship Envisioning: Configuration for the starship module. One row per
 // space (mirrors priority matrices). Holds the editable labels for the three
-// zones drawn on the sailboat sketch.
-export const sailboats = pgTable("sailboats", {
+// zones drawn on the starship sketch.
+export const starships = pgTable("starships", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   spaceId: varchar("space_id").notNull().references(() => spaces.id),
   moduleRunId: varchar("module_run_id").references(() => workspaceModuleRuns.id, { onDelete: "cascade" }),
-  goalLabel: text("goal_label").notNull().default("Goal / Destination"), // In front of the boat
-  windLabel: text("wind_label").notNull().default("Driving Forces"), // Behind the sail (wind)
-  anchorLabel: text("anchor_label").notNull().default("Anchors / Holding Back"), // Attached to the anchor
+  destinationLabel: text("destination_label").notNull().default("Destinations"), // Worlds ahead (upper-right)
+  thrustLabel: text("thrust_label").notNull().default("Propulsion"), // Rockets / warp drives (upper-left)
+  dragLabel: text("drag_label").notNull().default("Black Holes"), // Forces dragging the ship down (bottom)
   assignZoneAsCategory: boolean("assign_zone_as_category").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-// Sailboat Positions: Track which zone each note was dropped into, plus the
+// Starship Positions: Track which zone each note was dropped into, plus the
 // normalized x/y coordinate so the visual placement on the sketch persists.
-export const sailboatPositions = pgTable("sailboat_positions", {
+export const starshipPositions = pgTable("starship_positions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  sailboatId: varchar("sailboat_id").notNull().references(() => sailboats.id, { onDelete: "cascade" }),
+  starshipId: varchar("starship_id").notNull().references(() => starships.id, { onDelete: "cascade" }),
   noteId: varchar("note_id").notNull().references(() => notes.id, { onDelete: "cascade" }),
   moduleRunId: varchar("module_run_id").references(() => workspaceModuleRuns.id, { onDelete: "cascade" }),
-  zone: text("zone").notNull().$type<SailboatZone>(), // 'goal' | 'wind' | 'anchor'
+  zone: text("zone").notNull().$type<StarshipZone>(), // 'thrust' | 'destination' | 'drag'
   xCoord: real("x_coord").notNull().default(0.5), // Normalized float (0.0 - 1.0)
   yCoord: real("y_coord").notNull().default(0.5), // Normalized float (0.0 - 1.0)
   lockedBy: varchar("locked_by").references(() => participants.id),
@@ -735,7 +735,7 @@ export const sailboatPositions = pgTable("sailboat_positions", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
-  uniqueSailboatNote: unique().on(table.sailboatId, table.noteId, table.moduleRunId),
+  uniqueStarshipNote: unique().on(table.starshipId, table.noteId, table.moduleRunId),
   checkXCoord: sql`CHECK (x_coord >= 0 AND x_coord <= 1)`,
   checkYCoord: sql`CHECK (y_coord >= 0 AND y_coord <= 1)`,
 }));
@@ -1018,8 +1018,8 @@ const moduleInsertVariants = [
     config: moduleConfigSchemas["staircase"]
   }),
   z.object({
-    moduleType: z.literal("sailboat" as const),
-    config: moduleConfigSchemas["sailboat"]
+    moduleType: z.literal("starship" as const),
+    config: moduleConfigSchemas["starship"]
   })
 ] as const;
 
@@ -1058,14 +1058,14 @@ export const insertStaircasePositionSchema = createInsertSchema(staircasePositio
   updatedAt: true,
 });
 
-export const insertSailboatSchema = createInsertSchema(sailboats).omit({
+export const insertStarshipSchema = createInsertSchema(starships).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export const insertSailboatPositionSchema = createInsertSchema(sailboatPositions, {
-  zone: z.enum(SAILBOAT_ZONES),
+export const insertStarshipPositionSchema = createInsertSchema(starshipPositions, {
+  zone: z.enum(STARSHIP_ZONES),
 }).omit({
   id: true,
   createdAt: true,
@@ -1187,11 +1187,11 @@ export type InsertStaircaseModule = z.infer<typeof insertStaircaseModuleSchema>;
 export type StaircasePosition = typeof staircasePositions.$inferSelect;
 export type InsertStaircasePosition = z.infer<typeof insertStaircasePositionSchema>;
 
-export type Sailboat = typeof sailboats.$inferSelect;
-export type InsertSailboat = z.infer<typeof insertSailboatSchema>;
+export type Starship = typeof starships.$inferSelect;
+export type InsertStarship = z.infer<typeof insertStarshipSchema>;
 
-export type SailboatPosition = typeof sailboatPositions.$inferSelect;
-export type InsertSailboatPosition = z.infer<typeof insertSailboatPositionSchema>;
+export type StarshipPosition = typeof starshipPositions.$inferSelect;
+export type InsertStarshipPosition = z.infer<typeof insertStarshipPositionSchema>;
 
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;

@@ -69,10 +69,10 @@ import {
   type InsertStaircaseModule,
   type StaircasePosition,
   type InsertStaircasePosition,
-  type Sailboat,
-  type InsertSailboat,
-  type SailboatPosition,
-  type InsertSailboatPosition,
+  type Starship,
+  type InsertStarship,
+  type StarshipPosition,
+  type InsertStarshipPosition,
   type Notification,
   type InsertNotification,
   type NotificationPreference,
@@ -123,8 +123,8 @@ import {
   priorityMatrixPositions,
   staircaseModules,
   staircasePositions,
-  sailboats,
-  sailboatPositions,
+  starships,
+  starshipPositions,
   notifications,
   notificationPreferences,
   clientErrors,
@@ -504,17 +504,17 @@ export interface IStorage {
   lockStaircasePosition(id: string, participantId: string): Promise<boolean>;
   unlockStaircasePosition(id: string): Promise<boolean>;
 
-  // Sailboat Envisioning
-  getSailboat(spaceId: string): Promise<Sailboat | undefined>;
-  createSailboat(sailboat: InsertSailboat): Promise<Sailboat>;
-  updateSailboat(id: string, sailboat: Partial<InsertSailboat>): Promise<Sailboat | undefined>;
+  // Starship Envisioning
+  getStarship(spaceId: string): Promise<Starship | undefined>;
+  createStarship(starship: InsertStarship): Promise<Starship>;
+  updateStarship(id: string, starship: Partial<InsertStarship>): Promise<Starship | undefined>;
 
-  // Sailboat Positions
-  getSailboatPositions(sailboatId: string): Promise<SailboatPosition[]>;
-  upsertSailboatPosition(position: InsertSailboatPosition): Promise<SailboatPosition>;
-  deleteSailboatPosition(sailboatId: string, noteId: string): Promise<boolean>;
-  lockSailboatPosition(id: string, participantId: string): Promise<boolean>;
-  unlockSailboatPosition(id: string): Promise<boolean>;
+  // Starship Positions
+  getStarshipPositions(starshipId: string): Promise<StarshipPosition[]>;
+  upsertStarshipPosition(position: InsertStarshipPosition): Promise<StarshipPosition>;
+  deleteStarshipPosition(starshipId: string, noteId: string): Promise<boolean>;
+  lockStarshipPosition(id: string, participantId: string): Promise<boolean>;
+  unlockStarshipPosition(id: string): Promise<boolean>;
 
   // Notifications (in-app)
   createNotification(notification: InsertNotification): Promise<Notification>;
@@ -1004,7 +1004,7 @@ export class DbStorage implements IStorage {
       safeDelete(db.delete(ideas).where(eq(ideas.spaceId, id))),
       safeDelete(db.delete(staircaseModules).where(eq(staircaseModules.spaceId, id))),
       safeDelete(db.delete(priorityMatrices).where(eq(priorityMatrices.spaceId, id))),
-      safeDelete(db.delete(sailboats).where(eq(sailboats.spaceId, id))),
+      safeDelete(db.delete(starships).where(eq(starships.spaceId, id))),
       safeDelete(db.delete(surveyQuestions).where(eq(surveyQuestions.spaceId, id))),
       safeDelete(db.delete(workspaceModuleRuns).where(eq(workspaceModuleRuns.spaceId, id))),
       safeDelete(db.delete(workspaceModules).where(eq(workspaceModules.spaceId, id))),
@@ -2830,42 +2830,42 @@ export class DbStorage implements IStorage {
     return result.rowCount ? result.rowCount > 0 : false;
   }
 
-  // Sailboat Envisioning
-  async getSailboat(spaceId: string): Promise<Sailboat | undefined> {
-    const [sailboat] = await db.select().from(sailboats)
-      .where(eq(sailboats.spaceId, spaceId))
-      .orderBy(desc(sailboats.createdAt))
+  // Starship Envisioning
+  async getStarship(spaceId: string): Promise<Starship | undefined> {
+    const [starship] = await db.select().from(starships)
+      .where(eq(starships.spaceId, spaceId))
+      .orderBy(desc(starships.createdAt))
       .limit(1);
-    return sailboat;
+    return starship;
   }
 
-  async createSailboat(sailboat: InsertSailboat): Promise<Sailboat> {
-    const [created] = await db.insert(sailboats).values(sailboat).returning();
+  async createStarship(starship: InsertStarship): Promise<Starship> {
+    const [created] = await db.insert(starships).values(starship).returning();
     return created;
   }
 
-  async updateSailboat(id: string, sailboat: Partial<InsertSailboat>): Promise<Sailboat | undefined> {
-    const [updated] = await db.update(sailboats)
-      .set({ ...sailboat, updatedAt: new Date() })
-      .where(eq(sailboats.id, id))
+  async updateStarship(id: string, starship: Partial<InsertStarship>): Promise<Starship | undefined> {
+    const [updated] = await db.update(starships)
+      .set({ ...starship, updatedAt: new Date() })
+      .where(eq(starships.id, id))
       .returning();
     return updated;
   }
 
-  // Sailboat Positions
-  async getSailboatPositions(sailboatId: string): Promise<SailboatPosition[]> {
-    return db.select().from(sailboatPositions)
-      .where(eq(sailboatPositions.sailboatId, sailboatId));
+  // Starship Positions
+  async getStarshipPositions(starshipId: string): Promise<StarshipPosition[]> {
+    return db.select().from(starshipPositions)
+      .where(eq(starshipPositions.starshipId, starshipId));
   }
 
-  async upsertSailboatPosition(position: InsertSailboatPosition): Promise<SailboatPosition> {
-    const [upsertedPosition] = await db.insert(sailboatPositions)
+  async upsertStarshipPosition(position: InsertStarshipPosition): Promise<StarshipPosition> {
+    const [upsertedPosition] = await db.insert(starshipPositions)
       .values(position)
       .onConflictDoUpdate({
         target: [
-          sailboatPositions.sailboatId,
-          sailboatPositions.noteId,
-          sailboatPositions.moduleRunId
+          starshipPositions.starshipId,
+          starshipPositions.noteId,
+          starshipPositions.moduleRunId
         ],
         set: {
           zone: sql`excluded.zone`,
@@ -2882,26 +2882,26 @@ export class DbStorage implements IStorage {
     return upsertedPosition;
   }
 
-  async deleteSailboatPosition(sailboatId: string, noteId: string): Promise<boolean> {
-    const result = await db.delete(sailboatPositions)
+  async deleteStarshipPosition(starshipId: string, noteId: string): Promise<boolean> {
+    const result = await db.delete(starshipPositions)
       .where(and(
-        eq(sailboatPositions.sailboatId, sailboatId),
-        eq(sailboatPositions.noteId, noteId)
+        eq(starshipPositions.starshipId, starshipId),
+        eq(starshipPositions.noteId, noteId)
       ));
     return result.rowCount ? result.rowCount > 0 : false;
   }
 
-  async lockSailboatPosition(id: string, participantId: string): Promise<boolean> {
-    const result = await db.update(sailboatPositions)
+  async lockStarshipPosition(id: string, participantId: string): Promise<boolean> {
+    const result = await db.update(starshipPositions)
       .set({ lockedBy: participantId, lockedAt: new Date() })
-      .where(eq(sailboatPositions.id, id));
+      .where(eq(starshipPositions.id, id));
     return result.rowCount ? result.rowCount > 0 : false;
   }
 
-  async unlockSailboatPosition(id: string): Promise<boolean> {
-    const result = await db.update(sailboatPositions)
+  async unlockStarshipPosition(id: string): Promise<boolean> {
+    const result = await db.update(starshipPositions)
       .set({ lockedBy: null, lockedAt: null })
-      .where(eq(sailboatPositions.id, id));
+      .where(eq(starshipPositions.id, id));
     return result.rowCount ? result.rowCount > 0 : false;
   }
 

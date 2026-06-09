@@ -526,7 +526,7 @@ function formatPhaseName(phase: string): string {
     'survey': 'Survey',
     'priority-matrix': 'Priority Matrix',
     'staircase': 'Staircase',
-    'sailboat': 'Sailboat',
+    'starship': 'Starship',
     'results': 'Results',
     'closed': 'Closed',
     'open': 'Open',
