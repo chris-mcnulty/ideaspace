@@ -2891,10 +2891,11 @@ export class DbStorage implements IStorage {
     const [upsertedPosition] = await db.insert(starshipPositions)
       .values(position)
       .onConflictDoUpdate({
+        // Matches the (starship_id, note_id) unique constraint. module_run_id is
+        // excluded so a NULL run doesn't defeat the conflict match.
         target: [
           starshipPositions.starshipId,
           starshipPositions.noteId,
-          starshipPositions.moduleRunId
         ],
         set: {
           zone: sql`excluded.zone`,

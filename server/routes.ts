@@ -6171,6 +6171,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (activeActivityId !== undefined) {
         if (activeActivityId === null) {
           updates.activeActivityId = null;
+          // Clearing the live pointer: close any activity still marked 'live'.
+          const all = await storage.getSignalActivities(deck.id);
+          await Promise.all(all
+            .filter((a) => a.status === "live")
+            .map((a) => storage.updateSignalActivity(a.id, { status: "closed" })));
         } else {
           const activity = await storage.getSignalActivity(activeActivityId);
           if (!activity || activity.deckId !== deck.id) {

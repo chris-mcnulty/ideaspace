@@ -541,7 +541,9 @@ export const signalWordCloudConfigSchema = z.object({
   normalizeCase: z.boolean().default(true),
 });
 export const signalMultipleChoiceConfigSchema = z.object({
-  options: z.array(z.object({ id: z.string(), label: z.string() })).default([]),
+  // id is optional on input — the server fills in any missing/blank ids in
+  // parseSignalConfig — but always present on the parsed output.
+  options: z.array(z.object({ id: z.string().optional().default(""), label: z.string() })).default([]),
   allowMultiple: z.boolean().default(false),
 });
 export const signalNumericConfigSchema = z.object({
@@ -607,8 +609,8 @@ const starshipConfigSchema = z.object({
   dragLabel: z.string().default("Black Holes"),
   collaborative: z.boolean().default(true),
   // When true, dropping a note into a zone tags the underlying idea with a
-  // matching category (Goal / Driving Force / Anchor) so the grouping flows
-  // into downstream DLT modules and results.
+  // matching category (Propulsion / Destination / Black Hole) so the grouping
+  // flows into downstream DLT modules and results.
   assignZoneAsCategory: z.boolean().default(true)
 });
 
@@ -765,7 +767,11 @@ export const starshipPositions = pgTable("starship_positions", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
-  uniqueStarshipNote: unique().on(table.starshipId, table.noteId, table.moduleRunId),
+  // One position per note per board. module_run_id is intentionally excluded:
+  // it is nullable and Postgres treats NULLs as distinct, which would defeat
+  // the upsert's ON CONFLICT and create duplicate positions. (Starship does not
+  // use per-run positions in v1.)
+  uniqueStarshipNote: unique().on(table.starshipId, table.noteId),
   checkXCoord: sql`CHECK (x_coord >= 0 AND x_coord <= 1)`,
   checkYCoord: sql`CHECK (y_coord >= 0 AND y_coord <= 1)`,
 }));

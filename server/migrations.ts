@@ -306,7 +306,7 @@ export async function ensureStarshipTables(): Promise<void> {
       participant_id varchar REFERENCES participants(id),
       created_at timestamp NOT NULL DEFAULT now(),
       updated_at timestamp NOT NULL DEFAULT now(),
-      CONSTRAINT starship_positions_unique_note UNIQUE (starship_id, note_id, module_run_id)
+      CONSTRAINT starship_positions_unique_note UNIQUE (starship_id, note_id)
     );
   `);
   await pool.query(`
