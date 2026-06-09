@@ -70,11 +70,13 @@ export default function SignalFacilitator({ spaceId, orgSlug }: { spaceId: strin
   const [editing, setEditing] = useState<SignalActivity | null>(null);
   const [creatingType, setCreatingType] = useState<SignalActivityType | null>(null);
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/signal`] });
+  const signalKey = [`/api/spaces/${spaceId}/signal`];
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: signalKey });
 
   const updateDeck = useMutation({
     mutationFn: (body: Record<string, unknown>) => apiRequest('PUT', `/api/spaces/${spaceId}/signal/deck`, body),
     onSuccess: invalidate,
+    onError: invalidate, // revert any optimistic update
   });
   const deleteActivity = useMutation({
     mutationFn: (id: string) => apiRequest('DELETE', `/api/spaces/${spaceId}/signal/activities/${id}`),
@@ -96,7 +98,18 @@ export default function SignalFacilitator({ spaceId, orgSlug }: { spaceId: strin
     onError: (e: any) => toast({ title: 'Could not push to ideas', description: e?.message, variant: 'destructive' }),
   });
 
-  const goLive = (id: string) => updateDeck.mutate({ activeActivityId: id, responsesOpen: true });
+  const goLive = (id: string) => {
+    // Optimistic update — flip activeActivityId immediately so the UI doesn't
+    // wait for the full server round-trip before showing the new question.
+    const prev = queryClient.getQueryData<{ deck: typeof deck; activities: typeof activities }>(signalKey);
+    if (prev?.deck) {
+      queryClient.setQueryData(signalKey, {
+        ...prev,
+        deck: { ...prev.deck, activeActivityId: id, responsesOpen: true },
+      });
+    }
+    updateDeck.mutate({ activeActivityId: id, responsesOpen: true });
+  };
   const liveIndex = active ? activities.findIndex((a) => a.id === active.id) : -1;
   const goPrev = () => { if (liveIndex > 0) goLive(activities[liveIndex - 1].id); };
   const goNext = () => { if (liveIndex >= 0 && liveIndex < activities.length - 1) goLive(activities[liveIndex + 1].id); };
