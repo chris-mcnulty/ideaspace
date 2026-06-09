@@ -2,8 +2,8 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 type SpaceLifecycleStatus = "draft" | "open" | "closed" | "processing" | "archived";
-type SessionPhase = "ideation" | "ideate" | "voting" | "vote" | "ranking" | "rank" | 
-  "marketplace" | "survey" | "results" | "priority-matrix" | "staircase";
+type SessionPhase = "ideation" | "ideate" | "voting" | "vote" | "ranking" | "rank" |
+  "marketplace" | "survey" | "results" | "priority-matrix" | "staircase" | "starship" | "signal";
 type Status = SpaceLifecycleStatus | SessionPhase;
 
 interface StatusBadgeProps {
@@ -29,6 +29,8 @@ export default function StatusBadge({ status, className }: StatusBadgeProps) {
     results: { label: "Results", color: "bg-emerald-500 text-white" },
     "priority-matrix": { label: "Priority Matrix", color: "bg-orange-500 text-white" },
     staircase: { label: "Staircase", color: "bg-teal-500 text-white" },
+    starship: { label: "Starship", color: "bg-sky-500 text-white" },
+    signal: { label: "Signal", color: "bg-fuchsia-500 text-white" },
   };
 
   const fallback = { label: String(status || "Unknown"), color: "bg-muted text-muted-foreground" };

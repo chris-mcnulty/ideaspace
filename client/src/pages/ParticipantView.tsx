@@ -206,6 +206,8 @@ export default function ParticipantView() {
             survey: `/o/${params.org}/s/${params.space}/survey`,
             'priority-matrix': `/o/${params.org}/s/${params.space}/priority-matrix`,
             staircase: `/o/${params.org}/s/${params.space}/staircase`,
+            starship: `/o/${params.org}/s/${params.space}/starship`,
+            signal: `/o/${params.org}/s/${params.space}/signal`,
             ideate: `/o/${params.org}/s/${params.space}/participate`,
             results: `/o/${params.org}/s/${params.space}/results`,
           };

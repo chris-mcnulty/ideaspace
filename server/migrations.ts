@@ -272,6 +272,105 @@ export async function ensureOrganisationApiKeysTable(): Promise<void> {
   `);
 }
 
+/**
+ * Ensure the starship envisioning module tables exist. Mirrors the priority
+ * matrix tables: one config row per space plus a positions table that records
+ * which zone (thrust/destination/drag) each note was dropped into and its
+ * normalized x/y coordinate on the canvas. Idempotent and safe to run on every startup.
+ */
+export async function ensureStarshipTables(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS starships (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      space_id varchar NOT NULL REFERENCES spaces(id),
+      module_run_id varchar REFERENCES workspace_module_runs(id) ON DELETE CASCADE,
+      destination_label text NOT NULL DEFAULT 'Destinations',
+      thrust_label text NOT NULL DEFAULT 'Propulsion',
+      drag_label text NOT NULL DEFAULT 'Black Holes',
+      assign_zone_as_category boolean NOT NULL DEFAULT true,
+      created_at timestamp NOT NULL DEFAULT now(),
+      updated_at timestamp NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS starship_positions (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      starship_id varchar NOT NULL REFERENCES starships(id) ON DELETE CASCADE,
+      note_id varchar NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+      module_run_id varchar REFERENCES workspace_module_runs(id) ON DELETE CASCADE,
+      zone text NOT NULL,
+      x_coord real NOT NULL DEFAULT 0.5 CHECK (x_coord >= 0 AND x_coord <= 1),
+      y_coord real NOT NULL DEFAULT 0.5 CHECK (y_coord >= 0 AND y_coord <= 1),
+      locked_by varchar REFERENCES participants(id),
+      locked_at timestamp,
+      participant_id varchar REFERENCES participants(id),
+      created_at timestamp NOT NULL DEFAULT now(),
+      updated_at timestamp NOT NULL DEFAULT now(),
+      CONSTRAINT starship_positions_unique_note UNIQUE (starship_id, note_id)
+    );
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_starship_positions_starship
+    ON starship_positions(starship_id);
+  `);
+}
+
+/**
+ * Ensure the Signal (live interaction) module tables exist: a deck per space, an
+ * ordered set of activities, and an append-only responses log. Idempotent and
+ * safe to run on every startup.
+ */
+export async function ensureSignalTables(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS signal_decks (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      space_id varchar NOT NULL REFERENCES spaces(id),
+      module_run_id varchar REFERENCES workspace_module_runs(id) ON DELETE CASCADE,
+      title text NOT NULL DEFAULT 'Live Session',
+      active_activity_id varchar,
+      responses_open boolean NOT NULL DEFAULT false,
+      created_at timestamp NOT NULL DEFAULT now(),
+      updated_at timestamp NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS signal_activities (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      deck_id varchar NOT NULL REFERENCES signal_decks(id) ON DELETE CASCADE,
+      space_id varchar NOT NULL REFERENCES spaces(id),
+      module_run_id varchar REFERENCES workspace_module_runs(id) ON DELETE CASCADE,
+      type text NOT NULL,
+      prompt text NOT NULL DEFAULT '',
+      order_index integer NOT NULL DEFAULT 0,
+      status text NOT NULL DEFAULT 'draft',
+      config jsonb NOT NULL DEFAULT '{}'::jsonb,
+      source_filter jsonb,
+      created_at timestamp NOT NULL DEFAULT now(),
+      updated_at timestamp NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_signal_activities_deck ON signal_activities(deck_id);
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS signal_responses (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      activity_id varchar NOT NULL REFERENCES signal_activities(id) ON DELETE CASCADE,
+      deck_id varchar NOT NULL REFERENCES signal_decks(id) ON DELETE CASCADE,
+      space_id varchar NOT NULL REFERENCES spaces(id),
+      module_run_id varchar REFERENCES workspace_module_runs(id) ON DELETE CASCADE,
+      participant_id varchar REFERENCES participants(id),
+      value_text text,
+      value_number real,
+      option_id text,
+      created_at timestamp NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_signal_responses_activity ON signal_responses(activity_id);
+  `);
+}
+
 export async function runStartupMigrations(): Promise<void> {
   await ensureNotificationsTable();
   await ensureClientErrorsTable();
@@ -279,4 +378,6 @@ export async function runStartupMigrations(): Promise<void> {
   await ensureParticipantsSpaceUserUniqueIndex();
   await ensureNotificationPreferencesTable();
   await ensureOrganisationApiKeysTable();
+  await ensureStarshipTables();
+  await ensureSignalTables();
 }

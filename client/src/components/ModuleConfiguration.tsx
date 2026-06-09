@@ -8,10 +8,10 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { 
-  Settings, Save, RotateCcw, GripVertical, 
-  FileText, Vote, TrendingUp, ShoppingCart, 
+  Settings, Save, RotateCcw, GripVertical,
+  FileText, Vote, TrendingUp, ShoppingCart,
   Grid3x3, ClipboardList, ChevronUp, ChevronDown,
-  Info, Lock
+  Info, Lock, Rocket, Radio
 } from 'lucide-react';
 import {
   DndContext,
@@ -137,6 +137,29 @@ const MODULE_METADATA = {
       allowDecimals: false,
       collaborative: true,
       showDistribution: true
+    }
+  },
+  'starship': {
+    name: 'Starship',
+    icon: Rocket,
+    description: 'Plot ideas as propulsion, destinations, or black holes on a starship',
+    configurable: true,
+    config: {
+      destinationLabel: 'Destinations',
+      thrustLabel: 'Propulsion',
+      dragLabel: 'Black Holes',
+      collaborative: true,
+      assignZoneAsCategory: true
+    }
+  },
+  'signal': {
+    name: 'Signal',
+    icon: Radio,
+    description: 'Live word clouds, polls, and numeric check-ins with a presenter screen',
+    configurable: true,
+    config: {
+      showResponseCounts: true,
+      allowAnonymous: true
     }
   }
 } as const satisfies Record<ModuleType, {

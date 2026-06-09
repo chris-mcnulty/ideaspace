@@ -520,6 +520,8 @@ export function NotificationPanel({ spaceId, participants, currentPhase }: Notif
                       <SelectItem value="ideation">Ideation</SelectItem>
                       <SelectItem value="priority-matrix">Priority Matrix</SelectItem>
                       <SelectItem value="staircase">Staircase</SelectItem>
+                      <SelectItem value="starship">Starship</SelectItem>
+                      <SelectItem value="signal">Signal</SelectItem>
                       <SelectItem value="survey">Survey</SelectItem>
                       <SelectItem value="voting">Pairwise Voting</SelectItem>
                       <SelectItem value="ranking">Stack Ranking</SelectItem>

@@ -69,6 +69,16 @@ import {
   type InsertStaircaseModule,
   type StaircasePosition,
   type InsertStaircasePosition,
+  type Starship,
+  type InsertStarship,
+  type StarshipPosition,
+  type InsertStarshipPosition,
+  type SignalDeck,
+  type InsertSignalDeck,
+  type SignalActivity,
+  type InsertSignalActivity,
+  type SignalResponse,
+  type InsertSignalResponse,
   type Notification,
   type InsertNotification,
   type NotificationPreference,
@@ -119,6 +129,11 @@ import {
   priorityMatrixPositions,
   staircaseModules,
   staircasePositions,
+  starships,
+  starshipPositions,
+  signalDecks,
+  signalActivities,
+  signalResponses,
   notifications,
   notificationPreferences,
   clientErrors,
@@ -497,6 +512,37 @@ export interface IStorage {
   upsertStaircasePosition(position: InsertStaircasePosition): Promise<StaircasePosition>;
   lockStaircasePosition(id: string, participantId: string): Promise<boolean>;
   unlockStaircasePosition(id: string): Promise<boolean>;
+
+  // Starship Envisioning
+  getStarship(spaceId: string): Promise<Starship | undefined>;
+  createStarship(starship: InsertStarship): Promise<Starship>;
+  updateStarship(id: string, starship: Partial<InsertStarship>): Promise<Starship | undefined>;
+
+  // Starship Positions
+  getStarshipPositions(starshipId: string): Promise<StarshipPosition[]>;
+  upsertStarshipPosition(position: InsertStarshipPosition): Promise<StarshipPosition>;
+  deleteStarshipPosition(starshipId: string, noteId: string): Promise<boolean>;
+  lockStarshipPosition(id: string, participantId: string): Promise<boolean>;
+  unlockStarshipPosition(id: string): Promise<boolean>;
+
+  // Signal (live interaction) — decks
+  getSignalDeck(spaceId: string): Promise<SignalDeck | undefined>;
+  createSignalDeck(deck: InsertSignalDeck): Promise<SignalDeck>;
+  updateSignalDeck(id: string, deck: Partial<InsertSignalDeck>): Promise<SignalDeck | undefined>;
+
+  // Signal — activities
+  getSignalActivities(deckId: string): Promise<SignalActivity[]>;
+  getSignalActivity(id: string): Promise<SignalActivity | undefined>;
+  createSignalActivity(activity: InsertSignalActivity): Promise<SignalActivity>;
+  updateSignalActivity(id: string, activity: Partial<InsertSignalActivity>): Promise<SignalActivity | undefined>;
+  deleteSignalActivity(id: string): Promise<boolean>;
+
+  // Signal — responses
+  getSignalResponses(activityId: string): Promise<SignalResponse[]>;
+  createSignalResponse(response: InsertSignalResponse): Promise<SignalResponse>;
+  deleteParticipantSignalResponses(activityId: string, participantId: string): Promise<number>;
+  countParticipantSignalResponses(activityId: string, participantId: string): Promise<number>;
+  deleteSignalResponsesByActivity(activityId: string): Promise<number>;
 
   // Notifications (in-app)
   createNotification(notification: InsertNotification): Promise<Notification>;
@@ -986,6 +1032,8 @@ export class DbStorage implements IStorage {
       safeDelete(db.delete(ideas).where(eq(ideas.spaceId, id))),
       safeDelete(db.delete(staircaseModules).where(eq(staircaseModules.spaceId, id))),
       safeDelete(db.delete(priorityMatrices).where(eq(priorityMatrices.spaceId, id))),
+      safeDelete(db.delete(starships).where(eq(starships.spaceId, id))),
+      safeDelete(db.delete(signalDecks).where(eq(signalDecks.spaceId, id))),
       safeDelete(db.delete(surveyQuestions).where(eq(surveyQuestions.spaceId, id))),
       safeDelete(db.delete(workspaceModuleRuns).where(eq(workspaceModuleRuns.spaceId, id))),
       safeDelete(db.delete(workspaceModules).where(eq(workspaceModules.spaceId, id))),
@@ -2809,6 +2857,171 @@ export class DbStorage implements IStorage {
       .set({ lockedBy: null, lockedAt: null })
       .where(eq(staircasePositions.id, id));
     return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Starship Envisioning
+  async getStarship(spaceId: string): Promise<Starship | undefined> {
+    const [starship] = await db.select().from(starships)
+      .where(eq(starships.spaceId, spaceId))
+      .orderBy(desc(starships.createdAt))
+      .limit(1);
+    return starship;
+  }
+
+  async createStarship(starship: InsertStarship): Promise<Starship> {
+    const [created] = await db.insert(starships).values(starship).returning();
+    return created;
+  }
+
+  async updateStarship(id: string, starship: Partial<InsertStarship>): Promise<Starship | undefined> {
+    const [updated] = await db.update(starships)
+      .set({ ...starship, updatedAt: new Date() })
+      .where(eq(starships.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Starship Positions
+  async getStarshipPositions(starshipId: string): Promise<StarshipPosition[]> {
+    return db.select().from(starshipPositions)
+      .where(eq(starshipPositions.starshipId, starshipId));
+  }
+
+  async upsertStarshipPosition(position: InsertStarshipPosition): Promise<StarshipPosition> {
+    const [upsertedPosition] = await db.insert(starshipPositions)
+      .values(position)
+      .onConflictDoUpdate({
+        // Matches the (starship_id, note_id) unique constraint. module_run_id is
+        // excluded so a NULL run doesn't defeat the conflict match.
+        target: [
+          starshipPositions.starshipId,
+          starshipPositions.noteId,
+        ],
+        set: {
+          zone: sql`excluded.zone`,
+          xCoord: sql`excluded.x_coord`,
+          yCoord: sql`excluded.y_coord`,
+          lockedBy: sql`excluded.locked_by`,
+          lockedAt: sql`excluded.locked_at`,
+          participantId: sql`excluded.participant_id`,
+          updatedAt: sql`now()`
+        }
+      })
+      .returning();
+
+    return upsertedPosition;
+  }
+
+  async deleteStarshipPosition(starshipId: string, noteId: string): Promise<boolean> {
+    const result = await db.delete(starshipPositions)
+      .where(and(
+        eq(starshipPositions.starshipId, starshipId),
+        eq(starshipPositions.noteId, noteId)
+      ));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async lockStarshipPosition(id: string, participantId: string): Promise<boolean> {
+    const result = await db.update(starshipPositions)
+      .set({ lockedBy: participantId, lockedAt: new Date() })
+      .where(eq(starshipPositions.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async unlockStarshipPosition(id: string): Promise<boolean> {
+    const result = await db.update(starshipPositions)
+      .set({ lockedBy: null, lockedAt: null })
+      .where(eq(starshipPositions.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Signal (live interaction) — decks
+  async getSignalDeck(spaceId: string): Promise<SignalDeck | undefined> {
+    const [deck] = await db.select().from(signalDecks)
+      .where(eq(signalDecks.spaceId, spaceId))
+      .orderBy(desc(signalDecks.createdAt))
+      .limit(1);
+    return deck;
+  }
+
+  async createSignalDeck(deck: InsertSignalDeck): Promise<SignalDeck> {
+    const [created] = await db.insert(signalDecks).values(deck).returning();
+    return created;
+  }
+
+  async updateSignalDeck(id: string, deck: Partial<InsertSignalDeck>): Promise<SignalDeck | undefined> {
+    const [updated] = await db.update(signalDecks)
+      .set({ ...deck, updatedAt: new Date() })
+      .where(eq(signalDecks.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Signal — activities
+  async getSignalActivities(deckId: string): Promise<SignalActivity[]> {
+    return db.select().from(signalActivities)
+      .where(eq(signalActivities.deckId, deckId))
+      .orderBy(signalActivities.orderIndex);
+  }
+
+  async getSignalActivity(id: string): Promise<SignalActivity | undefined> {
+    const [activity] = await db.select().from(signalActivities)
+      .where(eq(signalActivities.id, id))
+      .limit(1);
+    return activity;
+  }
+
+  async createSignalActivity(activity: InsertSignalActivity): Promise<SignalActivity> {
+    const [created] = await db.insert(signalActivities).values(activity).returning();
+    return created;
+  }
+
+  async updateSignalActivity(id: string, activity: Partial<InsertSignalActivity>): Promise<SignalActivity | undefined> {
+    const [updated] = await db.update(signalActivities)
+      .set({ ...activity, updatedAt: new Date() })
+      .where(eq(signalActivities.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteSignalActivity(id: string): Promise<boolean> {
+    const result = await db.delete(signalActivities).where(eq(signalActivities.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Signal — responses
+  async getSignalResponses(activityId: string): Promise<SignalResponse[]> {
+    return db.select().from(signalResponses)
+      .where(eq(signalResponses.activityId, activityId))
+      .orderBy(signalResponses.createdAt);
+  }
+
+  async createSignalResponse(response: InsertSignalResponse): Promise<SignalResponse> {
+    const [created] = await db.insert(signalResponses).values(response).returning();
+    return created;
+  }
+
+  async deleteParticipantSignalResponses(activityId: string, participantId: string): Promise<number> {
+    const result = await db.delete(signalResponses)
+      .where(and(
+        eq(signalResponses.activityId, activityId),
+        eq(signalResponses.participantId, participantId)
+      ));
+    return result.rowCount ?? 0;
+  }
+
+  async countParticipantSignalResponses(activityId: string, participantId: string): Promise<number> {
+    const rows = await db.select({ id: signalResponses.id }).from(signalResponses)
+      .where(and(
+        eq(signalResponses.activityId, activityId),
+        eq(signalResponses.participantId, participantId)
+      ));
+    return rows.length;
+  }
+
+  async deleteSignalResponsesByActivity(activityId: string): Promise<number> {
+    const result = await db.delete(signalResponses).where(eq(signalResponses.activityId, activityId));
+    return result.rowCount ?? 0;
   }
 
   // Notifications (in-app)
