@@ -3,7 +3,7 @@ import { Link, useSearch, useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Users, StickyNote, ArrowRight, Plus, FolderKanban, FolderPlus, ChevronDown, ChevronRight, Building2, User, Archive, ArchiveRestore, UserCheck, UserX } from "lucide-react";
+import { Users, StickyNote, ArrowRight, Plus, FolderKanban, FolderPlus, ChevronDown, ChevronRight, Building2, User, Archive, ArchiveRestore, UserCheck, UserX, Copy } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
@@ -16,6 +16,7 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { NewWorkspaceDialog } from "@/components/NewWorkspaceDialog";
 import { NewProjectDialog } from "@/components/NewProjectDialog";
+import { DuplicateWorkspaceModal } from "@/components/DuplicateWorkspaceModal";
 import { SynozurAppSwitcher } from "@/components/SynozurAppSwitcher";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -95,6 +96,11 @@ export default function FacilitatorDashboard() {
     orgId: string;
     orgName: string;
   }>({ open: false, orgId: "", orgName: "" });
+  const [duplicateModal, setDuplicateModal] = useState<{
+    open: boolean;
+    workspaceId: string;
+    workspaceName: string;
+  }>({ open: false, workspaceId: "", workspaceName: "" });
 
   useEffect(() => {
     document.title = "Nebula - Dashboard | The Synozur Alliance";
@@ -617,6 +623,21 @@ export default function FacilitatorDashboard() {
                                     </TooltipContent>
                                   </Tooltip>
 
+                                  {/* Duplicate workspace */}
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="icon"
+                                        variant="outline"
+                                        onClick={() => setDuplicateModal({ open: true, workspaceId: workspace.id, workspaceName: workspace.name })}
+                                        data-testid={`button-duplicate-${workspace.id}`}
+                                      >
+                                        <Copy className="h-4 w-4 text-muted-foreground" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Duplicate workspace</TooltipContent>
+                                  </Tooltip>
+
                                   {/* Archive / restore — admins only */}
                                   {(user.role === "global_admin" || user.role === "company_admin") && (
                                     <Tooltip>
@@ -666,6 +687,13 @@ export default function FacilitatorDashboard() {
           queryClient.invalidateQueries({ queryKey: ["/api/my-workspaces"] });
           queryClient.invalidateQueries({ queryKey: ["/api/my-organizations"] });
         }}
+      />
+
+      <DuplicateWorkspaceModal
+        open={duplicateModal.open}
+        onOpenChange={(open) => setDuplicateModal((s) => ({ ...s, open }))}
+        workspaceId={duplicateModal.workspaceId}
+        workspaceName={duplicateModal.workspaceName}
       />
     </div>
   );

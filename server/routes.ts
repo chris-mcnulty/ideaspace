@@ -2132,6 +2132,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Duplicate a workspace (structure-only or full copy with responses)
+  app.post("/api/spaces/:id/duplicate", requireAuth, async (req, res) => {
+    try {
+      const currentUser = req.user as User;
+      const { id } = req.params;
+
+      const workspaceId = await resolveWorkspaceId(id);
+      if (!workspaceId) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      const workspace = await storage.getSpace(workspaceId);
+      if (!workspace) {
+        return res.status(404).json({ error: "Workspace not found" });
+      }
+
+      // Validate request body
+      const { name, mode } = z.object({
+        name: z.string().min(1, "Name is required").max(200),
+        mode: z.enum(["structure_only", "full_copy"]),
+      }).parse(req.body);
+
+      // Authorization: global_admin, company_admin (same org), or assigned facilitator
+      let authorized = false;
+      if (currentUser.role === "global_admin") {
+        authorized = true;
+      } else if (currentUser.role === "company_admin" && currentUser.organizationId === workspace.organizationId) {
+        authorized = true;
+      } else {
+        const facilitators = await storage.getSpaceFacilitatorsBySpace(workspaceId);
+        authorized = facilitators.some(f => f.userId === currentUser.id);
+      }
+
+      if (!authorized) {
+        return res.status(403).json({ error: "You do not have permission to duplicate this workspace" });
+      }
+
+      const newSpace = await storage.duplicateWorkspace(workspaceId, name, mode, currentUser.id);
+
+      // Ensure the duplicating user is assigned as a facilitator of the new workspace
+      // so it appears in their /api/my-workspaces list regardless of their role
+      if (currentUser.id) {
+        try {
+          await storage.createSpaceFacilitator({ spaceId: newSpace.id, userId: currentUser.id });
+        } catch {
+          // Ignore duplicate-key errors; the assignment is best-effort
+        }
+      }
+
+      res.status(201).json(newSpace);
+    } catch (error: any) {
+      if (error?.name === "ZodError") {
+        return res.status(400).json({ error: "Invalid request", details: error.errors });
+      }
+      console.error("[duplicateWorkspace] Error:", error);
+      res.status(500).json({ error: "Failed to duplicate workspace" });
+    }
+  });
+
   // Protected: Navigate all participants to a specific phase
   app.post("/api/spaces/:id/navigate-participants", requireFacilitator, async (req, res) => {
     try {

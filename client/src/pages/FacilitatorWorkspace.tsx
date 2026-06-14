@@ -94,6 +94,7 @@ import SignalFacilitator from "@/components/SignalFacilitator";
 import { NotificationPanel } from "@/components/NotificationPanel";
 import { CountdownTimer } from "@/components/CountdownTimer";
 import { isPhaseActive } from "@/lib/phaseUtils";
+import { DuplicateWorkspaceModal } from "@/components/DuplicateWorkspaceModal";
 
 // Comprehensive Results Table Component
 function ComprehensiveResultsTable({
@@ -318,6 +319,7 @@ export default function FacilitatorWorkspace() {
   const [newNoteCategoryId, setNewNoteCategoryId] = useState<string | null>(null);
   const [mergedNoteContent, setMergedNoteContent] = useState("");
   const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
+  const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
   const [rewriteDialogNote, setRewriteDialogNote] = useState<Note | null>(null);
   const [rewriteVariations, setRewriteVariations] = useState<Array<{ version: number; content: string }>>([]);
   const [editDialogNote, setEditDialogNote] = useState<Note | null>(null);
@@ -2844,6 +2846,14 @@ export default function FacilitatorWorkspace() {
                 </Button>
               )}
               <Button
+                variant="outline"
+                onClick={() => setIsDuplicateModalOpen(true)}
+                data-testid="button-duplicate-workspace"
+              >
+                <Copy className="mr-2 h-4 w-4" />
+                Duplicate
+              </Button>
+              <Button
                 variant="secondary"
                 onClick={() => setIsTemplateDialogOpen(true)}
                 data-testid="button-save-as-template"
@@ -3112,6 +3122,13 @@ export default function FacilitatorWorkspace() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DuplicateWorkspaceModal
+        open={isDuplicateModalOpen}
+        onOpenChange={setIsDuplicateModalOpen}
+        workspaceId={space.id}
+        workspaceName={space.name}
+      />
     </div>
   );
 }

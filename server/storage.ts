@@ -566,6 +566,9 @@ export interface IStorage {
   getOrganisationApiKeysByOrg(organisationId: string): Promise<OrganisationApiKey[]>;
   revokeOrganisationApiKey(id: string): Promise<boolean>;
   touchOrganisationApiKey(id: string): Promise<void>;
+
+  // Workspace Duplication
+  duplicateWorkspace(sourceId: string, name: string, mode: 'structure_only' | 'full_copy', createdBy?: string): Promise<Space>;
 }
 
 export class DbStorage implements IStorage {
@@ -1309,6 +1312,339 @@ export class DbStorage implements IStorage {
         documentId: doc.id,
         spaceId: newSpace.id,
       });
+    }
+
+    return newSpace;
+  }
+
+  /** Generate a unique nnnn-nnnn workspace code without importing workspace-code.ts (avoids circular dep). */
+  private async _generateWorkspaceCode(): Promise<string> {
+    for (let i = 0; i < 100; i++) {
+      const s1 = Math.floor(1000 + Math.random() * 9000).toString();
+      const s2 = Math.floor(1000 + Math.random() * 9000).toString();
+      const code = `${s1}-${s2}`;
+      const existing = await this.getSpaceByCode(code);
+      if (!existing) return code;
+    }
+    throw new Error("Failed to generate unique workspace code after multiple attempts");
+  }
+
+  async duplicateWorkspace(sourceId: string, name: string, mode: 'structure_only' | 'full_copy', createdBy?: string): Promise<Space> {
+    const source = await this.getSpace(sourceId);
+    if (!source) throw new Error("Source workspace not found");
+
+    const newCode = await this._generateWorkspaceCode();
+
+    // Create the new workspace (draft status, no phase timestamps)
+    const newSpace = await this.createSpace({
+      organizationId: source.organizationId || undefined,
+      projectId: source.projectId || undefined,
+      name,
+      purpose: source.purpose,
+      code: newCode,
+      status: 'draft',
+      hidden: false,
+      guestAllowed: source.guestAllowed,
+      icon: source.icon,
+      sessionMode: source.sessionMode,
+      pairwiseScope: source.pairwiseScope,
+      marketplaceCoinBudget: source.marketplaceCoinBudget,
+      aiResultsEnabled: source.aiResultsEnabled,
+      resultsPublicAfterClose: source.resultsPublicAfterClose,
+      isTemplate: false,
+      templateScope: null,
+      createdBy: createdBy || source.createdBy || undefined,
+    } as InsertSpace);
+
+    // Clone workspace modules (config only, no timestamps)
+    const sourceModules = await this.getWorkspaceModules(sourceId);
+    for (const mod of sourceModules) {
+      await this.createWorkspaceModule({
+        spaceId: newSpace.id,
+        moduleType: mod.moduleType,
+        enabled: mod.enabled,
+        orderIndex: mod.orderIndex,
+        config: mod.config,
+      });
+    }
+
+    // Clone categories (build old->new ID map)
+    const sourceCategories = await this.getCategoriesBySpace(sourceId);
+    const categoryIdMap = new Map<string, string>();
+    for (const cat of sourceCategories) {
+      const newCat = await this.createCategory({
+        spaceId: newSpace.id,
+        name: cat.name,
+        color: cat.color,
+      });
+      categoryIdMap.set(cat.id, newCat.id);
+    }
+
+    // Re-link knowledge-base documents (same pattern as cloneWorkspaceFromTemplate)
+    const workspaceScopedDocs = await db.select().from(knowledgeBaseDocuments).where(
+      eq(knowledgeBaseDocuments.spaceId, sourceId)
+    );
+    for (const doc of workspaceScopedDocs) {
+      if (doc.scope === 'workspace') {
+        await db.update(knowledgeBaseDocuments)
+          .set({ scope: 'multi_workspace', spaceId: null, organizationId: source.organizationId })
+          .where(eq(knowledgeBaseDocuments.id, doc.id));
+        await this.createDocumentWorkspaceAccess({ documentId: doc.id, spaceId: sourceId });
+      }
+      await this.createDocumentWorkspaceAccess({ documentId: doc.id, spaceId: newSpace.id });
+    }
+    // Also carry over any multi_workspace links
+    const existingAccesses = await db.select().from(documentWorkspaceAccess).where(
+      eq(documentWorkspaceAccess.spaceId, sourceId)
+    );
+    const alreadyLinkedDocIds = new Set(workspaceScopedDocs.map(d => d.id));
+    for (const access of existingAccesses) {
+      if (!alreadyLinkedDocIds.has(access.documentId)) {
+        await this.createDocumentWorkspaceAccess({ documentId: access.documentId, spaceId: newSpace.id });
+      }
+    }
+
+    // Clone Signal deck + activities (structure, no responses)
+    const sourceDeck = await this.getSignalDeck(sourceId);
+    let newDeck: SignalDeck | null = null;
+    const activityIdMap = new Map<string, string>();
+    if (sourceDeck) {
+      newDeck = await this.createSignalDeck({
+        spaceId: newSpace.id,
+        title: sourceDeck.title,
+        responsesOpen: false,
+      });
+      const activities = await this.getSignalActivities(sourceDeck.id);
+      for (const act of activities) {
+        const newAct = await this.createSignalActivity({
+          deckId: newDeck.id,
+          spaceId: newSpace.id,
+          type: act.type,
+          prompt: act.prompt,
+          orderIndex: act.orderIndex,
+          status: 'draft',
+          config: act.config,
+          sourceFilter: act.sourceFilter as any,
+        });
+        activityIdMap.set(act.id, newAct.id);
+      }
+    }
+
+    // Clone Priority Matrix config (no positions)
+    const sourceMatrix = await this.getPriorityMatrix(sourceId);
+    let newMatrix: PriorityMatrix | null = null;
+    if (sourceMatrix) {
+      newMatrix = await this.createPriorityMatrix({
+        spaceId: newSpace.id,
+        xAxisLabel: sourceMatrix.xAxisLabel,
+        yAxisLabel: sourceMatrix.yAxisLabel,
+        xMin: sourceMatrix.xMin,
+        xMax: sourceMatrix.xMax,
+        yMin: sourceMatrix.yMin,
+        yMax: sourceMatrix.yMax,
+        snapToGrid: sourceMatrix.snapToGrid,
+        gridSize: sourceMatrix.gridSize ?? undefined,
+      });
+    }
+
+    // Clone Staircase config (no positions)
+    const sourceStaircase = await this.getStaircaseModule(sourceId);
+    let newStaircase: StaircaseModule | null = null;
+    if (sourceStaircase) {
+      newStaircase = await this.createStaircaseModule({
+        spaceId: newSpace.id,
+        minScore: sourceStaircase.minScore,
+        maxScore: sourceStaircase.maxScore,
+        stepCount: sourceStaircase.stepCount,
+        allowDecimals: sourceStaircase.allowDecimals,
+        minLabel: sourceStaircase.minLabel,
+        maxLabel: sourceStaircase.maxLabel,
+        showDistribution: sourceStaircase.showDistribution,
+      });
+    }
+
+    // Clone Starship config (no positions)
+    const sourceStarship = await this.getStarship(sourceId);
+    let newStarship: Starship | null = null;
+    if (sourceStarship) {
+      newStarship = await this.createStarship({
+        spaceId: newSpace.id,
+        destinationLabel: sourceStarship.destinationLabel,
+        thrustLabel: sourceStarship.thrustLabel,
+        dragLabel: sourceStarship.dragLabel,
+        assignZoneAsCategory: sourceStarship.assignZoneAsCategory,
+      });
+    }
+
+    // Structure-only mode complete
+    if (mode === 'structure_only') {
+      return newSpace;
+    }
+
+    // ── FULL COPY MODE ──────────────────────────────────────────────────────
+    // Create a single placeholder participant for all imported content
+    const importedParticipant = await this.createParticipant({
+      spaceId: newSpace.id,
+      displayName: "Imported",
+      isGuest: true,
+    });
+
+    // Clone Ideas (preserve category assignments)
+    const sourceIdeas = await this.getIdeasBySpace(sourceId);
+    const ideaIdMap = new Map<string, string>();
+    for (const idea of sourceIdeas) {
+      const newCategoryId = idea.manualCategoryId ? (categoryIdMap.get(idea.manualCategoryId) ?? null) : null;
+      const newIdea = await this.createIdea({
+        spaceId: newSpace.id,
+        content: idea.content,
+        contentPlain: idea.contentPlain ?? undefined,
+        contentType: idea.contentType,
+        sourceType: idea.sourceType,
+        assetUrl: idea.assetUrl ?? undefined,
+        assetType: idea.assetType ?? undefined,
+        thumbnailUrl: idea.thumbnailUrl ?? undefined,
+        assetMetadata: idea.assetMetadata as any,
+        createdByParticipantId: importedParticipant.id,
+        manualCategoryId: newCategoryId ?? undefined,
+        isManualOverride: idea.isManualOverride,
+        showOnIdeationBoard: idea.showOnIdeationBoard,
+        metadata: idea.metadata as any,
+      });
+      ideaIdMap.set(idea.id, newIdea.id);
+    }
+
+    // Clone Notes (re-map category + participant + sourceIdea)
+    const sourceNotes = await this.getNotesBySpace(sourceId);
+    const noteIdMap = new Map<string, string>();
+    for (const note of sourceNotes) {
+      const newCategoryId = note.manualCategoryId ? (categoryIdMap.get(note.manualCategoryId) ?? null) : null;
+      const newSourceIdeaId = note.sourceIdeaId ? (ideaIdMap.get(note.sourceIdeaId) ?? null) : null;
+      const newNote = await this.createNote({
+        spaceId: newSpace.id,
+        participantId: importedParticipant.id,
+        content: note.content,
+        manualCategoryId: newCategoryId ?? undefined,
+        isManualOverride: note.isManualOverride,
+        visibleInRanking: note.visibleInRanking,
+        visibleInMarketplace: note.visibleInMarketplace,
+        isSeed: note.isSeed,
+        sourceIdeaId: newSourceIdeaId ?? undefined,
+        aiGenerated: note.aiGenerated,
+      });
+      noteIdMap.set(note.id, newNote.id);
+    }
+
+    // Clone Votes
+    const sourceVotes = await db.select().from(votes).where(eq(votes.spaceId, sourceId));
+    for (const vote of sourceVotes) {
+      const newWinnerId = noteIdMap.get(vote.winnerNoteId);
+      const newLoserId = noteIdMap.get(vote.loserNoteId);
+      if (newWinnerId && newLoserId) {
+        await this.createVote({
+          spaceId: newSpace.id,
+          participantId: importedParticipant.id,
+          winnerNoteId: newWinnerId,
+          loserNoteId: newLoserId,
+        });
+      }
+    }
+
+    // Clone Rankings
+    const sourceRankings = await this.getRankingsBySpace(sourceId);
+    for (const ranking of sourceRankings) {
+      const newNoteId = noteIdMap.get(ranking.noteId);
+      if (newNoteId) {
+        await this.createRanking({
+          spaceId: newSpace.id,
+          participantId: importedParticipant.id,
+          noteId: newNoteId,
+          rank: ranking.rank,
+        });
+      }
+    }
+
+    // Clone Marketplace Allocations
+    const sourceAllocations = await this.getMarketplaceAllocationsBySpace(sourceId);
+    for (const alloc of sourceAllocations) {
+      const newNoteId = noteIdMap.get(alloc.noteId);
+      if (newNoteId) {
+        await this.createMarketplaceAllocation({
+          spaceId: newSpace.id,
+          participantId: importedParticipant.id,
+          noteId: newNoteId,
+          coinsAllocated: alloc.coinsAllocated,
+        });
+      }
+    }
+
+    // Clone Priority Matrix Positions
+    if (newMatrix && sourceMatrix) {
+      const positions = await this.getPriorityMatrixPositions(sourceMatrix.id);
+      for (const pos of positions) {
+        const newNoteId = noteIdMap.get(pos.noteId);
+        if (newNoteId) {
+          await this.upsertPriorityMatrixPosition({
+            matrixId: newMatrix.id,
+            noteId: newNoteId,
+            xCoord: pos.xCoord,
+            yCoord: pos.yCoord,
+            participantId: importedParticipant.id,
+          });
+        }
+      }
+    }
+
+    // Clone Staircase Positions
+    if (newStaircase && sourceStaircase) {
+      const positions = await this.getStaircasePositions(sourceStaircase.id);
+      for (const pos of positions) {
+        const newNoteId = noteIdMap.get(pos.noteId);
+        if (newNoteId) {
+          await this.upsertStaircasePosition({
+            staircaseId: newStaircase.id,
+            noteId: newNoteId,
+            score: pos.score,
+            participantId: importedParticipant.id,
+            slotOffset: pos.slotOffset ?? 0,
+          });
+        }
+      }
+    }
+
+    // Clone Starship Positions
+    if (newStarship && sourceStarship) {
+      const positions = await this.getStarshipPositions(sourceStarship.id);
+      for (const pos of positions) {
+        const newNoteId = noteIdMap.get(pos.noteId);
+        if (newNoteId) {
+          await this.upsertStarshipPosition({
+            starshipId: newStarship.id,
+            noteId: newNoteId,
+            zone: pos.zone,
+            xCoord: pos.xCoord,
+            yCoord: pos.yCoord,
+            participantId: importedParticipant.id,
+          });
+        }
+      }
+    }
+
+    // Clone Signal Responses
+    if (newDeck && sourceDeck) {
+      for (const [oldActivityId, newActivityId] of activityIdMap.entries()) {
+        const responses = await this.getSignalResponses(oldActivityId);
+        for (const resp of responses) {
+          await this.createSignalResponse({
+            activityId: newActivityId,
+            deckId: newDeck.id,
+            spaceId: newSpace.id,
+            participantId: importedParticipant.id,
+            valueText: resp.valueText ?? undefined,
+            valueNumber: resp.valueNumber ?? undefined,
+            optionId: resp.optionId ?? undefined,
+          });
+        }
+      }
     }
 
     return newSpace;
