@@ -543,6 +543,7 @@ export interface IStorage {
   deleteParticipantSignalResponses(activityId: string, participantId: string): Promise<number>;
   countParticipantSignalResponses(activityId: string, participantId: string): Promise<number>;
   deleteSignalResponsesByActivity(activityId: string): Promise<number>;
+  deleteSignalResponse(id: string, activityId: string): Promise<boolean>;
 
   // Notifications (in-app)
   createNotification(notification: InsertNotification): Promise<Notification>;
@@ -3022,6 +3023,13 @@ export class DbStorage implements IStorage {
   async deleteSignalResponsesByActivity(activityId: string): Promise<number> {
     const result = await db.delete(signalResponses).where(eq(signalResponses.activityId, activityId));
     return result.rowCount ?? 0;
+  }
+
+  async deleteSignalResponse(id: string, activityId: string): Promise<boolean> {
+    const result = await db.delete(signalResponses).where(
+      and(eq(signalResponses.id, id), eq(signalResponses.activityId, activityId))
+    );
+    return (result.rowCount ?? 0) > 0;
   }
 
   // Notifications (in-app)

@@ -6460,6 +6460,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete a single response (facilitator-only).
+  app.delete("/api/spaces/:spaceId/signal/activities/:activityId/responses/:responseId", requireFacilitator, async (req, res) => {
+    try {
+      const spaceId = await requireSpaceFacilitator(req, res);
+      if (!spaceId) return;
+
+      const activity = await storage.getSignalActivity(req.params.activityId);
+      if (!activity || activity.spaceId !== spaceId) {
+        return res.status(404).json({ error: "Activity not found" });
+      }
+
+      const deleted = await storage.deleteSignalResponse(req.params.responseId, activity.id);
+      if (!deleted) return res.status(404).json({ error: "Response not found" });
+
+      broadcastToSpace(spaceId, { type: "signal_response_added", data: { activityId: activity.id } });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to delete signal response:", error);
+      res.status(500).json({ error: "Failed to delete response" });
+    }
+  });
+
+  // Export word-cloud responses as CSV (facilitator-only).
+  app.get("/api/spaces/:spaceId/signal/activities/:activityId/responses/export", requireFacilitator, async (req, res) => {
+    try {
+      const spaceId = await requireSpaceFacilitator(req, res);
+      if (!spaceId) return;
+
+      const activity = await storage.getSignalActivity(req.params.activityId);
+      if (!activity || activity.spaceId !== spaceId) {
+        return res.status(404).json({ error: "Activity not found" });
+      }
+      if (activity.type !== "word_cloud") {
+        return res.status(400).json({ error: "CSV export is only available for word cloud activities" });
+      }
+
+      const responses = await storage.getSignalResponses(activity.id);
+
+      // Aggregate: word → { count, first_submitted_at }
+      const agg = new Map<string, { count: number; firstAt: string }>();
+      for (const r of responses) {
+        const w = (r.valueText ?? "").trim();
+        if (!w) continue;
+        const existing = agg.get(w);
+        const createdAt = r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString();
+        if (!existing) {
+          agg.set(w, { count: 1, firstAt: createdAt });
+        } else {
+          existing.count += 1;
+          if (createdAt < existing.firstAt) existing.firstAt = createdAt;
+        }
+      }
+
+      const safeTitle = (activity.prompt ?? "wordcloud").replace(/[^a-z0-9_-]/gi, "_").slice(0, 50);
+      const filename = `signal-wordcloud-${safeTitle}.csv`;
+
+      const rows = ["word,count,submitted_at"];
+      for (const [word, { count, firstAt }] of Array.from(agg.entries()).sort((a, b) => b[1].count - a[1].count)) {
+        const escaped = `"${word.replace(/"/g, '""')}"`;
+        rows.push(`${escaped},${count},${firstAt}`);
+      }
+
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(rows.join("\n"));
+    } catch (error) {
+      console.error("Failed to export signal responses:", error);
+      res.status(500).json({ error: "Failed to export responses" });
+    }
+  });
+
   // Reset (clear) all responses for an activity.
   app.post("/api/spaces/:spaceId/signal/activities/:id/reset", requireFacilitator, async (req, res) => {
     try {

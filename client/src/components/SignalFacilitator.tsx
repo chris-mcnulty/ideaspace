@@ -17,7 +17,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import {
   Radio, Plus, Trash2, Play, RotateCcw, ExternalLink, ChevronLeft, ChevronRight,
-  Cloud, BarChart3, Hash, Pencil, Loader2,
+  Cloud, BarChart3, Hash, Pencil, Loader2, Download, X,
 } from 'lucide-react';
 import { useSignalDeck, useSignalResponses, useSignalRealtime } from '@/components/signal/useSignal';
 import SignalResult from '@/components/signal/SignalResultLazy';
@@ -86,6 +86,39 @@ export default function SignalFacilitator({ spaceId, orgSlug }: { spaceId: strin
     mutationFn: (id: string) => apiRequest('POST', `/api/spaces/${spaceId}/signal/activities/${id}/reset`, {}),
     onSuccess: () => toast({ title: 'Responses cleared' }),
   });
+
+  const deleteResponse = useMutation({
+    mutationFn: ({ activityId, responseId }: { activityId: string; responseId: string }) =>
+      apiRequest('DELETE', `/api/spaces/${spaceId}/signal/activities/${activityId}/responses/${responseId}`),
+    onMutate: async ({ responseId }) => {
+      const key = [`/api/spaces/${spaceId}/signal/activities/${active?.id}/responses`];
+      await queryClient.cancelQueries({ queryKey: key });
+      const prev = queryClient.getQueryData<any[]>(key);
+      if (prev) {
+        queryClient.setQueryData(key, prev.filter((r) => r.id !== responseId));
+      }
+      return { prev, key };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(ctx.key, ctx.prev);
+      toast({ title: 'Could not delete word', variant: 'destructive' });
+    },
+    onSettled: (_data, _err, { activityId }) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/signal/activities/${activityId}/responses`] });
+    },
+  });
+
+  const exportCsv = (activity: typeof active) => {
+    if (!activity) return;
+    const url = `/api/spaces/${spaceId}/signal/activities/${activity.id}/responses/export`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   const pushToIdeas = useMutation({
     mutationFn: async (id: string) => {
       const res = await apiRequest('POST', `/api/spaces/${spaceId}/signal/activities/${id}/push-to-ideas`, {});
@@ -218,7 +251,7 @@ export default function SignalFacilitator({ spaceId, orgSlug }: { spaceId: strin
                   {entryCount(active, responses as any)} response{responses.length === 1 ? '' : 's'}
                 </p>
                 {active.type === 'word_cloud' && responses.length > 0 && (
-                  <div className="mb-3 text-center">
+                  <div className="mb-3 flex flex-wrap justify-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"
@@ -229,9 +262,25 @@ export default function SignalFacilitator({ spaceId, orgSlug }: { spaceId: strin
                       {pushToIdeas.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                       Send words to Ideas
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => exportCsv(active)}
+                      data-testid="button-export-csv"
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      Export CSV
+                    </Button>
                   </div>
                 )}
-                <SignalResult activity={active} responses={responses as any} height={360} />
+                {active.type === 'word_cloud' && responses.length > 0 && (
+                  <WordList
+                    responses={responses as any[]}
+                    activityId={active.id}
+                    onDelete={(responseId) => deleteResponse.mutate({ activityId: active.id, responseId })}
+                  />
+                )}
+                <SignalResult activity={active} responses={responses as any} height={300} />
               </>
             ) : (
               <div className="py-16 text-center text-muted-foreground">
@@ -252,6 +301,56 @@ export default function SignalFacilitator({ spaceId, orgSlug }: { spaceId: strin
           onSaved={() => { setCreatingType(null); setEditing(null); invalidate(); }}
         />
       )}
+    </div>
+  );
+}
+
+function WordList({
+  responses,
+  activityId,
+  onDelete,
+}: {
+  responses: Array<{ id: string; valueText?: string | null; createdAt?: string | null }>;
+  activityId: string;
+  onDelete: (responseId: string) => void;
+}) {
+  const counts = useMemo(() => {
+    const map = new Map<string, { ids: string[]; word: string }>();
+    for (const r of responses) {
+      const w = (r.valueText ?? '').trim();
+      if (!w) continue;
+      const entry = map.get(w) ?? { ids: [], word: w };
+      entry.ids.push(r.id);
+      map.set(w, entry);
+    }
+    return Array.from(map.values()).sort((a, b) => b.ids.length - a.ids.length);
+  }, [responses]);
+
+  if (counts.length === 0) return null;
+
+  return (
+    <div className="mb-4 flex flex-wrap gap-1.5">
+      {counts.map(({ word, ids }) => (
+        <span
+          key={word}
+          className="group inline-flex items-center gap-1 rounded-md border bg-muted/40 px-2 py-1 text-sm"
+          data-testid={`word-chip-${word}`}
+        >
+          <span>{word}</span>
+          {ids.length > 1 && (
+            <span className="text-xs text-muted-foreground">×{ids.length}</span>
+          )}
+          <button
+            type="button"
+            title={`Remove one "${word}"`}
+            onClick={() => onDelete(ids[ids.length - 1])}
+            className="ml-0.5 rounded text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground focus:opacity-100"
+            data-testid={`button-delete-word-${word}`}
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      ))}
     </div>
   );
 }
