@@ -151,14 +151,14 @@ function WordCloudInput({ config, pending, onSubmit }: { config: SignalWordCloud
         value={word}
         onChange={(e) => setWord(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
-        placeholder="Type a word…"
+        placeholder="Type a word or phrase…"
         maxLength={80}
         data-testid="input-signal-word"
       />
       <Button className="w-full" onClick={send} disabled={pending || !word.trim()} data-testid="button-signal-submit-word">
-        {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send word'}
+        {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}
       </Button>
-      <p className="text-center text-xs text-muted-foreground">You can submit up to {max} word{max === 1 ? '' : 's'}.</p>
+      <p className="text-center text-xs text-muted-foreground">You can submit up to {max} {max === 1 ? 'entry' : 'entries'}.</p>
     </div>
   );
 }
