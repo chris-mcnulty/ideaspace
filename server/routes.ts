@@ -6398,7 +6398,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(403).json({ error: "Responses are not currently being accepted for this activity" });
         }
         participantId = req.session?.participantId ?? null;
-        if (!participantId) return res.status(401).json({ error: "No participant session found" });
       }
 
       const baseRow = { activityId: activity.id, deckId: deck.id, spaceId, participantId };
