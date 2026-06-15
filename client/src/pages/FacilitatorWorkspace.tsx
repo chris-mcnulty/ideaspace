@@ -96,6 +96,7 @@ import { NotificationPanel } from "@/components/NotificationPanel";
 import { CountdownTimer } from "@/components/CountdownTimer";
 import { isPhaseActive } from "@/lib/phaseUtils";
 import { DuplicateWorkspaceModal } from "@/components/DuplicateWorkspaceModal";
+import { ProjectShareDialog } from "@/components/ProjectShareDialog";
 
 // Comprehensive Results Table Component
 function ComprehensiveResultsTable({
@@ -321,6 +322,7 @@ export default function FacilitatorWorkspace() {
   const [mergedNoteContent, setMergedNoteContent] = useState("");
   const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [rewriteDialogNote, setRewriteDialogNote] = useState<Note | null>(null);
   const [rewriteVariations, setRewriteVariations] = useState<Array<{ version: number; content: string }>>([]);
   const [editDialogNote, setEditDialogNote] = useState<Note | null>(null);
@@ -2906,6 +2908,16 @@ export default function FacilitatorWorkspace() {
                 <FileStack className="mr-2 h-4 w-4" />
                 Save as Template
               </Button>
+              {space.projectId && (
+                <Button
+                  variant="outline"
+                  onClick={() => setIsShareDialogOpen(true)}
+                  data-testid="button-share-project"
+                >
+                  <Share2 className="mr-2 h-4 w-4" />
+                  Share
+                </Button>
+              )}
               <ShareLinksDialog
                 orgSlug={params.org}
                 spaceCode={params.space}
@@ -3174,6 +3186,14 @@ export default function FacilitatorWorkspace() {
         workspaceId={space.id}
         workspaceName={space.name}
       />
+      {isShareDialogOpen && space.projectId && (
+        <ProjectShareDialog
+          projectId={space.projectId}
+          projectName={project?.name ?? "this project"}
+          orgId={space.organizationId}
+          onClose={() => setIsShareDialogOpen(false)}
+        />
+      )}
     </div>
   );
 }
