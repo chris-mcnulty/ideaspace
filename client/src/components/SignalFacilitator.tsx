@@ -75,8 +75,19 @@ export default function SignalFacilitator({ spaceId, orgSlug }: { spaceId: strin
 
   const updateDeck = useMutation({
     mutationFn: (body: Record<string, unknown>) => apiRequest('PUT', `/api/spaces/${spaceId}/signal/deck`, body),
-    onSuccess: invalidate,
-    onError: invalidate, // revert any optimistic update
+    onMutate: async () => {
+      // Cancel any in-flight refetches so they don't overwrite the optimistic update.
+      await queryClient.cancelQueries({ queryKey: signalKey });
+    },
+    onError: (_err, _vars, _ctx) => {
+      // Refetch to restore real server state on failure.
+      invalidate();
+      toast({ title: 'Could not update session', description: 'Changes were not saved.', variant: 'destructive' });
+    },
+    onSettled: () => {
+      // Always re-sync with the server after the mutation completes (success or error).
+      invalidate();
+    },
   });
   const deleteActivity = useMutation({
     mutationFn: (id: string) => apiRequest('DELETE', `/api/spaces/${spaceId}/signal/activities/${id}`),
