@@ -14,7 +14,10 @@ export default function SignalPresenter() {
   const spaceId = params.space!;
 
   const { user, isLoading: authLoading } = useAuth();
-  const canPresent = !!user && ["facilitator", "company_admin", "global_admin"].includes(user.role);
+  // Any authenticated user with workspace access (project members, facilitators,
+  // admins) may view the presenter screen. The backend enforces access on the
+  // data endpoints; unauthenticated visitors still see the lock screen.
+  const canPresent = !!user;
 
   useSignalRealtime(spaceId);
   const { data: space } = useQuery<Space>({ queryKey: [`/api/spaces/${spaceId}`] });
@@ -62,7 +65,7 @@ export default function SignalPresenter() {
         <Lock className="mb-4 h-10 w-10 text-muted-foreground" />
         <h1 className="text-2xl font-semibold">Presenter screen</h1>
         <p className="mt-1 max-w-sm text-muted-foreground">
-          The Signal presenter view is only available to facilitators. Please sign in with a facilitator account.
+          Please sign in with an account that has access to this workspace to view the presenter screen.
         </p>
       </div>
     );

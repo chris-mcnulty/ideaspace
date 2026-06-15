@@ -6443,11 +6443,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get responses for an activity (raw rows for client-side aggregation).
-  // Facilitator-only: aggregated results are shown on the presenter screen.
-  app.get("/api/spaces/:spaceId/signal/activities/:id/responses", requireFacilitator, async (req, res) => {
+  // Accessible to any user with workspace access (project members, facilitators,
+  // admins) so co-presenters can view the live aggregated results.
+  app.get("/api/spaces/:spaceId/signal/activities/:id/responses", createWorkspaceAccessMiddleware({}), async (req, res) => {
     try {
-      const spaceId = await requireSpaceFacilitator(req, res);
-      if (!spaceId) return;
+      const spaceId = await resolveWorkspaceId(req.params.spaceId);
+      if (!spaceId) return res.status(404).json({ error: "Workspace not found" });
 
       const activity = await storage.getSignalActivity(req.params.id);
       if (!activity || activity.spaceId !== spaceId) {
