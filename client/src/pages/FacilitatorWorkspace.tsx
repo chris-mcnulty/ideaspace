@@ -73,6 +73,7 @@ import {
   Activity,
   UserCheck,
   UserX,
+  Pencil,
 } from "lucide-react";
 import type { Organization, Space, Note, Participant, Category, User, Idea, WorkspaceModule, Project, Starship, StarshipPosition, PriorityMatrix as PriorityMatrixType, PriorityMatrixPosition } from "@shared/schema";
 import { Leaderboard } from "@/components/Leaderboard";
@@ -884,8 +885,25 @@ export default function FacilitatorWorkspace() {
   });
 
   // Update workspace settings mutation
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState("");
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  function startEditingName() {
+    setNameValue(space?.name ?? "");
+    setEditingName(true);
+    setTimeout(() => nameInputRef.current?.select(), 0);
+  }
+
+  function commitNameEdit() {
+    const trimmed = nameValue.trim();
+    if (!trimmed || trimmed === space?.name) { setEditingName(false); return; }
+    updateWorkspaceSettings.mutate({ name: trimmed });
+    setEditingName(false);
+  }
+
   const updateWorkspaceSettings = useMutation({
-    mutationFn: async (settings: { aiResultsEnabled?: boolean; marketplaceCoinBudget?: number; resultsPublicAfterClose?: boolean; guestAllowed?: boolean }) => {
+    mutationFn: async (settings: { name?: string; aiResultsEnabled?: boolean; marketplaceCoinBudget?: number; resultsPublicAfterClose?: boolean; guestAllowed?: boolean }) => {
       const response = await apiRequest("PATCH", `/api/spaces/${params.space}`, settings);
       return await response.json();
     },
@@ -906,6 +924,8 @@ export default function FacilitatorWorkspace() {
         description = variables.guestAllowed
           ? "Anyone with the join code can now participate anonymously"
           : "Only registered users can now join this workspace";
+      } else if (variables.name !== undefined) {
+        description = `Workspace renamed to "${variables.name}"`;
       }
       toast({
         title: "Settings Updated",
@@ -2767,7 +2787,32 @@ export default function FacilitatorWorkspace() {
         <div className="container mx-auto px-6 py-8">
           <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
             <div className="flex-1">
-              <h1 className="text-3xl font-bold tracking-tight">{space.name}</h1>
+              {editingName ? (
+                <input
+                  ref={nameInputRef}
+                  value={nameValue}
+                  onChange={(e) => setNameValue(e.target.value)}
+                  onBlur={commitNameEdit}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitNameEdit();
+                    if (e.key === "Escape") setEditingName(false);
+                  }}
+                  className="text-3xl font-bold tracking-tight bg-transparent border-b-2 border-primary outline-none w-full"
+                  data-testid="input-workspace-name"
+                  maxLength={100}
+                  autoFocus
+                />
+              ) : (
+                <h1
+                  className="text-3xl font-bold tracking-tight cursor-pointer hover:text-primary transition-colors group flex items-center gap-2"
+                  onClick={startEditingName}
+                  title="Click to rename"
+                  data-testid="heading-workspace-name"
+                >
+                  {space.name}
+                  <Pencil className="h-5 w-5 opacity-0 group-hover:opacity-50 transition-opacity shrink-0" />
+                </h1>
+              )}
               <p className="mt-2 text-base text-muted-foreground">{space.purpose}</p>
               <div className="mt-4 flex flex-wrap gap-3">
                 <Badge variant="outline" className="gap-1 font-mono text-[18px]" data-testid="badge-workspace-code">
