@@ -1,0 +1,2 @@
+- [Signal facilitator auth gap](signal-facilitator-auth.md) — project members (added via ProjectShareDialog) are NOT in spaceFacilitators; assertFacilitatorForSpace must check projectMembers too.
+- [Signal optimistic update race](signal-optimistic-race.md) — staleTime:0 fires a background refetch immediately after setQueryData; always cancelQueries before optimistic writes.

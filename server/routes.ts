@@ -258,6 +258,12 @@ async function assertFacilitatorForSpace(
   }
   const facilitators = await storage.getSpaceFacilitatorsBySpace(space.id);
   if (facilitators.some(f => f.userId === user.id)) return true;
+  // Also allow project members: facilitators added to the parent project via
+  // ProjectShareDialog land in projectMembers, not spaceFacilitators.
+  if (space.projectId) {
+    const isMember = await storage.isProjectMember(space.projectId, user.id);
+    if (isMember) return true;
+  }
   res.status(403).json({ error: "Not authorized for this workspace" });
   return false;
 }
