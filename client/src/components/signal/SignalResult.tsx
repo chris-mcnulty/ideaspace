@@ -12,13 +12,14 @@ export interface SignalResultProps {
   activity: SignalActivity;
   responses: SignalResponseLite[];
   height?: number;
+  large?: boolean;
 }
 
 // Renders the live aggregated visualization for a Signal activity. Pure: given
 // the activity + current responses, it draws the right chart.
-export default function SignalResult({ activity, responses, height = 360 }: SignalResultProps) {
+export default function SignalResult({ activity, responses, height = 360, large = false }: SignalResultProps) {
   if (activity.type === 'word_cloud') {
-    return <WordCloud words={wordCounts(responses)} height={height} />;
+    return <WordCloud words={wordCounts(responses)} height={height} large={large} />;
   }
 
   if (activity.type === 'multiple_choice') {
@@ -27,16 +28,19 @@ export default function SignalResult({ activity, responses, height = 360 }: Sign
     if ((cfg.options ?? []).length === 0) {
       return <div className="flex items-center justify-center text-muted-foreground" style={{ height }}>No options configured.</div>;
     }
+    const labelFontSize = large ? 20 : 13;
+    const yAxisWidth = large ? 240 : 140;
+    const pctFontSize = large ? 18 : 12;
     return (
       <div style={{ height }} data-testid="signal-mc-result">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} layout="vertical" margin={{ left: 12, right: 40, top: 8, bottom: 8 }}>
+          <BarChart data={data} layout="vertical" margin={{ left: 12, right: large ? 60 : 40, top: 8, bottom: 8 }}>
             <XAxis type="number" allowDecimals={false} hide />
-            <YAxis type="category" dataKey="label" width={140} tick={{ fontSize: 13 }} />
+            <YAxis type="category" dataKey="label" width={yAxisWidth} tick={{ fontSize: labelFontSize }} />
             <Tooltip formatter={(v: number, _n, p: any) => [`${v} (${p.payload.pct}%)`, 'Votes']} />
             <Bar dataKey="count" radius={[0, 6, 6, 0]}>
               {data.map((_, i) => <Cell key={i} fill={SIGNAL_PALETTE[i % SIGNAL_PALETTE.length]} />)}
-              <LabelList dataKey="pct" position="right" formatter={(v: number) => `${v}%`} />
+              <LabelList dataKey="pct" position="right" formatter={(v: number) => `${v}%`} style={{ fontSize: pctFontSize, fontWeight: 600 }} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>

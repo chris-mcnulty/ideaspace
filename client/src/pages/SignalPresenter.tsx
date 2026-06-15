@@ -178,7 +178,7 @@ export default function SignalPresenter() {
                 {responses.length === 1 ? 'response' : 'responses'}
                 {deck?.responsesOpen ? '' : ' · closed'}
               </p>
-              <SignalResult activity={active} responses={responses as any} height={500} />
+              <SignalResult activity={active} responses={responses as any} height={500} large />
             </div>
 
             {/* Compact join panel stays visible while activity runs */}

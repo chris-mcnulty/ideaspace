@@ -14,11 +14,12 @@ interface PlacedWord {
 interface WordCloudProps {
   words: WordCount[];
   height?: number;
+  large?: boolean;
 }
 
 // Renders an aggregating word cloud using d3-cloud for spiral layout. Recomputes
 // whenever the word frequencies or container width change.
-export default function WordCloud({ words, height = 360 }: WordCloudProps) {
+export default function WordCloud({ words, height = 360, large = false }: WordCloudProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(600);
   const [placed, setPlaced] = useState<PlacedWord[]>([]);
@@ -47,6 +48,10 @@ export default function WordCloud({ words, height = 360 }: WordCloudProps) {
     const max = Math.max(...words.map((w) => w.value));
     const min = Math.min(...words.map((w) => w.value));
     const scale = (v: number) => {
+      if (large) {
+        if (max === min) return 80;
+        return 40 + ((v - min) / (max - min)) * 100; // 40px..140px
+      }
       if (max === min) return 36;
       return 16 + ((v - min) / (max - min)) * 56; // 16px..72px
     };
