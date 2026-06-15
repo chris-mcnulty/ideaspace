@@ -173,11 +173,18 @@ export default function SignalFacilitator({ spaceId, orgSlug }: { spaceId: strin
             data-testid="input-signal-deck-title"
           />
           {orgSlug && (
-            <Button variant="outline" size="sm" asChild>
-              <a href={`/o/${orgSlug}/s/${spaceId}/signal/present`} target="_blank" rel="noreferrer" data-testid="button-open-presenter">
-                <ExternalLink className="mr-2 h-4 w-4" /> Open Presenter
-              </a>
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" asChild>
+                <a href={`/o/${orgSlug}/s/${spaceId}/signal/present`} target="_blank" rel="noreferrer" data-testid="button-open-presenter">
+                  <ExternalLink className="mr-2 h-4 w-4" /> Presenter
+                </a>
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <a href={`/o/${orgSlug}/s/${spaceId}/signal/embed`} target="_blank" rel="noreferrer" data-testid="button-open-embed">
+                  <ExternalLink className="mr-2 h-4 w-4" /> Embed
+                </a>
+              </Button>
+            </div>
           )}
         </div>
 

@@ -37,6 +37,7 @@ import StaircaseParticipant from "@/pages/StaircaseParticipant";
 import StarshipParticipant from "@/pages/StarshipParticipant";
 import SignalParticipant from "@/pages/SignalParticipant";
 import SignalPresenter from "@/pages/SignalPresenter";
+import SignalEmbed from "@/pages/SignalEmbed";
 import MyProjects from "@/pages/MyProjects";
 import NotificationSettings from "@/pages/NotificationSettings";
 
@@ -89,6 +90,7 @@ const StaircaseBoundary = withBoundary(StaircaseParticipant, "staircase");
 const StarshipBoundary = withBoundary(StarshipParticipant, "starship");
 const SignalBoundary = withBoundary(SignalParticipant, "signal");
 const SignalPresenterBoundary = withBoundary(SignalPresenter, "signal-presenter");
+const SignalEmbedBoundary = withBoundary(SignalEmbed, "signal-embed");
 const ResultsBoundary = withBoundary(Results, "results");
 const PublicResultsBoundary = withBoundary(PublicResults, "public-results");
 const FacilitatorWorkspaceBoundary = withBoundary(FacilitatorWorkspace, "facilitator-workspace");
@@ -121,6 +123,7 @@ function Router() {
       <Route path="/o/:org/s/:space/starship" component={StarshipBoundary} />
       <Route path="/o/:org/s/:space/signal" component={SignalBoundary} />
       <Route path="/o/:org/s/:space/signal/present" component={SignalPresenterBoundary} />
+      <Route path="/o/:org/s/:space/signal/embed" component={SignalEmbedBoundary} />
       <Route path="/o/:org/s/:space/results" component={ResultsBoundary} />
       <Route path="/o/:org/s/:space/public-results" component={PublicResultsBoundary} />
       <Route path="/o/:org/s/:space/facilitate" component={FacilitatorWorkspaceBoundary} />
