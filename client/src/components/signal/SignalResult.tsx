@@ -55,6 +55,9 @@ export default function SignalResult({ activity, responses, height = 360, large 
     return <div className="flex items-center justify-center text-muted-foreground" style={{ height }}>Waiting for responses…</div>;
   }
 
+  const axisFontSize = large ? 20 : 12;
+  const summaryHeight = large ? 72 : 48;
+
   if (cfg.chartStyle === 'bar') {
     // Left-to-right bar chart of each distinct value's frequency.
     const freq = new Map<number, number>();
@@ -64,12 +67,12 @@ export default function SignalResult({ activity, responses, height = 360, large 
       .map(([value, count]) => ({ label: `${value}`, count }));
     return (
       <div data-testid="signal-numeric-result">
-        <NumericSummary stats={stats} />
-        <div style={{ height: height - 48 }}>
+        <NumericSummary stats={stats} large={large} />
+        <div style={{ height: height - summaryHeight }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
-              <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-              <YAxis allowDecimals={false} />
+              <XAxis dataKey="label" tick={{ fontSize: axisFontSize }} />
+              <YAxis allowDecimals={false} tick={{ fontSize: axisFontSize }} />
               <Tooltip />
               <Bar dataKey="count" fill={SIGNAL_PALETTE[1]} radius={[6, 6, 0, 0]} />
             </BarChart>
@@ -83,12 +86,12 @@ export default function SignalResult({ activity, responses, height = 360, large 
   const bins = histogram(stats.values, cfg.min, cfg.max, 10);
   return (
     <div data-testid="signal-numeric-result">
-      <NumericSummary stats={stats} />
-      <div style={{ height: height - 48 }}>
+      <NumericSummary stats={stats} large={large} />
+      <div style={{ height: height - summaryHeight }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={bins} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
-            <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-            <YAxis allowDecimals={false} />
+            <XAxis dataKey="label" tick={{ fontSize: axisFontSize }} />
+            <YAxis allowDecimals={false} tick={{ fontSize: axisFontSize }} />
             <Tooltip />
             <ReferenceLine x={`${Math.round(stats.avg * 10) / 10}`} stroke="#EF4444" strokeDasharray="4 4" />
             <Bar dataKey="count" fill={SIGNAL_PALETTE[0]} radius={[6, 6, 0, 0]} />
@@ -99,10 +102,12 @@ export default function SignalResult({ activity, responses, height = 360, large 
   );
 }
 
-function NumericSummary({ stats }: { stats: ReturnType<typeof numericStats> }) {
+function NumericSummary({ stats, large = false }: { stats: ReturnType<typeof numericStats>; large?: boolean }) {
   return (
-    <div className="flex items-baseline gap-4 px-2 pb-1 text-sm">
-      <span className="text-2xl font-bold" data-testid="signal-numeric-avg">{Math.round(stats.avg * 100) / 100}</span>
+    <div className={`flex items-baseline gap-4 px-2 pb-1 ${large ? 'text-xl' : 'text-sm'}`}>
+      <span className={`font-bold ${large ? 'text-5xl' : 'text-2xl'}`} data-testid="signal-numeric-avg">
+        {Math.round(stats.avg * 100) / 100}
+      </span>
       <span className="text-muted-foreground">average</span>
       <span className="text-muted-foreground">· {stats.count} responses · range {stats.min}–{stats.max}</span>
     </div>
