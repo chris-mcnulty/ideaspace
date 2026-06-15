@@ -13,6 +13,7 @@ import {
   Plus,
   FolderPlus,
   ArrowRight,
+  Share2,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -506,6 +507,24 @@ export default function MyProjects() {
 
                                   {/* Action area — outside the Link */}
                                   <div className="flex items-center gap-1.5 shrink-0">
+                                    {/* Share / copy join link */}
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      title="Copy participant join link"
+                                      data-testid={`button-share-workspace-${ws.id}`}
+                                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        const url = `${window.location.origin}/o/${organization.slug}/s/${ws.code}`;
+                                        navigator.clipboard.writeText(url).then(() =>
+                                          toast({ title: "Link copied", description: url })
+                                        );
+                                      }}
+                                    >
+                                      <Share2 className="h-3.5 w-3.5" />
+                                    </Button>
                                     {/* Move to project — admins only, only when >1 project in org */}
                                     {isAdmin && (
                                       <MoveWorkspacePopover
