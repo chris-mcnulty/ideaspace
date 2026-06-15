@@ -17,7 +17,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import {
   Radio, Plus, Trash2, Play, RotateCcw, ExternalLink, ChevronLeft, ChevronRight,
-  Cloud, BarChart3, Hash, Pencil, Loader2, Download, X,
+  Cloud, BarChart3, Hash, Pencil, Loader2, Download, X, StopCircle,
 } from 'lucide-react';
 import { useSignalDeck, useSignalResponses, useSignalRealtime } from '@/components/signal/useSignal';
 import SignalResult from '@/components/signal/SignalResultLazy';
@@ -143,6 +143,16 @@ export default function SignalFacilitator({ spaceId, orgSlug }: { spaceId: strin
     }
     updateDeck.mutate({ activeActivityId: id, responsesOpen: true });
   };
+  const stopLive = () => {
+    const prev = queryClient.getQueryData<{ deck: typeof deck; activities: typeof activities }>(signalKey);
+    if (prev?.deck) {
+      queryClient.setQueryData(signalKey, {
+        ...prev,
+        deck: { ...prev.deck, activeActivityId: null, responsesOpen: false },
+      });
+    }
+    updateDeck.mutate({ activeActivityId: null, responsesOpen: false });
+  };
   const liveIndex = active ? activities.findIndex((a) => a.id === active.id) : -1;
   const goPrev = () => { if (liveIndex > 0) goLive(activities[liveIndex - 1].id); };
   const goNext = () => { if (liveIndex >= 0 && liveIndex < activities.length - 1) goLive(activities[liveIndex + 1].id); };
@@ -228,6 +238,11 @@ export default function SignalFacilitator({ spaceId, orgSlug }: { spaceId: strin
           <div className="flex items-center gap-2">
             <Button size="icon" variant="ghost" onClick={goPrev} disabled={liveIndex <= 0} data-testid="button-prev"><ChevronLeft className="h-4 w-4" /></Button>
             <Button size="icon" variant="ghost" onClick={goNext} disabled={liveIndex < 0 || liveIndex >= activities.length - 1} data-testid="button-next"><ChevronRight className="h-4 w-4" /></Button>
+            {active && (
+              <Button size="icon" variant="ghost" onClick={stopLive} title="End session — send participants back to waiting room" data-testid="button-stop-live">
+                <StopCircle className="h-4 w-4 text-destructive" />
+              </Button>
+            )}
             <span className="text-sm text-muted-foreground">{active ? `Live: ${liveIndex + 1}/${activities.length}` : 'Nothing live'}</span>
           </div>
           <div className="flex items-center gap-2">
