@@ -1501,6 +1501,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // List org members — visible to any authenticated member of that org (safe fields only)
+  app.get("/api/organizations/:orgId/members", requireAuth, async (req, res) => {
+    try {
+      const currentUser = req.user as any;
+      const { orgId } = req.params;
+      const isAdmin = currentUser.role === "global_admin" || currentUser.role === "company_admin";
+      if (!isAdmin && currentUser.organizationId !== orgId) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      const users = await storage.getUsersByOrganization(orgId);
+      res.json(users.map((u) => ({
+        id: u.id,
+        displayName: u.displayName,
+        username: u.username,
+        email: u.email,
+        role: u.role,
+      })));
+    } catch (err) {
+      console.error("Failed to list org members:", err);
+      res.status(500).json({ error: "Failed to list org members" });
+    }
+  });
+
   app.get("/api/organizations/:orgId/projects", requireAuth, async (req, res) => {
     try {
       const projects = await storage.getProjectsByOrganization(req.params.orgId);
@@ -1626,8 +1649,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/projects/:projectId/members", requireCompanyAdmin, async (req, res) => {
+  app.post("/api/projects/:projectId/members", requireFacilitator, async (req, res) => {
     try {
+      const currentUser = req.user as any;
       const { userId, role = "member" } = req.body;
       if (!userId) {
         return res.status(400).json({ error: "userId is required" });
@@ -1637,6 +1661,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const project = await storage.getProject(req.params.projectId);
       if (!project) {
         return res.status(404).json({ error: "Project not found" });
+      }
+
+      // Facilitators (non-admin) may only manage members of their own org's projects
+      const isAdmin = currentUser.role === "global_admin" || currentUser.role === "company_admin";
+      if (!isAdmin && currentUser.organizationId !== project.organizationId) {
+        return res.status(403).json({ error: "Forbidden" });
       }
       
       // Verify user exists and belongs to the same org
@@ -1656,8 +1686,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/projects/:projectId/members/:userId", requireCompanyAdmin, async (req, res) => {
+  app.delete("/api/projects/:projectId/members/:userId", requireFacilitator, async (req, res) => {
     try {
+      const currentUser = req.user as any;
+      const isAdmin = currentUser.role === "global_admin" || currentUser.role === "company_admin";
+      if (!isAdmin) {
+        const project = await storage.getProject(req.params.projectId);
+        if (!project || currentUser.organizationId !== project.organizationId) {
+          return res.status(403).json({ error: "Forbidden" });
+        }
+      }
       const success = await storage.removeProjectMember(req.params.projectId, req.params.userId);
       if (!success) {
         return res.status(404).json({ error: "Member not found" });
