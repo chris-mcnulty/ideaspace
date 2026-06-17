@@ -24,7 +24,7 @@ export default function SignalParticipant() {
 
   const { data: org } = useQuery<Organization>({ queryKey: [`/api/organizations/${params.org}`] });
   const { data: space } = useQuery<Space>({ queryKey: [`/api/spaces/${spaceId}`] });
-  const { data: signal, isLoading } = useSignalDeck(spaceId);
+  const { data: signal, isLoading } = useSignalDeck(spaceId, { refetchInterval: 5000 });
 
   const deck = signal?.deck ?? null;
   const activities = signal?.activities ?? [];

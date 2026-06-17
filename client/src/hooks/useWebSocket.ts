@@ -109,9 +109,11 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
         // 1001 (going-away, e.g. server restart) and 1011 (transient server
         // error) deliberately fall through to the backoff loop so the client
         // re-attaches once the server is back.
-        // 1000 normal close, 1002 protocol error, 1003 unsupported data,
-        // 1008 policy violation.
-        const terminalCloseCodes = new Set([1000, 1002, 1003, 1008]);
+        // NOTE: 1000 (normal close) is intentionally NOT terminal here —
+        // reverse proxies and load balancers send 1000 on idle timeout and
+        // we must reconnect so live Signal / WS updates keep flowing.
+        // 1002 protocol error, 1003 unsupported data, 1008 policy violation.
+        const terminalCloseCodes = new Set([1002, 1003, 1008]);
         if (terminalCloseCodes.has(event.code)) {
           wsDebug('terminal close — not reconnecting', { code: event.code });
           return;

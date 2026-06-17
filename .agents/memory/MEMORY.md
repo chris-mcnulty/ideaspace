@@ -1,2 +1,3 @@
 - [Signal facilitator auth gap](signal-facilitator-auth.md) — project members (added via ProjectShareDialog) are NOT in spaceFacilitators; assertFacilitatorForSpace must check projectMembers too.
 - [Signal optimistic update race](signal-optimistic-race.md) — staleTime:0 fires a background refetch immediately after setQueryData; always cancelQueries before optimistic writes.
+- [Signal participant hang-tight](signal-participant-hang-tight.md) — WS close code 1000 was terminal; proxies send 1000 on idle timeout causing permanent disconnect and stale "hang tight" state.

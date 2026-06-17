@@ -21,7 +21,7 @@ export default function SignalPresenter() {
 
   useSignalRealtime(spaceId);
   const { data: space } = useQuery<Space>({ queryKey: [`/api/spaces/${spaceId}`] });
-  const { data: signal } = useSignalDeck(spaceId, canPresent);
+  const { data: signal } = useSignalDeck(spaceId, { enabled: canPresent, refetchInterval: 5000 });
 
   const deck = signal?.deck ?? null;
   const activities = signal?.activities ?? [];

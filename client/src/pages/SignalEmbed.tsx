@@ -21,7 +21,7 @@ export default function SignalEmbed() {
 
   useSignalRealtime(spaceId);
   const { data: space } = useQuery<Space>({ queryKey: [`/api/spaces/${spaceId}`] });
-  const { data: signal } = useSignalDeck(spaceId, canView);
+  const { data: signal } = useSignalDeck(spaceId, { enabled: canView, refetchInterval: 5000 });
 
   const deck = signal?.deck ?? null;
   const activities = signal?.activities ?? [];

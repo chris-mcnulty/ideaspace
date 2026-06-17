@@ -9,11 +9,12 @@ export interface SignalDeckData {
   activities: SignalActivity[];
 }
 
-export function useSignalDeck(spaceId: string, enabled = true) {
+export function useSignalDeck(spaceId: string, { enabled = true, refetchInterval }: { enabled?: boolean; refetchInterval?: number } = {}) {
   return useQuery<SignalDeckData>({
     queryKey: [`/api/spaces/${spaceId}/signal`],
     enabled: !!spaceId && enabled,
     staleTime: 0,
+    refetchInterval,
   });
 }
 
@@ -35,6 +36,13 @@ export function useSignalRealtime(spaceId: string, opts: RealtimeOptions = {}) {
   return useWebSocket({
     spaceId,
     enabled: !!spaceId,
+    // Re-sync state immediately when the socket reconnects after a drop so
+    // participants don't stay stuck on stale data (e.g. "Hang tight" screen).
+    onOpen: ({ reconnected }) => {
+      if (reconnected) {
+        queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/signal`] });
+      }
+    },
     onMessage: (message) => {
       switch (message.type) {
         case 'signal_deck_updated':
