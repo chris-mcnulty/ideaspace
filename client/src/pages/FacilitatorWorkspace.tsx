@@ -1489,6 +1489,50 @@ export default function FacilitatorWorkspace() {
         </div>
       </div>
 
+      {/* Guest / Anonymous Access Toggle — top of Participants tab for discoverability */}
+      <Card className="bg-muted/30">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            {space.guestAllowed ? (
+              <UserCheck className="h-4 w-4 text-primary" />
+            ) : (
+              <UserX className="h-4 w-4 text-muted-foreground" />
+            )}
+            Anonymous Guest Access
+          </CardTitle>
+          <CardDescription>
+            When enabled, anyone with the join code can participate without creating an account. When disabled, only registered and verified users may join.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              Status: {space.guestAllowed ? (
+                <Badge variant="default" className="ml-2">Allowed</Badge>
+              ) : (
+                <Badge variant="secondary" className="ml-2">Disabled</Badge>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => updateWorkspaceSettings.mutate({ guestAllowed: !space.guestAllowed })}
+              disabled={updateWorkspaceSettings.isPending}
+              data-testid="button-toggle-guest-allowed"
+            >
+              {updateWorkspaceSettings.isPending ? (
+                <>
+                  <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                  {space.guestAllowed ? "Disabling..." : "Enabling..."}
+                </>
+              ) : (
+                <>{space.guestAllowed ? "Disable Guest Access" : "Enable Guest Access"}</>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <NotificationPanel 
         spaceId={space.id} 
         participants={participants}
@@ -2652,50 +2696,6 @@ export default function FacilitatorWorkspace() {
               </CardContent>
             </Card>
 
-            {/* Guest / Anonymous Access Toggle */}
-            <Card className="bg-muted/30">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  {space.guestAllowed ? (
-                    <UserCheck className="h-4 w-4 text-primary" />
-                  ) : (
-                    <UserX className="h-4 w-4 text-muted-foreground" />
-                  )}
-                  Anonymous Guest Access
-                </CardTitle>
-                <CardDescription>
-                  When enabled, anyone with the join code can participate without creating an account. When disabled, only registered and verified users may join.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-muted-foreground">
-                    Status: {space.guestAllowed ? (
-                      <Badge variant="default" className="ml-2">Allowed</Badge>
-                    ) : (
-                      <Badge variant="secondary" className="ml-2">Disabled</Badge>
-                    )}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => updateWorkspaceSettings.mutate({ guestAllowed: !space.guestAllowed })}
-                    disabled={updateWorkspaceSettings.isPending}
-                    data-testid="button-toggle-guest-allowed"
-                  >
-                    {updateWorkspaceSettings.isPending ? (
-                      <>
-                        <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-                        {space.guestAllowed ? "Disabling..." : "Enabling..."}
-                      </>
-                    ) : (
-                      <>{space.guestAllowed ? "Disable Guest Access" : "Enable Guest Access"}</>
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-            
             <div className="flex gap-3">
               <Button
                 variant="outline"
