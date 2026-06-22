@@ -75,17 +75,33 @@ export default function SignalFacilitator({ spaceId, orgSlug }: { spaceId: strin
 
   const updateDeck = useMutation({
     mutationFn: (body: Record<string, unknown>) => apiRequest('PUT', `/api/spaces/${spaceId}/signal/deck`, body),
-    onMutate: async () => {
-      // Cancel any in-flight refetches so they don't overwrite the optimistic update.
+    onMutate: async (vars) => {
+      // Cancel in-flight refetches FIRST so they can't overwrite the optimistic
+      // write that follows. This must happen before setQueryData.
       await queryClient.cancelQueries({ queryKey: signalKey });
+      const prev = queryClient.getQueryData<{ deck: typeof deck; activities: typeof activities }>(signalKey);
+      // Apply optimistic update for fields we know about.
+      if (prev?.deck) {
+        const patch: Record<string, unknown> = {};
+        if ('activeActivityId' in vars) patch.activeActivityId = vars.activeActivityId;
+        if ('responsesOpen'    in vars) patch.responsesOpen    = vars.responsesOpen;
+        if (Object.keys(patch).length > 0) {
+          queryClient.setQueryData(signalKey, {
+            ...prev,
+            deck: { ...prev.deck, ...patch },
+          });
+        }
+      }
+      return { prev };
     },
-    onError: (_err, _vars, _ctx) => {
-      // Refetch to restore real server state on failure.
+    onError: (_err, _vars, ctx) => {
+      // Roll back to the snapshot taken before the optimistic write.
+      if (ctx?.prev) queryClient.setQueryData(signalKey, ctx.prev);
       invalidate();
       toast({ title: 'Could not update session', description: 'Changes were not saved.', variant: 'destructive' });
     },
     onSettled: () => {
-      // Always re-sync with the server after the mutation completes (success or error).
+      // Always re-sync with the server after the mutation settles.
       invalidate();
     },
   });
@@ -143,25 +159,10 @@ export default function SignalFacilitator({ spaceId, orgSlug }: { spaceId: strin
   });
 
   const goLive = (id: string) => {
-    // Optimistic update — flip activeActivityId immediately so the UI doesn't
-    // wait for the full server round-trip before showing the new question.
-    const prev = queryClient.getQueryData<{ deck: typeof deck; activities: typeof activities }>(signalKey);
-    if (prev?.deck) {
-      queryClient.setQueryData(signalKey, {
-        ...prev,
-        deck: { ...prev.deck, activeActivityId: id, responsesOpen: true },
-      });
-    }
+    // Optimistic update now happens inside updateDeck.onMutate (after cancelQueries).
     updateDeck.mutate({ activeActivityId: id, responsesOpen: true });
   };
   const stopLive = () => {
-    const prev = queryClient.getQueryData<{ deck: typeof deck; activities: typeof activities }>(signalKey);
-    if (prev?.deck) {
-      queryClient.setQueryData(signalKey, {
-        ...prev,
-        deck: { ...prev.deck, activeActivityId: null, responsesOpen: false },
-      });
-    }
     updateDeck.mutate({ activeActivityId: null, responsesOpen: false });
   };
   const liveIndex = active ? activities.findIndex((a) => a.id === active.id) : -1;
@@ -219,8 +220,8 @@ export default function SignalFacilitator({ spaceId, orgSlug }: { spaceId: strin
                   </div>
                   {isLive && <Badge className="shrink-0">Live</Badge>}
                   <div className="flex shrink-0 items-center gap-1">
-                    <Button size="icon" variant={isLive ? 'default' : 'ghost'} onClick={() => goLive(a.id)} title="Go live" data-testid={`button-golive-${a.id}`}>
-                      <Play className="h-4 w-4" />
+                    <Button size="icon" variant={isLive ? 'default' : 'ghost'} onClick={() => goLive(a.id)} disabled={updateDeck.isPending} title="Go live" data-testid={`button-golive-${a.id}`}>
+                      {updateDeck.isPending && isLive ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                     </Button>
                     <Button size="icon" variant="ghost" onClick={() => setEditing(a)} title="Edit" data-testid={`button-edit-${a.id}`}>
                       <Pencil className="h-4 w-4" />
@@ -254,11 +255,11 @@ export default function SignalFacilitator({ spaceId, orgSlug }: { spaceId: strin
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2 rounded-md border p-3">
           <div className="flex items-center gap-2">
-            <Button size="icon" variant="ghost" onClick={goPrev} disabled={liveIndex <= 0} data-testid="button-prev"><ChevronLeft className="h-4 w-4" /></Button>
-            <Button size="icon" variant="ghost" onClick={goNext} disabled={liveIndex < 0 || liveIndex >= activities.length - 1} data-testid="button-next"><ChevronRight className="h-4 w-4" /></Button>
+            <Button size="icon" variant="ghost" onClick={goPrev} disabled={updateDeck.isPending || liveIndex <= 0} data-testid="button-prev"><ChevronLeft className="h-4 w-4" /></Button>
+            <Button size="icon" variant="ghost" onClick={goNext} disabled={updateDeck.isPending || liveIndex < 0 || liveIndex >= activities.length - 1} data-testid="button-next"><ChevronRight className="h-4 w-4" /></Button>
             {active && (
-              <Button size="icon" variant="ghost" onClick={stopLive} title="End session — send participants back to waiting room" data-testid="button-stop-live">
-                <StopCircle className="h-4 w-4 text-destructive" />
+              <Button size="icon" variant="ghost" onClick={stopLive} disabled={updateDeck.isPending} title="End session — send participants back to waiting room" data-testid="button-stop-live">
+                {updateDeck.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <StopCircle className="h-4 w-4 text-destructive" />}
               </Button>
             )}
             <span className="text-sm text-muted-foreground">{active ? `Live: ${liveIndex + 1}/${activities.length}` : 'Nothing live'}</span>
