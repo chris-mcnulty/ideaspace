@@ -1412,6 +1412,33 @@ export const insertOrganisationApiKeySchema = createInsertSchema(organisationApi
 export type OrganisationApiKey = typeof organisationApiKeys.$inferSelect;
 export type InsertOrganisationApiKey = z.infer<typeof insertOrganisationApiKeySchema>;
 
+// ── Workspace Visits (local traffic analytics) ────────────────────────────────
+// Records every participant join so traffic stats can be queried inside Nebula
+// and Synozur can pull aggregate data via the /api/traffic/report endpoint.
+export const workspaceVisits = pgTable("workspace_visits", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  spaceId: varchar("space_id").notNull().references(() => spaces.id, { onDelete: "cascade" }),
+  organizationId: varchar("organization_id").references(() => organizations.id),
+  // Soft reference — no FK so visits survive participant deletion.
+  participantId: varchar("participant_id"),
+  sessionKey: text("session_key").notNull(),
+  isGuest: boolean("is_guest").notNull().default(false),
+  deviceType: text("device_type"),
+  country: text("country"),
+  visitedAt: timestamp("visited_at").defaultNow().notNull(),
+}, (table) => ({
+  spaceIdx: index("workspace_visits_space_idx").on(table.spaceId),
+  orgIdx: index("workspace_visits_org_idx").on(table.organizationId),
+  visitedAtIdx: index("workspace_visits_visited_at_idx").on(table.visitedAt),
+}));
+
+export const insertWorkspaceVisitSchema = createInsertSchema(workspaceVisits).omit({
+  id: true,
+  visitedAt: true,
+});
+export type WorkspaceVisit = typeof workspaceVisits.$inferSelect;
+export type InsertWorkspaceVisit = z.infer<typeof insertWorkspaceVisitSchema>;
+
 export const insertNotificationPreferenceSchema = createInsertSchema(notificationPreferences).omit({
   id: true,
   updatedAt: true,

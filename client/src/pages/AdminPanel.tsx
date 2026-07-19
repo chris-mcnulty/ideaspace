@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Building2, Plus, LogOut, Loader2, Mail, Clock, Check, X, BookOpen, FileStack, Activity, Users, Edit, Trash2, FolderKanban, Upload, KeyRound, Copy, Eye, EyeOff, Globe } from "lucide-react";
+import { Building2, Plus, LogOut, Loader2, Mail, Clock, Check, X, BookOpen, FileStack, Activity, Users, Edit, Trash2, FolderKanban, Upload, KeyRound, Copy, Eye, EyeOff, Globe, BarChart2 } from "lucide-react";
 import { ImportsTab } from "@/components/ImportsTab";
 import type { Organization, Space, User, AccessRequest, WorkspaceTemplate, SystemSetting, Project, ProjectMember } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -30,6 +30,7 @@ import { NewWorkspaceDialog } from "@/components/NewWorkspaceDialog";
 import { z } from "zod";
 import { Key, UserPlus } from "lucide-react";
 import { SynozurAppSwitcher } from "@/components/SynozurAppSwitcher";
+import { TrafficAnalyticsTab } from "@/components/TrafficAnalyticsTab";
 
 // Stripped-down API key type (hash never sent to client)
 interface ApiKey {
@@ -183,6 +184,10 @@ export default function AdminPanel() {
               <KeyRound className="h-4 w-4 mr-2" />
               API Keys
             </TabsTrigger>
+            <TabsTrigger value="analytics" data-testid="tab-analytics">
+              <BarChart2 className="h-4 w-4 mr-2" />
+              Analytics
+            </TabsTrigger>
             {currentUser.role === "global_admin" && (
               <TabsTrigger value="system-settings" data-testid="tab-system-settings">
                 <Activity className="h-4 w-4 mr-2" />
@@ -286,6 +291,10 @@ export default function AdminPanel() {
               currentUser={currentUser}
               organizations={displayOrgs}
             />
+          </TabsContent>
+
+          <TabsContent value="analytics">
+            <TrafficAnalyticsTab currentUser={currentUser} />
           </TabsContent>
 
           <TabsContent value="system-settings">

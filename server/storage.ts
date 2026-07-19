@@ -92,6 +92,9 @@ import {
   type InsertServicePlan,
   type OrganisationApiKey,
   type InsertOrganisationApiKey,
+  type WorkspaceVisit,
+  type InsertWorkspaceVisit,
+  workspaceVisits,
   organizations,
   projects,
   projectMembers,
@@ -569,6 +572,39 @@ export interface IStorage {
 
   // Workspace Duplication
   duplicateWorkspace(sourceId: string, name: string, mode: 'structure_only' | 'full_copy', createdBy?: string): Promise<Space>;
+
+  // Workspace Visits (traffic analytics)
+  recordWorkspaceVisit(visit: InsertWorkspaceVisit): Promise<WorkspaceVisit>;
+  getTrafficStats(opts?: { organizationId?: string }): Promise<TrafficStats>;
+  getTrafficByWorkspace(opts?: { organizationId?: string; limit?: number }): Promise<WorkspaceTrafficRow[]>;
+  getTrafficByDay(opts?: { organizationId?: string; days?: number }): Promise<DailyTrafficRow[]>;
+}
+
+// ── Traffic analytics result shapes ──────────────────────────────────────────
+export interface TrafficStats {
+  totalVisits: number;
+  ytdVisits: number;
+  mtdVisits: number;
+  weekVisits: number;
+  guestVisits: number;
+  registeredVisits: number;
+  uniqueSessions: number;
+}
+
+export interface WorkspaceTrafficRow {
+  spaceId: string;
+  spaceName: string;
+  spaceCode: string;
+  organizationName: string;
+  totalVisits: number;
+  guestVisits: number;
+  registeredVisits: number;
+  lastVisit: Date | null;
+}
+
+export interface DailyTrafficRow {
+  date: string; // YYYY-MM-DD
+  visits: number;
 }
 
 export class DbStorage implements IStorage {
@@ -3472,6 +3508,108 @@ export class DbStorage implements IStorage {
         requestCount: sql`${organisationApiKeys.requestCount} + 1`,
       })
       .where(eq(organisationApiKeys.id, id));
+  }
+
+  // ── Workspace Visits (traffic analytics) ───────────────────────────────────
+
+  async recordWorkspaceVisit(visit: InsertWorkspaceVisit): Promise<WorkspaceVisit> {
+    const [row] = await db.insert(workspaceVisits).values(visit).returning();
+    return row;
+  }
+
+  async getTrafficStats(opts: { organizationId?: string } = {}): Promise<TrafficStats> {
+    const now = new Date();
+    const ytdStart = new Date(now.getFullYear(), 0, 1);
+    const mtdStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const orgFilter = opts.organizationId
+      ? sql`AND organization_id = ${opts.organizationId}`
+      : sql``;
+
+    const row = await db.execute(sql`
+      SELECT
+        COUNT(*)::int                                                AS total_visits,
+        COUNT(*) FILTER (WHERE visited_at >= ${ytdStart})::int      AS ytd_visits,
+        COUNT(*) FILTER (WHERE visited_at >= ${mtdStart})::int      AS mtd_visits,
+        COUNT(*) FILTER (WHERE visited_at >= ${weekStart})::int     AS week_visits,
+        COUNT(*) FILTER (WHERE is_guest = true)::int                AS guest_visits,
+        COUNT(*) FILTER (WHERE is_guest = false)::int               AS registered_visits,
+        COUNT(DISTINCT session_key)::int                            AS unique_sessions
+      FROM workspace_visits
+      WHERE 1=1 ${orgFilter}
+    `);
+
+    const r = (row.rows[0] ?? {}) as Record<string, number>;
+    return {
+      totalVisits:      r.total_visits      ?? 0,
+      ytdVisits:        r.ytd_visits        ?? 0,
+      mtdVisits:        r.mtd_visits        ?? 0,
+      weekVisits:       r.week_visits       ?? 0,
+      guestVisits:      r.guest_visits      ?? 0,
+      registeredVisits: r.registered_visits ?? 0,
+      uniqueSessions:   r.unique_sessions   ?? 0,
+    };
+  }
+
+  async getTrafficByWorkspace(opts: { organizationId?: string; limit?: number } = {}): Promise<WorkspaceTrafficRow[]> {
+    const orgFilter = opts.organizationId
+      ? sql`AND wv.organization_id = ${opts.organizationId}`
+      : sql``;
+    const limitClause = sql`LIMIT ${opts.limit ?? 50}`;
+
+    const rows = await db.execute(sql`
+      SELECT
+        wv.space_id,
+        s.name            AS space_name,
+        s.code            AS space_code,
+        o.name            AS organization_name,
+        COUNT(*)::int     AS total_visits,
+        COUNT(*) FILTER (WHERE wv.is_guest = true)::int  AS guest_visits,
+        COUNT(*) FILTER (WHERE wv.is_guest = false)::int AS registered_visits,
+        MAX(wv.visited_at)                               AS last_visit
+      FROM workspace_visits wv
+      JOIN spaces s ON s.id = wv.space_id
+      LEFT JOIN organizations o ON o.id = wv.organization_id
+      WHERE 1=1 ${orgFilter}
+      GROUP BY wv.space_id, s.name, s.code, o.name
+      ORDER BY total_visits DESC
+      ${limitClause}
+    `);
+
+    return (rows.rows as any[]).map((r) => ({
+      spaceId:          r.space_id,
+      spaceName:        r.space_name,
+      spaceCode:        r.space_code,
+      organizationName: r.organization_name ?? '',
+      totalVisits:      Number(r.total_visits),
+      guestVisits:      Number(r.guest_visits),
+      registeredVisits: Number(r.registered_visits),
+      lastVisit:        r.last_visit ? new Date(r.last_visit) : null,
+    }));
+  }
+
+  async getTrafficByDay(opts: { organizationId?: string; days?: number } = {}): Promise<DailyTrafficRow[]> {
+    const days = opts.days ?? 30;
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const orgFilter = opts.organizationId
+      ? sql`AND organization_id = ${opts.organizationId}`
+      : sql``;
+
+    const rows = await db.execute(sql`
+      SELECT
+        TO_CHAR(visited_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date,
+        COUNT(*)::int AS visits
+      FROM workspace_visits
+      WHERE visited_at >= ${since} ${orgFilter}
+      GROUP BY date
+      ORDER BY date ASC
+    `);
+
+    return (rows.rows as any[]).map((r) => ({
+      date:   r.date as string,
+      visits: Number(r.visits),
+    }));
   }
 }
 

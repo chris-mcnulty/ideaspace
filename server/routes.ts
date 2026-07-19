@@ -4079,6 +4079,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       // ─────────────────────────────────────────────────────────────────────
 
+      // ── Local traffic analytics ───────────────────────────────────────────
+      // Mirror the visit into workspace_visits so Nebula can report on traffic
+      // internally and Synozur can pull aggregate data via GET /api/traffic/report.
+      try {
+        const ua2        = (req.headers["user-agent"] as string) || "";
+        const country2   = (req.headers["cf-ipcountry"] as string) || undefined;
+        const sessionKey2 = buildSessionKey(space.code || spaceId, participant.id);
+        await storage.recordWorkspaceVisit({
+          spaceId,
+          organizationId: space.organizationId ?? undefined,
+          participantId:  participant.id,
+          sessionKey:     sessionKey2,
+          isGuest:        participant.isGuest ?? false,
+          deviceType:     detectDeviceType(ua2),
+          country:        country2,
+        });
+      } catch {
+        // best-effort — never block the response
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       res.status(201).json(participant);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -8147,6 +8168,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Failed to fetch workspace AI usage:", error);
       res.status(500).json({ error: "Failed to fetch AI usage statistics" });
+    }
+  });
+
+  // ── Traffic Analytics ──────────────────────────────────────────────────────
+
+  // Summary stats — global_admin sees all orgs; company_admin sees their own org only.
+  app.get("/api/admin/analytics/traffic", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as User;
+      if (user.role !== "global_admin" && user.role !== "company_admin") {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      const orgId = user.role === "global_admin"
+        ? (req.query.organizationId as string | undefined)
+        : user.organizationId ?? undefined;
+      const stats = await storage.getTrafficStats({ organizationId: orgId });
+      res.json(stats);
+    } catch (e) {
+      console.error("[analytics/traffic]", e);
+      res.status(500).json({ error: "Failed to fetch traffic stats" });
+    }
+  });
+
+  // Per-workspace breakdown.
+  app.get("/api/admin/analytics/traffic/workspaces", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as User;
+      if (user.role !== "global_admin" && user.role !== "company_admin") {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      const orgId = user.role === "global_admin"
+        ? (req.query.organizationId as string | undefined)
+        : user.organizationId ?? undefined;
+      const rows = await storage.getTrafficByWorkspace({ organizationId: orgId, limit: 100 });
+      res.json(rows);
+    } catch (e) {
+      console.error("[analytics/traffic/workspaces]", e);
+      res.status(500).json({ error: "Failed to fetch workspace traffic" });
+    }
+  });
+
+  // Daily trend (default last 30 days).
+  app.get("/api/admin/analytics/traffic/daily", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as User;
+      if (user.role !== "global_admin" && user.role !== "company_admin") {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      const orgId = user.role === "global_admin"
+        ? (req.query.organizationId as string | undefined)
+        : user.organizationId ?? undefined;
+      const days = Math.min(365, Math.max(7, parseInt((req.query.days as string) || "30", 10)));
+      const rows = await storage.getTrafficByDay({ organizationId: orgId, days });
+      res.json(rows);
+    } catch (e) {
+      console.error("[analytics/traffic/daily]", e);
+      res.status(500).json({ error: "Failed to fetch daily traffic" });
+    }
+  });
+
+  // Synozur pull endpoint — global_admin or Galaxy API key.
+  // When Synozur is ready to pull aggregate data, call this endpoint with the
+  // org's Galaxy API key in the x-api-key header.
+  app.get("/api/traffic/report", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as User;
+      if (user.role !== "global_admin") {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      const orgId = req.query.organizationId as string | undefined;
+      const days  = Math.min(365, Math.max(7, parseInt((req.query.days as string) || "30", 10)));
+      const [stats, byWorkspace, byDay] = await Promise.all([
+        storage.getTrafficStats({ organizationId: orgId }),
+        storage.getTrafficByWorkspace({ organizationId: orgId, limit: 200 }),
+        storage.getTrafficByDay({ organizationId: orgId, days }),
+      ]);
+      res.json({ stats, byWorkspace, byDay, generatedAt: new Date().toISOString() });
+    } catch (e) {
+      console.error("[traffic/report]", e);
+      res.status(500).json({ error: "Failed to generate traffic report" });
     }
   });
 
