@@ -99,6 +99,16 @@ function isWorkspaceOpenForParticipation(status: string): boolean {
   return activePhrasePrefixes.some(prefix => normalized.startsWith(prefix));
 }
 
+// Starship is both an activity board and an idea-capture surface. Participants
+// may create and arrange notes while the workspace is generally open, during
+// ideation, or while the facilitator has made Starship the active phase.
+function isStarshipParticipationOpen(space: Pick<Space, "status">): boolean {
+  const status = space.status.toLowerCase().trim();
+  return status === "open" ||
+    status.startsWith("ideate") ||
+    status.startsWith("starship");
+}
+
 // Middleware factory to check workspace access based on status and guest permissions
 function createWorkspaceAccessMiddleware(options: {
   allowClosed?: boolean;  // Allow access even if workspace is closed (for results with resultsPublicAfterClose)
@@ -2256,7 +2266,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const now = new Date();
       const farFuture = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000); // 1 year from now
       
-      const updates: any = {};
+      const updates: any = { status: phase };
       
       // Get workspace modules to check for timer configuration
       const wModules = await storage.getWorkspaceModules(spaceId);
@@ -4173,13 +4183,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Check if ideation phase is active by status OR time window. The
         // starship module also lets participants generate new ideas directly on
         // the board, so its phase is treated as an idea-creation window too.
-        const statusBasedActive = ['ideation', 'ideate', 'starship'].includes(space.status.toLowerCase());
-        const timeWindowActive = space.ideationStartsAt && space.ideationEndsAt &&
-          new Date() >= new Date(space.ideationStartsAt) &&
-          new Date() <= new Date(space.ideationEndsAt);
-
-        if (!statusBasedActive && !timeWindowActive) {
-          return res.status(403).json({ error: "Ideation phase is not currently active. New ideas cannot be added at this time." });
+        if (!isStarshipParticipationOpen(space)) {
+          return res.status(403).json({ error: "Ideas can only be added while the workspace is open, in ideation, or during Starship." });
         }
       }
       
@@ -6144,7 +6149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isFacilitator = user && ["facilitator", "company_admin", "global_admin"].includes(user.role);
       if (!isFacilitator) {
         const space = await storage.getSpace(spaceId);
-        if (space && space.status !== "open") {
+        if (space && !isStarshipParticipationOpen(space)) {
           return res.status(403).json({
             error: "This workspace is not currently open for participation",
             code: "WORKSPACE_NOT_OPEN",
@@ -6197,7 +6202,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isFacilitator = user && ["facilitator", "company_admin", "global_admin"].includes(user.role);
       if (!isFacilitator) {
         const space = await storage.getSpace(spaceId);
-        if (space && space.status !== "open") {
+        if (space && !isStarshipParticipationOpen(space)) {
           return res.status(403).json({
             error: "This workspace is not currently open for participation",
             code: "WORKSPACE_NOT_OPEN",

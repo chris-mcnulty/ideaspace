@@ -1675,6 +1675,14 @@ export default function FacilitatorWorkspace() {
           </Button>
           )}
           <Button
+            variant="outline"
+            onClick={() => window.open(`/o/${params.org}/s/${params.space}/starship/present`, '_blank', 'noopener,noreferrer')}
+            data-testid="button-starship-presenter"
+          >
+            <ExternalLink className="mr-2 h-4 w-4" />
+            Presenter Screen
+          </Button>
+          <Button
             variant="default"
             onClick={() => navigateParticipantsMutation.mutate("starship")}
             disabled={navigateParticipantsMutation.isPending}

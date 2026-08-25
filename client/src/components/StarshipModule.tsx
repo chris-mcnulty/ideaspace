@@ -147,7 +147,6 @@ export default function StarshipModule({
 
   // Real-time updates from other participants / the facilitator.
   useEffect(() => {
-    if (isReadOnly) return;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws?spaceId=${spaceId}`);
     ws.onmessage = (event) => {
@@ -227,8 +226,12 @@ export default function StarshipModule({
       queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/notes`] });
       toast({ title: 'Idea Added', description: 'Drag or tap it onto the starship.' });
     },
-    onError: () => {
-      toast({ title: 'Could Not Add Idea', description: 'New ideas can only be added while the workspace is open.', variant: 'destructive' });
+    onError: (error: Error) => {
+      toast({
+        title: 'Could Not Add Idea',
+        description: error.message || 'New ideas cannot be added in the current workspace state.',
+        variant: 'destructive',
+      });
     },
   });
 

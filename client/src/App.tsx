@@ -35,6 +35,7 @@ import PublicResults from "@/pages/PublicResults";
 import PriorityMatrixParticipant from "@/pages/PriorityMatrixParticipant";
 import StaircaseParticipant from "@/pages/StaircaseParticipant";
 import StarshipParticipant from "@/pages/StarshipParticipant";
+import StarshipPresenter from "@/pages/StarshipPresenter";
 import SignalParticipant from "@/pages/SignalParticipant";
 import SignalPresenter from "@/pages/SignalPresenter";
 import SignalEmbed from "@/pages/SignalEmbed";
@@ -88,6 +89,7 @@ const SurveyBoundary = withBoundary(Survey, "survey");
 const PriorityMatrixBoundary = withBoundary(PriorityMatrixParticipant, "priority-matrix");
 const StaircaseBoundary = withBoundary(StaircaseParticipant, "staircase");
 const StarshipBoundary = withBoundary(StarshipParticipant, "starship");
+const StarshipPresenterBoundary = withBoundary(StarshipPresenter, "starship-presenter");
 const SignalBoundary = withBoundary(SignalParticipant, "signal");
 const SignalPresenterBoundary = withBoundary(SignalPresenter, "signal-presenter");
 const SignalEmbedBoundary = withBoundary(SignalEmbed, "signal-embed");
@@ -120,6 +122,7 @@ function Router() {
       <Route path="/o/:org/s/:space/survey" component={SurveyBoundary} />
       <Route path="/o/:org/s/:space/priority-matrix" component={PriorityMatrixBoundary} />
       <Route path="/o/:org/s/:space/staircase" component={StaircaseBoundary} />
+      <Route path="/o/:org/s/:space/starship/present" component={StarshipPresenterBoundary} />
       <Route path="/o/:org/s/:space/starship" component={StarshipBoundary} />
       <Route path="/o/:org/s/:space/signal" component={SignalBoundary} />
       <Route path="/o/:org/s/:space/signal/present" component={SignalPresenterBoundary} />
