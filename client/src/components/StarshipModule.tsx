@@ -610,10 +610,26 @@ export default function StarshipModule({
               fill="none"
               aria-hidden="true"
             >
-              {/* exhaust plume */}
-              <path d="M40 50 L8 60 L40 70 Z" fill="currentColor" opacity="0.50" />
-              {/* engine glow rings */}
-              <ellipse cx="40" cy="60" rx="5" ry="8" stroke="currentColor" strokeWidth="1.5" fill="none" opacity="0.35" />
+              {/* rocket exhaust plume — layered, flickering flames trailing left */}
+              <path
+                d="M43 49 C34 46 27 42 18 46 C22 51 14 55 5 57 C14 60 20 63 13 70 C25 72 34 68 43 71 Z"
+                fill="#F97316"
+                opacity="0.72"
+              />
+              <path
+                d="M42 53 C34 50 28 49 22 52 C27 56 21 59 15 60 C23 65 31 64 42 67 Z"
+                fill="#FBBF24"
+                opacity="0.86"
+              />
+              <path
+                d="M42 56 C36 54 32 54 28 57 C31 59 28 61 24 61 C30 64 35 63 42 64 Z"
+                fill="#FEF3C7"
+                opacity="0.92"
+              />
+              {/* exhaust streaks and engine glow */}
+              <path d="M31 48 C23 44 18 45 12 47" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" opacity="0.65" />
+              <path d="M28 72 C21 76 16 76 10 74" stroke="#F97316" strokeWidth="2" strokeLinecap="round" opacity="0.55" />
+              <ellipse cx="40" cy="60" rx="5" ry="8" stroke="#F59E0B" strokeWidth="1.5" fill="none" opacity="0.50" />
               {/* upper fin */}
               <path d="M70 50 L46 30 L86 50 Z" fill="currentColor" opacity="0.55" />
               {/* lower fin */}
