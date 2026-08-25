@@ -480,7 +480,7 @@ export async function generateCohortResults(
       organizationId: space.organizationId ?? undefined,
       spaceId,
       userId: generatedBy,
-      modelName: 'gpt-4o',
+      modelName: 'gpt-5',
       operation: 'cohort-results-cache-hit',
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
       metadata: { cacheHit: true, cohortResultId: cached.id, inputsHash },
@@ -574,7 +574,7 @@ ${ideas.map((idea: any) => `  - ${sfNote(idea)}`).join('\n')}
 
   // Generate results using GPT-5
   const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-5",
     messages: [
       {
         role: "system",
@@ -651,7 +651,7 @@ ${kbChunks.length > 0 ? `\nIMPORTANT: ${kbChunks.length} knowledge base excerpt(
       organizationId: space.organizationId ?? undefined,
       spaceId,
       userId: generatedBy,
-      modelName: 'gpt-4o',
+      modelName: 'gpt-5',
       operation: 'cohort-results',
       usage,
       metadata: {
@@ -851,7 +851,7 @@ export async function generatePersonalizedResults(
   if (cachedSingle) {
     await logAiUsage({
       spaceId,
-      modelName: 'gpt-4o',
+      modelName: 'gpt-5',
       operation: 'personalized-results-cache-hit',
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
       metadata: { cacheHit: true, personalizedResultId: cachedSingle.id, personalHash },
@@ -909,7 +909,7 @@ ${(cohortResult as any).signalSummary ? `\nCohort Signal Summary (for comparison
 
   // Generate personalized insights using GPT-5
   const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-5",
     messages: [
       {
         role: "system",
@@ -958,7 +958,7 @@ Include their top 3 contributions in topContributions array.`,
   if (personalUsage) {
     await logAiUsage({
       spaceId,
-      modelName: 'gpt-4o',
+      modelName: 'gpt-5',
       operation: 'personalized-results',
       usage: personalUsage,
       metadata: { cacheHit: false, personalHash, participantId },
@@ -1172,7 +1172,7 @@ async function generatePersonalizedResultsFromCache(params: {
   if (cachedPersonal) {
     await logAiUsage({
       spaceId,
-      modelName: 'gpt-4o',
+      modelName: 'gpt-5',
       operation: 'personalized-results-cache-hit',
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
       metadata: { cacheHit: true, personalizedResultId: cachedPersonal.id, personalHash },
@@ -1225,7 +1225,7 @@ ${(cohortResult as any).signalSummary ? `\nCohort Signal Summary (for comparison
   );
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-5",
     messages: [
       {
         role: "system",
@@ -1273,7 +1273,7 @@ Include their top 3 contributions in topContributions array.`,
   if (personalUsage) {
     await logAiUsage({
       spaceId,
-      modelName: 'gpt-4o',
+      modelName: 'gpt-5',
       operation: 'personalized-results',
       usage: personalUsage,
       metadata: { cacheHit: false, personalHash, participantId: participant.id },

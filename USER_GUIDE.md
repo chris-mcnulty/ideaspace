@@ -283,7 +283,7 @@ When participants submit duplicate or similar ideas:
 5. Ideas are automatically assigned to categories
 
 **How it works:**
-- Uses OpenAI GPT-4o to analyze semantic similarities
+- Uses OpenAI GPT-5 to analyze semantic similarities
 - Creates 3-7 categories based on natural themes
 - Assigns each idea to the most relevant category
 - Provides category descriptions
