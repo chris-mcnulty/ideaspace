@@ -627,7 +627,6 @@ ${kbChunks.length > 0 ? `\nIMPORTANT: ${kbChunks.length} knowledge base excerpt(
       },
     ],
     response_format: { type: "json_object" },
-    temperature: 0.7,
   });
 
   const rawResponse = completion.choices[0].message.content;
@@ -942,7 +941,6 @@ Include their top 3 contributions in topContributions array.`,
       },
     ],
     response_format: { type: "json_object" },
-    temperature: 0.7,
   });
 
   const rawResponse = completion.choices[0].message.content;
@@ -1258,7 +1256,6 @@ Include their top 3 contributions in topContributions array.`,
       },
     ],
     response_format: { type: "json_object" },
-    temperature: 0.7,
   });
 
   const rawResponse = completion.choices[0].message.content;
