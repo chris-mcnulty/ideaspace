@@ -23,3 +23,22 @@ test("shared middleware participation policy retains its existing phase vocabula
     assert.equal(isWorkspaceOpenForParticipation(status), true, status);
   }
 });
+
+test("Priority Matrix and Staircase stay available through live status transitions", () => {
+  for (const phase of ["priority-matrix", "staircase"]) {
+    const transitions = [
+      ["draft", false],
+      ["open", true],
+      [phase, true],
+      [` ${phase.toUpperCase()}-live `, true],
+      ["closed", false],
+      ["archived", false],
+      ["processing", false],
+      ["unknown", false],
+      ["", false],
+    ] as const;
+    for (const [status, expected] of transitions) {
+      assert.equal(isWorkspaceOpenForParticipation(status), expected, `${phase}: ${status}`);
+    }
+  }
+});

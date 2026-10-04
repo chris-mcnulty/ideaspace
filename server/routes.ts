@@ -5583,7 +5583,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Update idea position by spaceId (PUT for client compatibility)
-  app.put("/api/spaces/:spaceId/priority-matrix/positions", createWorkspaceAccessMiddleware({ requireOpen: false }), async (req, res) => {
+  app.put("/api/spaces/:spaceId/priority-matrix/positions", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
     try {
       const spaceId = await resolveWorkspaceId(req.params.spaceId);
       if (!spaceId) {
@@ -5623,7 +5623,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const normalizedX = xCoord / 100;
       const normalizedY = yCoord / 100;
       
-      // Check user role - facilitators can always update, participants need open workspace
+      // Facilitators can always update; participants need a live workspace and session.
       const user = req.user as User | undefined;
       const isFacilitator = user && ["facilitator", "company_admin", "global_admin"].includes(user.role);
       
@@ -5635,9 +5635,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       
       if (!isFacilitator) {
-        // For participants, require open workspace and participant session
+        // Use the same live-phase policy as the workspace access middleware.
         const space = await storage.getSpace(spaceId);
-        if (space && space.status !== 'open') {
+        if (!space || !isWorkspaceOpenForParticipation(space.status)) {
           return res.status(403).json({ 
             error: "This workspace is not currently open for participation",
             code: "WORKSPACE_NOT_OPEN"
@@ -5801,7 +5801,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Update note position on staircase (upsert)
-  app.post("/api/spaces/:spaceId/staircase-positions", createWorkspaceAccessMiddleware({ requireOpen: false }), async (req, res) => {
+  app.post("/api/spaces/:spaceId/staircase-positions", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
     try {
       const spaceId = await resolveWorkspaceId(req.params.spaceId);
       if (!spaceId) {
@@ -5836,14 +5836,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Check user role - facilitators can always update, participants need open workspace
+      // Facilitators can always update; participants need a live workspace and session.
       const user = req.user as User | undefined;
       const isFacilitator = user && ["facilitator", "company_admin", "global_admin"].includes(user.role);
       
       if (!isFacilitator) {
-        // For participants, require open workspace and participant session
+        // Use the same live-phase policy as the workspace access middleware.
         const space = await storage.getSpace(spaceId);
-        if (space && space.status !== 'open') {
+        if (!space || !isWorkspaceOpenForParticipation(space.status)) {
           return res.status(403).json({ 
             error: "This workspace is not currently open for participation",
             code: "WORKSPACE_NOT_OPEN"
