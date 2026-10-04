@@ -3,3 +3,4 @@
 - [Signal participant hang-tight](signal-participant-hang-tight.md) — WS close code 1000 was terminal; proxies send 1000 on idle timeout causing permanent disconnect and stale "hang tight" state.
 - [Starship live-phase access](starship-live-phase-access.md) — phase navigation must persist its active status; Starship create/place/remove permissions must use one shared activity rule.
 - [GPT-5 completion constraints](gpt-5-completion-constraints.md) — this OpenAI-compatible endpoint only accepts GPT-5’s default temperature; JSON mode prompts must explicitly request JSON.
+- [Live note deletion constraints](live-note-deletion.md) — inspect deployed foreign-key behavior; production dependent cleanup cannot be inferred solely from the shared schema.

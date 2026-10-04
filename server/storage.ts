@@ -1922,8 +1922,13 @@ export class DbStorage implements IStorage {
   }
 
   async deleteNote(id: string): Promise<boolean> {
-    const result = await db.delete(notes).where(eq(notes.id, id));
-    return result.rowCount ? result.rowCount > 0 : false;
+    return db.transaction(async (tx) => {
+      // Survey responses do not cascade in production. Remove only this
+      // note's responses, atomically with the note; other dependents cascade.
+      await tx.delete(surveyResponses).where(eq(surveyResponses.noteId, id));
+      const result = await tx.delete(notes).where(eq(notes.id, id));
+      return result.rowCount ? result.rowCount > 0 : false;
+    });
   }
 
   async deleteNotes(ids: string[]): Promise<boolean> {

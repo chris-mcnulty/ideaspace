@@ -4227,10 +4227,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/notes/:id", createWorkspaceAccessMiddleware({ requireOpen: true }), async (req, res) => {
+  app.delete("/api/notes/:id", async (req, res, next) => {
+    try {
+      // DELETE carries only a note ID. Resolve access from the stored note,
+      // never from a client-supplied workspace ID.
+      const note = await storage.getNote(req.params.id);
+      if (!note) return res.status(404).json({ error: "Note not found" });
+      req.params.spaceId = note.spaceId;
+      res.locals.noteToDelete = note;
+      return createWorkspaceAccessMiddleware({ requireOpen: true })(req, res, next);
+    } catch (error) {
+      console.error("Failed to resolve note workspace:", error);
+      return res.status(500).json({ error: "Failed to verify note access" });
+    }
+  }, async (req, res) => {
     try {
       // First, get the note to check permissions
-      const existingNote = await storage.getNote(req.params.id);
+      const existingNote = res.locals.noteToDelete;
       if (!existingNote) {
         return res.status(404).json({ error: "Note not found" });
       }
@@ -4243,14 +4256,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check permissions: 
       // 1. User is facilitator/admin (can always delete)
-      // 2. OR space is "open" AND participant owns the note
+      // 2. OR participation is active AND participant owns the note
       const user = req.user as User | undefined;
       const isFacilitatorOrAdmin = user && ["facilitator", "company_admin", "global_admin"].includes(user.role);
       
       // For participant deletes, use session-verified participantId (not client-supplied)
       const sessionParticipantId = req.session?.participantId;
       const isOwner = existingNote.participantId === sessionParticipantId;
-      const canParticipantDelete = sessionParticipantId && isOwner && space.status === "open";
+      const canParticipantDelete = sessionParticipantId && isOwner && isWorkspaceOpenForParticipation(space.status);
+
+      if (isFacilitatorOrAdmin && !(await assertFacilitatorForSpace(req, res, space))) {
+        return;
+      }
 
       if (!isFacilitatorOrAdmin && !canParticipantDelete) {
         return res.status(403).json({ error: "You can only delete your own notes when the session is open" });

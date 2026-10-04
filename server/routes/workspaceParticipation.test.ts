@@ -19,6 +19,9 @@ const storage = vi.hoisted(() => ({
   createStaircaseModule: vi.fn(),
   upsertStaircasePosition: vi.fn(),
   recordPulseActivity: vi.fn(),
+  getNote: vi.fn(),
+  deleteNote: vi.fn(),
+  getCompanyAdminsByUser: vi.fn(),
 }));
 vi.mock("../storage", () => ({ storage }));
 vi.mock("../db", () => ({ db: {}, pool: {} }));
@@ -80,6 +83,70 @@ beforeEach(() => {
   storage.upsertPriorityMatrixPosition.mockImplementation(async data => ({ id: "position", ...data }));
   storage.upsertStaircasePosition.mockImplementation(async data => ({ id: "position", ...data }));
   storage.recordPulseActivity.mockResolvedValue(undefined);
+  storage.getNote.mockResolvedValue({ id: NOTE_ID, spaceId: SPACE_ID, participantId: PARTICIPANT_ID });
+  storage.deleteNote.mockResolvedValue(true);
+  storage.getCompanyAdminsByUser.mockResolvedValue([]);
+});
+
+describe("note deletion resolves access from the note", () => {
+  const remove = () => request(app).delete(`/api/notes/${NOTE_ID}`);
+
+  it.each(["open", "ideation-live", "signal", "starship", "priority-matrix", "staircase"])(
+    "lets the owner delete without a workspace ID during %s",
+    async status => {
+      space.status = status;
+      expect((await remove()).status).toBe(204);
+      expect(storage.deleteNote).toHaveBeenCalledWith(NOTE_ID);
+    },
+  );
+
+  it("allows the assigned facilitator to delete another participant's note in a closed workspace", async () => {
+    space.status = "closed";
+    currentUser = { id: "facilitator", role: "facilitator" };
+    participantId = undefined;
+    storage.getSpaceFacilitatorsBySpace.mockResolvedValue([{ userId: "facilitator" }]);
+    expect((await remove()).status).toBe(204);
+    expect(storage.deleteNote).toHaveBeenCalledOnce();
+  });
+
+  it.each(["closed", "draft", "archived", "processing"])("rejects owner deletion in %s", async status => {
+    space.status = status;
+    expect((await remove()).status).toBe(403);
+    expect(storage.deleteNote).not.toHaveBeenCalled();
+  });
+
+  it("rejects deletion of another participant's note", async () => {
+    storage.getNote.mockResolvedValue({ id: NOTE_ID, spaceId: SPACE_ID, participantId: "other-participant" });
+    expect((await remove()).status).toBe(403);
+    expect(storage.deleteNote).not.toHaveBeenCalled();
+  });
+
+  it("rejects a participant session from another workspace", async () => {
+    participantSpaceId = "other-workspace";
+    expect((await remove()).status).toBe(403);
+    expect(storage.deleteNote).not.toHaveBeenCalled();
+  });
+
+  it("rejects unrelated facilitators even when guest access is enabled", async () => {
+    currentUser = { id: "outsider", role: "facilitator" };
+    participantId = undefined;
+    expect((await remove()).status).toBe(403);
+    expect(storage.deleteNote).not.toHaveBeenCalled();
+  });
+
+  it("does not trust a workspace ID supplied in the request body", async () => {
+    participantSpaceId = "other-workspace";
+    const response = await request(app).delete(`/api/notes/${NOTE_ID}`).send({ spaceId: "other-workspace" });
+    expect(response.status).toBe(403);
+    expect(storage.getSpace).toHaveBeenCalledWith(SPACE_ID);
+    expect(storage.deleteNote).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 for a missing note", async () => {
+    storage.getNote.mockResolvedValue(undefined);
+    expect((await remove()).status).toBe(404);
+    expect(storage.deleteNote).not.toHaveBeenCalled();
+  });
 });
 
 for (const activity of [
