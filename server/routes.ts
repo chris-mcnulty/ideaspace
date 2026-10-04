@@ -22,6 +22,7 @@ import {
   parseQuery,
 } from "./utils/queryParams";
 import { logger } from "./utils/logger";
+import { isWorkspaceOpenForParticipation } from "./utils/workspaceParticipation";
 import { z } from "zod";
 import { eq, count, inArray } from "drizzle-orm";
 import { categorizeNotes, rewriteCard, suggestIdeas } from "./services/openai";
@@ -67,36 +68,6 @@ async function resolveWorkspaceIdentifier(identifier: string): Promise<string | 
   
   // Already a UUID or other ID format
   return identifier;
-}
-
-// Helper function to check if workspace status indicates it's open for participation
-// Uses prefix matching to handle variants like "ideation-live", "vote-round1", etc.
-function isWorkspaceOpenForParticipation(status: string): boolean {
-  if (!status) return false;
-  
-  const normalized = status.toLowerCase().trim();
-  
-  // Exact lifecycle statuses
-  if (normalized === 'open') return true;
-  
-  // Closed/draft/archived are not open
-  if (['closed', 'draft', 'processing', 'archived'].includes(normalized)) return false;
-  
-  // Check active session phase prefixes
-  const activePhrasePrefixes = [
-    'ideation', 'ideate', 
-    'voting', 'vote', 
-    'ranking', 'rank', 
-    'marketplace', 'market',
-    'survey', 
-    'priority-matrix', 'priority',
-    'staircase',
-    'starship',
-    'signal',
-    'results'
-  ];
-  
-  return activePhrasePrefixes.some(prefix => normalized.startsWith(prefix));
 }
 
 // Starship is both an activity board and an idea-capture surface. Participants
@@ -6518,10 +6489,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const facilitator = isFacilitatorUser(req);
       let participantId: string | null = null;
       if (!facilitator) {
-        // Participants: workspace must be open, responses must be open, and this
-        // must be the live activity.
+        // Active phase statuses (including "signal") are also open for
+        // participation. The deck independently controls the live activity.
         const space = await storage.getSpace(spaceId);
-        if (space && space.status !== "open") {
+        if (!space) return res.status(404).json({ error: "Workspace not found" });
+        if (!isWorkspaceOpenForParticipation(space.status)) {
           return res.status(403).json({ error: "This workspace is not currently open for participation", code: "WORKSPACE_NOT_OPEN" });
         }
         if (!deck.responsesOpen || deck.activeActivityId !== activity.id) {
