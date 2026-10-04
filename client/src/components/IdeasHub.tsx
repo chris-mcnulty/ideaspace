@@ -303,17 +303,17 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
   // Bulk delete notes mutation
   const bulkDeleteNotesMutation = useMutation({
     mutationFn: async (noteIds: string[]) => {
-      const response = await apiRequest('POST', '/api/notes/bulk-delete', { ids: noteIds });
-      return response.json();
+      // Deletion returns 204 No Content, not JSON.
+      await apiRequest('POST', '/api/notes/bulk-delete', { ids: noteIds });
     },
-    onSuccess: (data: any) => {
+    onSuccess: (_data, noteIds) => {
       queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/notes`] });
       setSelectedNotes(new Set());
       setNoteBulkAction(null);
-      toast({ title: `${data.deleted || selectedNotes.size} notes deleted successfully` });
+      toast({ title: `${noteIds.length} notes deleted successfully` });
     },
-    onError: () => {
-      toast({ title: "Failed to delete notes", variant: "destructive" });
+    onError: (error: Error) => {
+      toast({ title: "Failed to delete notes", description: error.message, variant: "destructive" });
     }
   });
   
@@ -338,15 +338,14 @@ export default function IdeasHub({ spaceId, categories }: IdeasHubProps) {
   // Delete single note mutation
   const deleteNoteMutation = useMutation({
     mutationFn: async (noteId: string) => {
-      const response = await apiRequest('DELETE', `/api/notes/${noteId}`);
-      return response.json();
+      await apiRequest('DELETE', `/api/notes/${noteId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/spaces/${spaceId}/notes`] });
       toast({ title: "Note deleted successfully" });
     },
-    onError: () => {
-      toast({ title: "Failed to delete note", variant: "destructive" });
+    onError: (error: Error) => {
+      toast({ title: "Failed to delete note", description: error.message, variant: "destructive" });
     }
   });
   

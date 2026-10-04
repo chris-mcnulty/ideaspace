@@ -4235,6 +4235,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!note) return res.status(404).json({ error: "Note not found" });
       req.params.spaceId = note.spaceId;
       res.locals.noteToDelete = note;
+
+      // Facilitators can moderate notes regardless of participation status.
+      // Check scoped access first: the participant middleware does not bypass
+      // status/guest restrictions for project-member facilitators or admins
+      // authorized through a companyAdmins association.
+      const user = req.user as User | undefined;
+      if (user && ["facilitator", "company_admin", "global_admin"].includes(user.role)) {
+        const space = await storage.getSpace(note.spaceId);
+        if (!space) return res.status(404).json({ error: "Space not found" });
+        if (!(await assertFacilitatorForSpace(req, res, space))) return;
+        res.locals.noteSpaceToDelete = space;
+        res.locals.hasFacilitatorDeleteAccess = true;
+        return next();
+      }
       return createWorkspaceAccessMiddleware({ requireOpen: true })(req, res, next);
     } catch (error) {
       console.error("Failed to resolve note workspace:", error);
@@ -4248,8 +4262,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Note not found" });
       }
 
-      // Get the space to check if it's open
-      const space = await storage.getSpace(existingNote.spaceId);
+      // Resolve participant status, or reuse the authorized facilitator space.
+      const space = res.locals.noteSpaceToDelete ?? await storage.getSpace(existingNote.spaceId);
       if (!space) {
         return res.status(404).json({ error: "Space not found" });
       }
@@ -4257,17 +4271,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check permissions: 
       // 1. User is facilitator/admin (can always delete)
       // 2. OR participation is active AND participant owns the note
-      const user = req.user as User | undefined;
-      const isFacilitatorOrAdmin = user && ["facilitator", "company_admin", "global_admin"].includes(user.role);
+      const isFacilitatorOrAdmin = res.locals.hasFacilitatorDeleteAccess === true;
       
       // For participant deletes, use session-verified participantId (not client-supplied)
       const sessionParticipantId = req.session?.participantId;
       const isOwner = existingNote.participantId === sessionParticipantId;
       const canParticipantDelete = sessionParticipantId && isOwner && isWorkspaceOpenForParticipation(space.status);
-
-      if (isFacilitatorOrAdmin && !(await assertFacilitatorForSpace(req, res, space))) {
-        return;
-      }
 
       if (!isFacilitatorOrAdmin && !canParticipantDelete) {
         return res.status(403).json({ error: "You can only delete your own notes when the session is open" });
@@ -4292,26 +4301,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/notes/bulk-delete", requireFacilitator, async (req, res) => {
     try {
       const { ids } = req.body as { ids: string[] };
-      if (!Array.isArray(ids) || ids.length === 0) {
+      if (!Array.isArray(ids) || ids.length === 0 || ids.some(id => typeof id !== "string" || !id.trim())) {
         return res.status(400).json({ error: "Invalid note IDs" });
       }
       
-      // Get first note to determine workspace for broadcast
-      const firstNote = await storage.getNote(ids[0]);
-      const spaceId = firstNote?.spaceId;
+      // Authorize the entire batch before deleting anything.
+      const uniqueIds = [...new Set(ids)];
+      const batch = await Promise.all(uniqueIds.map(id => storage.getNote(id)));
+      if (batch.some(note => !note)) {
+        return res.status(404).json({ error: "Notes not found" });
+      }
+      const spaceId = batch[0]!.spaceId;
+      if (batch.some(note => note!.spaceId !== spaceId)) {
+        return res.status(400).json({ error: "Notes must belong to the same workspace" });
+      }
+      const space = await storage.getSpace(spaceId);
+      if (!space) return res.status(404).json({ error: "Workspace not found" });
+      if (!(await assertFacilitatorForSpace(req, res, space))) return;
       
-      const deleted = await storage.deleteNotes(ids);
+      const deleted = await storage.deleteNotes(uniqueIds);
       if (!deleted) {
         return res.status(404).json({ error: "Notes not found" });
       }
       
       // Broadcast to WebSocket clients in this workspace only
-      if (spaceId) {
-        broadcastToSpace(spaceId, { type: "notes_deleted", data: { ids } });
-      }
+      broadcastToSpace(spaceId, { type: "notes_deleted", data: { ids: uniqueIds } });
       
       res.status(204).send();
     } catch (error) {
+      console.error("Failed to bulk delete notes:", error);
       res.status(500).json({ error: "Failed to delete notes" });
     }
   });

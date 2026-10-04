@@ -21,6 +21,7 @@ const storage = vi.hoisted(() => ({
   recordPulseActivity: vi.fn(),
   getNote: vi.fn(),
   deleteNote: vi.fn(),
+  deleteNotes: vi.fn(),
   getCompanyAdminsByUser: vi.fn(),
 }));
 vi.mock("../storage", () => ({ storage }));
@@ -85,11 +86,25 @@ beforeEach(() => {
   storage.recordPulseActivity.mockResolvedValue(undefined);
   storage.getNote.mockResolvedValue({ id: NOTE_ID, spaceId: SPACE_ID, participantId: PARTICIPANT_ID });
   storage.deleteNote.mockResolvedValue(true);
+  storage.deleteNotes.mockResolvedValue(true);
   storage.getCompanyAdminsByUser.mockResolvedValue([]);
 });
 
 describe("note deletion resolves access from the note", () => {
   const remove = () => request(app).delete(`/api/notes/${NOTE_ID}`);
+
+  it.each(["draft", "open", "closed", "archived", "processing", "starship"])(
+    "allows super-admin single deletion in %s and returns an empty 204 response",
+    async status => {
+      Object.assign(space, { status, guestAllowed: false });
+      currentUser = { id: "super-admin", role: "global_admin" };
+      participantId = undefined;
+      const response = await remove();
+      expect(response.status).toBe(204);
+      expect(response.text).toBe("");
+      expect(storage.deleteNote).toHaveBeenCalledWith(NOTE_ID);
+    },
+  );
 
   it.each(["open", "ideation-live", "signal", "starship", "priority-matrix", "staircase"])(
     "lets the owner delete without a workspace ID during %s",
@@ -107,6 +122,37 @@ describe("note deletion resolves access from the note", () => {
     storage.getSpaceFacilitatorsBySpace.mockResolvedValue([{ userId: "facilitator" }]);
     expect((await remove()).status).toBe(204);
     expect(storage.deleteNote).toHaveBeenCalledOnce();
+  });
+
+  it.each(["draft", "closed", "archived", "processing", "open", "starship"])(
+    "lets a project-member facilitator delete in %s without guest or participant access",
+    async status => {
+      Object.assign(space, { status, projectId: "project", guestAllowed: false });
+      currentUser = { id: "project-facilitator", role: "facilitator" };
+      participantId = undefined;
+      storage.isProjectMember.mockResolvedValue(true);
+      expect((await remove()).status).toBe(204);
+      expect(storage.isProjectMember).toHaveBeenCalledWith("project", "project-facilitator");
+      expect(storage.deleteNote).toHaveBeenCalledWith(NOTE_ID);
+    },
+  );
+
+  it("allows a company admin with an organization association to delete in a closed workspace", async () => {
+    Object.assign(space, { status: "closed", guestAllowed: false });
+    currentUser = { id: "org-admin", role: "company_admin", organizationId: "other-org" };
+    participantId = undefined;
+    storage.getCompanyAdminsByUser.mockResolvedValue([{ organizationId: "org" }]);
+    expect((await remove()).status).toBe(204);
+    expect(storage.deleteNote).toHaveBeenCalledWith(NOTE_ID);
+  });
+
+  it("rejects a facilitator outside the workspace project even when participation is inactive", async () => {
+    Object.assign(space, { status: "draft", projectId: "project", guestAllowed: false });
+    currentUser = { id: "outsider", role: "facilitator" };
+    participantId = undefined;
+    storage.isProjectMember.mockResolvedValue(false);
+    expect((await remove()).status).toBe(403);
+    expect(storage.deleteNote).not.toHaveBeenCalled();
   });
 
   it.each(["closed", "draft", "archived", "processing"])("rejects owner deletion in %s", async status => {
@@ -146,6 +192,69 @@ describe("note deletion resolves access from the note", () => {
     storage.getNote.mockResolvedValue(undefined);
     expect((await remove()).status).toBe(404);
     expect(storage.deleteNote).not.toHaveBeenCalled();
+  });
+});
+
+describe("bulk note deletion", () => {
+  const secondNoteId = "66666666-6666-6666-6666-666666666666";
+  const remove = (ids: unknown = [NOTE_ID, secondNoteId]) =>
+    request(app).post("/api/notes/bulk-delete").send({ ids });
+
+  beforeEach(() => {
+    currentUser = { id: "super-admin", role: "global_admin" };
+    participantId = undefined;
+    space.guestAllowed = false;
+    storage.getNote.mockImplementation(async id => ({
+      id, spaceId: SPACE_ID, participantId: PARTICIPANT_ID,
+    }));
+  });
+
+  it.each(["draft", "open", "closed", "archived", "processing", "starship"])(
+    "allows super-admin bulk deletion in %s with an empty 204 response",
+    async status => {
+      space.status = status;
+      const response = await remove();
+      expect(response.status).toBe(204);
+      expect(response.text).toBe("");
+      expect(storage.deleteNotes).toHaveBeenCalledWith([NOTE_ID, secondNoteId]);
+    },
+  );
+
+  it("deduplicates the selected notes", async () => {
+    expect((await remove([NOTE_ID, NOTE_ID])).status).toBe(204);
+    expect(storage.deleteNotes).toHaveBeenCalledWith([NOTE_ID]);
+  });
+
+  it("does not partially delete when a selected note is missing", async () => {
+    storage.getNote.mockResolvedValueOnce({ id: NOTE_ID, spaceId: SPACE_ID }).mockResolvedValueOnce(undefined);
+    expect((await remove()).status).toBe(404);
+    expect(storage.deleteNotes).not.toHaveBeenCalled();
+  });
+
+  it("rejects a batch spanning multiple workspaces", async () => {
+    storage.getNote.mockResolvedValueOnce({ id: NOTE_ID, spaceId: SPACE_ID })
+      .mockResolvedValueOnce({ id: secondNoteId, spaceId: "other-workspace" });
+    expect((await remove()).status).toBe(400);
+    expect(storage.deleteNotes).not.toHaveBeenCalled();
+  });
+
+  it("allows project-member facilitators to moderate a closed workspace", async () => {
+    Object.assign(space, { status: "closed", projectId: "project" });
+    currentUser = { id: "facilitator", role: "facilitator" };
+    storage.isProjectMember.mockResolvedValue(true);
+    expect((await remove()).status).toBe(204);
+    expect(storage.deleteNotes).toHaveBeenCalledOnce();
+  });
+
+  it("rejects unrelated facilitators", async () => {
+    currentUser = { id: "outsider", role: "facilitator" };
+    expect((await remove()).status).toBe(403);
+    expect(storage.deleteNotes).not.toHaveBeenCalled();
+  });
+
+  it.each([{ ids: [] }, { ids: [NOTE_ID, null] }, { ids: [123] }, { ids: [""] }])("rejects invalid IDs %j", async ({ ids }) => {
+    expect((await remove(ids)).status).toBe(400);
+    expect(storage.deleteNotes).not.toHaveBeenCalled();
   });
 });
 

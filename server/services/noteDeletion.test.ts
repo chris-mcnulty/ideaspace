@@ -47,3 +47,30 @@ describe("atomic note deletion", () => {
     await expect(storage.deleteNote(NOTE_ID)).rejects.toThrow("delete failed");
   });
 });
+
+describe("atomic bulk note deletion", () => {
+  const ids = [NOTE_ID, "66666666-6666-6666-6666-666666666666"];
+
+  it("matches either selected note, not impossible simultaneous ID equality", async () => {
+    expect(await storage.deleteNotes(ids)).toBe(true);
+    expect(mocks.transaction).toHaveBeenCalledOnce();
+    expect(mocks.delete.mock.calls.map(call => call[0])).toEqual([surveyResponses, notes]);
+    const dialect = new PgDialect();
+    const filters = mocks.where.mock.calls.map(call => dialect.sqlToQuery(call[0]));
+    for (const filter of filters) {
+      expect(filter.params).toEqual(ids);
+      expect(filter.sql).toContain(" in ");
+      expect(filter.sql).not.toContain(" and ");
+    }
+  });
+
+  it("does not start a transaction for an empty batch", async () => {
+    expect(await storage.deleteNotes([])).toBe(false);
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it("propagates deletion failure so dependent cleanup rolls back", async () => {
+    mocks.where.mockResolvedValueOnce({ rowCount: 2 }).mockRejectedValueOnce(new Error("delete failed"));
+    await expect(storage.deleteNotes(ids)).rejects.toThrow("delete failed");
+  });
+});

@@ -1933,10 +1933,11 @@ export class DbStorage implements IStorage {
 
   async deleteNotes(ids: string[]): Promise<boolean> {
     if (ids.length === 0) return false;
-    const result = await db.delete(notes).where(
-      ids.map(id => eq(notes.id, id)).reduce((a, b) => and(a, b) as any)
-    );
-    return result.rowCount ? result.rowCount > 0 : false;
+    return db.transaction(async (tx) => {
+      await tx.delete(surveyResponses).where(inArray(surveyResponses.noteId, ids));
+      const result = await tx.delete(notes).where(inArray(notes.id, ids));
+      return result.rowCount ? result.rowCount > 0 : false;
+    });
   }
 
   async getPulseAggregates(
