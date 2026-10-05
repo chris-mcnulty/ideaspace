@@ -20,3 +20,9 @@ When anonymous participants report that an already-live question has not started
 **Why:** A production report following reordering coincided with a valid live deck but a guest-disabled workspace. The participant screen had hidden the rejected request behind its waiting state, while the facilitator could still see the question because their access bypassed guest restrictions.
 
 **How to apply:** Verify both stored live state and participant access. Signed-in facilitator testing alone cannot establish that anonymous participants can load the question. Confirm the affected workspace before changing permissions.
+
+Recover stale participant access through an explicit rejoin, rather than silently clearing session identity or bypassing workspace authorization.
+
+**Why:** A clean anonymous browser can succeed while an existing participant session fails. That distinction is not proof of the specific affected browser's error; preserve access checks and expose the actual failure instead of claiming the live state is broken.
+
+**How to apply:** Compare fresh and existing-session access, keep error states separate from waiting states, and preserve the destination module when rejoining.

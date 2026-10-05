@@ -68,6 +68,11 @@ export default function SignalParticipant() {
             <Button onClick={() => { void refetchOrg(); void refetchSpace(); void refetchSignal(); }}>
               Try again
             </Button>
+            <Button variant="outline" asChild>
+              <a href={`/o/${encodeURIComponent(params.org!)}/s/${encodeURIComponent(spaceId)}?returnTo=signal`}>
+                Rejoin this workspace
+              </a>
+            </Button>
           </CardContent>
         </Card>
       </main>

@@ -49,12 +49,17 @@ export default function WaitingRoomPage() {
       });
       return await response.json();
     },
-    onSuccess: (participant) => {
+    onSuccess: async (participant) => {
       queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/participants`] });
       // Store participant ID in session storage
       sessionStorage.setItem("participantId", participant.id);
-      // Navigate to the space
-      setLocation(`/o/${params.org}/s/${params.space}/participate`);
+      // Rejoining from Signal must clear any cached access error and return to
+      // the live question, not strand the participant on the ideas screen.
+      const returnToSignal = new URLSearchParams(window.location.search).get("returnTo") === "signal";
+      if (returnToSignal) {
+        await queryClient.invalidateQueries({ queryKey: [`/api/spaces/${params.space}/signal`] });
+      }
+      setLocation(`/o/${params.org}/s/${params.space}/${returnToSignal ? "signal" : "participate"}`);
     },
     onError: (error) => {
       toast({

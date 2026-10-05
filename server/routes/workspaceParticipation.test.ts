@@ -262,6 +262,36 @@ describe("bulk note deletion", () => {
   });
 });
 
+describe("Signal guest session access", () => {
+  beforeEach(() => {
+    storage.getSignalDeck.mockResolvedValue({
+      id: "deck", spaceId: SPACE_ID, activeActivityId: NOTE_ID, responsesOpen: true,
+    });
+    storage.getSignalActivities.mockResolvedValue([{ id: NOTE_ID, deckId: "deck", status: "live" }]);
+  });
+
+  it("loads the live question for a fresh anonymous visitor when guests are allowed", async () => {
+    participantId = undefined;
+    const response = await request(app).get(`/api/spaces/${SPACE_ID}/signal`);
+    expect(response.status).toBe(200);
+    expect(response.body.deck).toMatchObject({ activeActivityId: NOTE_ID, responsesOpen: true });
+  });
+
+  it("returns an explicit access error for an existing session from another workspace", async () => {
+    participantSpaceId = "different-workspace";
+    const response = await request(app).get(`/api/spaces/${SPACE_ID}/signal`);
+    expect(response.status).toBe(403);
+    expect(response.body.code).toBe("NO_ACCESS");
+    expect(storage.getSignalDeck).not.toHaveBeenCalled();
+  });
+
+  it("loads the live question again once the session belongs to this workspace", async () => {
+    const response = await request(app).get(`/api/spaces/${SPACE_ID}/signal`);
+    expect(response.status).toBe(200);
+    expect(response.body.deck.responsesOpen).toBe(true);
+  });
+});
+
 describe("Signal interactive reordering", () => {
   const ids = [NOTE_ID, MATRIX_ID, STAIRCASE_ID];
   const reorder = (activityIds: unknown = ids) =>
