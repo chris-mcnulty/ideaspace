@@ -23,6 +23,10 @@ const storage = vi.hoisted(() => ({
   deleteNote: vi.fn(),
   deleteNotes: vi.fn(),
   getCompanyAdminsByUser: vi.fn(),
+  getSignalDeck: vi.fn(),
+  getSignalActivities: vi.fn(),
+  reorderSignalActivities: vi.fn(),
+  createSignalActivity: vi.fn(),
 }));
 vi.mock("../storage", () => ({ storage }));
 vi.mock("../db", () => ({ db: {}, pool: {} }));
@@ -255,6 +259,77 @@ describe("bulk note deletion", () => {
   it.each([{ ids: [] }, { ids: [NOTE_ID, null] }, { ids: [123] }, { ids: [""] }])("rejects invalid IDs %j", async ({ ids }) => {
     expect((await remove(ids)).status).toBe(400);
     expect(storage.deleteNotes).not.toHaveBeenCalled();
+  });
+});
+
+describe("Signal interactive reordering", () => {
+  const ids = [NOTE_ID, MATRIX_ID, STAIRCASE_ID];
+  const reorder = (activityIds: unknown = ids) =>
+    request(app).post(`/api/spaces/${SPACE_ID}/signal/activities/reorder`).send({ activityIds });
+
+  beforeEach(() => {
+    currentUser = { id: "admin", role: "global_admin" };
+    participantId = undefined;
+    space.status = "closed";
+    space.guestAllowed = false;
+    storage.getSignalDeck.mockResolvedValue({ id: "deck", spaceId: SPACE_ID, activeActivityId: MATRIX_ID });
+    storage.reorderSignalActivities.mockImplementation(async (_deckId, orderedIds) =>
+      orderedIds.map((id: string, orderIndex: number) => ({ id, orderIndex })));
+  });
+
+  it("saves a super-admin order independently of participant restrictions", async () => {
+    const response = await reorder([...ids].reverse());
+    expect(response.status).toBe(200);
+    expect(storage.reorderSignalActivities).toHaveBeenCalledWith("deck", [...ids].reverse());
+    expect(response.body.map((activity: any) => activity.id)).toEqual([...ids].reverse());
+  });
+
+  it("allows project-member facilitators", async () => {
+    space.projectId = "project";
+    currentUser = { id: "facilitator", role: "facilitator" };
+    storage.isProjectMember.mockResolvedValue(true);
+    expect((await reorder()).status).toBe(200);
+  });
+
+  it("rejects unrelated facilitators before changing order", async () => {
+    currentUser = { id: "outsider", role: "facilitator" };
+    expect((await reorder()).status).toBe(403);
+    expect(storage.reorderSignalActivities).not.toHaveBeenCalled();
+  });
+
+  it("rejects participant-only requests", async () => {
+    currentUser = undefined;
+    participantId = PARTICIPANT_ID;
+    expect((await reorder()).status).toBe(401);
+    expect(storage.reorderSignalActivities).not.toHaveBeenCalled();
+  });
+
+  it.each([{ ids: [NOTE_ID, NOTE_ID] }, { ids: ["invalid"] }, { ids: null }])(
+    "rejects malformed or duplicate IDs %j",
+    async ({ ids }) => {
+      expect((await reorder(ids)).status).toBe(400);
+      expect(storage.reorderSignalActivities).not.toHaveBeenCalled();
+    },
+  );
+
+  it("reports a stale or cross-deck list without claiming success", async () => {
+    storage.reorderSignalActivities.mockResolvedValue(undefined);
+    expect((await reorder()).status).toBe(409);
+  });
+
+  it("does not create a deck if none exists", async () => {
+    storage.getSignalDeck.mockResolvedValue(undefined);
+    expect((await reorder()).status).toBe(404);
+    expect(storage.reorderSignalActivities).not.toHaveBeenCalled();
+  });
+
+  it("appends new interactives after the greatest remaining order index", async () => {
+    storage.getSignalActivities.mockResolvedValue([{ id: NOTE_ID, orderIndex: 0 }, { id: MATRIX_ID, orderIndex: 4 }]);
+    storage.createSignalActivity.mockImplementation(async data => ({ id: STAIRCASE_ID, ...data }));
+    const response = await request(app).post(`/api/spaces/${SPACE_ID}/signal/activities`)
+      .send({ type: "word_cloud", prompt: "New question" });
+    expect(response.status).toBe(201);
+    expect(response.body.orderIndex).toBe(5);
   });
 });
 

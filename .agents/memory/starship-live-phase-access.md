@@ -16,3 +16,11 @@ In live workshops, “open for participation” includes active phase statuses, 
 **Why:** A production workshop had an active Signal phase and responses enabled, but participants were rejected as “workspace not open” because the response endpoint only recognized the literal lifecycle status. Persisting navigation exposes any leftover literal-only checks.
 
 **How to apply:** When changing navigation or participation rules, audit both middleware and per-route guards. Do not replace activity-specific controls with a workspace-wide status check.
+
+## Signal sequencing during live sessions
+
+Facilitators may reorder interactives during a live session, but moving an interactive must not automatically switch the participants' current question, close responses, or reset submissions.
+
+**Why:** Editing the presentation sequence is a planning action, not a request to advance the workshop. Coupling these actions could unexpectedly interrupt people answering a live question.
+
+**How to apply:** Treat ordering separately from live selection. Previous/Next should follow the saved sequence; changing the current interactive still requires an explicit navigation or Go live action.

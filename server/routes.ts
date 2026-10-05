@@ -6402,7 +6402,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const existing = await storage.getSignalActivities(deck.id);
       const orderIndex = typeof req.body?.orderIndex === "number"
         ? req.body.orderIndex
-        : existing.length;
+        : existing.reduce((next, activity) => Math.max(next, activity.orderIndex + 1), 0);
 
       const activity = await storage.createSignalActivity({
         deckId: deck.id,
@@ -6420,6 +6420,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
       console.error("Failed to create signal activity:", error);
       res.status(500).json({ error: "Failed to create signal activity" });
+    }
+  });
+
+  // Save the entire order atomically, without changing the live pointer or responses.
+  app.post("/api/spaces/:spaceId/signal/activities/reorder", requireFacilitator, async (req, res) => {
+    try {
+      const spaceId = await requireSpaceFacilitator(req, res);
+      if (!spaceId) return;
+      const { activityIds } = z.object({
+        activityIds: z.array(z.string().uuid()).max(1000)
+          .refine(ids => new Set(ids).size === ids.length, "Activity IDs must be unique"),
+      }).parse(req.body);
+      const deck = await storage.getSignalDeck(spaceId);
+      if (!deck) return res.status(404).json({ error: "Signal deck not found" });
+      const reordered = await storage.reorderSignalActivities(deck.id, activityIds);
+      if (!reordered) {
+        return res.status(409).json({ error: "The interactive list has changed. Refresh and try again." });
+      }
+      broadcastToSpace(spaceId, { type: "signal_activities_updated", data: { deckId: deck.id } });
+      res.json(reordered);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: error.errors });
+      console.error("Failed to reorder Signal activities:", error);
+      res.status(500).json({ error: "Failed to reorder interactives" });
     }
   });
 

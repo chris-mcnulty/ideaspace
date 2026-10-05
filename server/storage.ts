@@ -535,6 +535,7 @@ export interface IStorage {
 
   // Signal — activities
   getSignalActivities(deckId: string): Promise<SignalActivity[]>;
+  reorderSignalActivities(deckId: string, activityIds: string[]): Promise<SignalActivity[] | undefined>;
   getSignalActivity(id: string): Promise<SignalActivity | undefined>;
   createSignalActivity(activity: InsertSignalActivity): Promise<SignalActivity>;
   updateSignalActivity(id: string, activity: Partial<InsertSignalActivity>): Promise<SignalActivity | undefined>;
@@ -3341,6 +3342,30 @@ export class DbStorage implements IStorage {
     return db.select().from(signalActivities)
       .where(eq(signalActivities.deckId, deckId))
       .orderBy(signalActivities.orderIndex);
+  }
+
+  async reorderSignalActivities(deckId: string, activityIds: string[]): Promise<SignalActivity[] | undefined> {
+    return db.transaction(async (tx) => {
+      // Lock in a stable order so simultaneous reorders cannot interleave.
+      const current = await tx.select().from(signalActivities)
+        .where(eq(signalActivities.deckId, deckId))
+        .orderBy(signalActivities.id).for("update");
+      const currentIds = new Set(current.map(activity => activity.id));
+      if (activityIds.length !== current.length ||
+          new Set(activityIds).size !== activityIds.length ||
+          activityIds.some(id => !currentIds.has(id))) {
+        return undefined;
+      }
+      const reordered: SignalActivity[] = [];
+      for (const [orderIndex, id] of activityIds.entries()) {
+        const [updated] = await tx.update(signalActivities)
+          .set({ orderIndex, updatedAt: new Date() })
+          .where(and(eq(signalActivities.id, id), eq(signalActivities.deckId, deckId)))
+          .returning();
+        reordered.push(updated);
+      }
+      return reordered;
+    });
   }
 
   async getSignalActivity(id: string): Promise<SignalActivity | undefined> {

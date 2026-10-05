@@ -17,9 +17,9 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import {
   Radio, Plus, Trash2, Play, RotateCcw, ExternalLink, ChevronLeft, ChevronRight,
-  Cloud, BarChart3, Hash, Pencil, Loader2, Download, X, StopCircle,
+  Cloud, BarChart3, Hash, Pencil, Loader2, Download, X, StopCircle, ArrowUp, ArrowDown,
 } from 'lucide-react';
-import { useSignalDeck, useSignalResponses, useSignalRealtime } from '@/components/signal/useSignal';
+import { useSignalDeck, useSignalResponses, useSignalRealtime, type SignalDeckData } from '@/components/signal/useSignal';
 import SignalResult from '@/components/signal/SignalResultLazy';
 import { entryCount } from '@/components/signal/aggregation';
 import {
@@ -109,6 +109,36 @@ export default function SignalFacilitator({ spaceId, orgSlug }: { spaceId: strin
     mutationFn: (id: string) => apiRequest('DELETE', `/api/spaces/${spaceId}/signal/activities/${id}`),
     onSuccess: invalidate,
   });
+  const reorderActivities = useMutation({
+    mutationFn: async (activityIds: string[]) => {
+      const response = await apiRequest('POST', `/api/spaces/${spaceId}/signal/activities/reorder`, { activityIds });
+      return response.json() as Promise<SignalActivity[]>;
+    },
+    onMutate: async (activityIds) => {
+      await queryClient.cancelQueries({ queryKey: signalKey });
+      const prev = queryClient.getQueryData<SignalDeckData>(signalKey);
+      if (prev) {
+        const byId = new Map(prev.activities.map(activity => [activity.id, activity]));
+        queryClient.setQueryData<SignalDeckData>(signalKey, {
+          ...prev,
+          activities: activityIds.map((id, orderIndex) => ({ ...byId.get(id)!, orderIndex })),
+        });
+      }
+      return { prev };
+    },
+    onError: (error: Error, _ids, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(signalKey, ctx.prev);
+      toast({ title: 'Could not reorder interactives', description: error.message, variant: 'destructive' });
+    },
+    onSettled: invalidate,
+  });
+  const moveActivity = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= activities.length || reorderActivities.isPending) return;
+    const ids = activities.map(activity => activity.id);
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+    reorderActivities.mutate(ids);
+  };
   const resetResponses = useMutation({
     mutationFn: (id: string) => apiRequest('POST', `/api/spaces/${spaceId}/signal/activities/${id}/reset`, {}),
     onSuccess: () => toast({ title: 'Responses cleared' }),
@@ -200,6 +230,11 @@ export default function SignalFacilitator({ spaceId, orgSlug }: { spaceId: strin
           )}
         </div>
 
+        {activities.length > 1 && (
+          <p className="text-xs text-muted-foreground" aria-live="polite">
+            {reorderActivities.isPending ? 'Saving order…' : 'Use the arrows to reorder interactives. Changes save automatically.'}
+          </p>
+        )}
         <div className="space-y-2">
           {activities.length === 0 && (
             <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
@@ -211,7 +246,23 @@ export default function SignalFacilitator({ spaceId, orgSlug }: { spaceId: strin
             const isLive = active?.id === a.id;
             return (
               <Card key={a.id} className={isLive ? 'border-primary' : ''} data-testid={`signal-activity-${a.id}`}>
-                <CardContent className="flex items-center gap-3 p-3">
+                <CardContent className="flex flex-wrap items-center gap-3 p-3">
+                  <div className="flex shrink-0 flex-col">
+                    <Button size="icon" variant="ghost" className="h-6 w-6"
+                      onClick={() => moveActivity(i, -1)}
+                      disabled={i === 0 || reorderActivities.isPending || deleteActivity.isPending}
+                      title="Move up" aria-label={`Move interactive ${i + 1} up`}
+                      data-testid={`button-move-up-${a.id}`}>
+                      <ArrowUp className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-6 w-6"
+                      onClick={() => moveActivity(i, 1)}
+                      disabled={i === activities.length - 1 || reorderActivities.isPending || deleteActivity.isPending}
+                      title="Move down" aria-label={`Move interactive ${i + 1} down`}
+                      data-testid={`button-move-down-${a.id}`}>
+                      <ArrowDown className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                   <span className="text-xs text-muted-foreground">{i + 1}</span>
                   <Meta.icon className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
@@ -229,7 +280,7 @@ export default function SignalFacilitator({ spaceId, orgSlug }: { spaceId: strin
                     <Button size="icon" variant="ghost" onClick={() => resetResponses.mutate(a.id)} title="Clear responses" data-testid={`button-reset-${a.id}`}>
                       <RotateCcw className="h-4 w-4" />
                     </Button>
-                    <Button size="icon" variant="ghost" onClick={() => deleteActivity.mutate(a.id)} title="Delete" data-testid={`button-delete-${a.id}`}>
+                    <Button size="icon" variant="ghost" onClick={() => deleteActivity.mutate(a.id)} disabled={reorderActivities.isPending} title="Delete" data-testid={`button-delete-${a.id}`}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -243,7 +294,7 @@ export default function SignalFacilitator({ spaceId, orgSlug }: { spaceId: strin
           {SIGNAL_ACTIVITY_TYPES.map((t) => {
             const Meta = TYPE_META[t];
             return (
-              <Button key={t} variant="outline" size="sm" onClick={() => setCreatingType(t)} data-testid={`button-add-${t}`}>
+              <Button key={t} variant="outline" size="sm" onClick={() => setCreatingType(t)} disabled={reorderActivities.isPending} data-testid={`button-add-${t}`}>
                 <Plus className="mr-1.5 h-4 w-4" /> <Meta.icon className="mr-1.5 h-4 w-4" /> {Meta.label}
               </Button>
             );
