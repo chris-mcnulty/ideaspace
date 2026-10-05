@@ -12,3 +12,11 @@ Three fixes must all be in place for reliable Signal participant experience:
 **Why:** Without these, a participant whose WS drops between "activity goes live" and "page is focused" will never receive the `signal_activity_changed` broadcast and will stay on the "Hang tight" waiting card indefinitely.
 
 **How to apply:** Any new page that needs live Signal state (participant view, presenter, embed) should call `useSignalDeck(spaceId, { refetchInterval: 5000 })` and must call `useSignalRealtime` which handles the `onOpen` re-sync. The facilitator does NOT use `refetchInterval` to avoid racing with optimistic updates.
+
+## Distinguish access failures from realtime failures
+
+When anonymous participants report that an already-live question has not started, check the anonymous API response and workspace guest permissions before attributing the symptom to sequencing or WebSockets.
+
+**Why:** A production report following reordering coincided with a valid live deck but a guest-disabled workspace. The participant screen had hidden the rejected request behind its waiting state, while the facilitator could still see the question because their access bypassed guest restrictions.
+
+**How to apply:** Verify both stored live state and participant access. Signed-in facilitator testing alone cannot establish that anonymous participants can load the question. Confirm the affected workspace before changing permissions.

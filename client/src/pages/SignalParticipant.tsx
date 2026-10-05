@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Radio, CheckCircle2 } from 'lucide-react';
 import { useModuleNavigation } from '@/hooks/useModuleNavigation';
 import { useSignalDeck, useSignalRealtime } from '@/components/signal/useSignal';
+import { signalLoadErrorMessage } from '@/components/signal/loadError';
 import type { Organization, Space, SignalActivity, SignalMultipleChoiceConfig, SignalNumericConfig, SignalWordCloudConfig } from '@shared/schema';
 
 export default function SignalParticipant() {
@@ -22,9 +23,9 @@ export default function SignalParticipant() {
   useModuleNavigation({ spaceId, orgSlug: params.org! });
   useSignalRealtime(spaceId, { onActivityChanged: () => setSubmitted(false) });
 
-  const { data: org } = useQuery<Organization>({ queryKey: [`/api/organizations/${params.org}`] });
-  const { data: space } = useQuery<Space>({ queryKey: [`/api/spaces/${spaceId}`] });
-  const { data: signal, isLoading } = useSignalDeck(spaceId, { refetchInterval: 5000 });
+  const { data: org, error: orgError, refetch: refetchOrg } = useQuery<Organization>({ queryKey: [`/api/organizations/${params.org}`] });
+  const { data: space, error: spaceError, refetch: refetchSpace } = useQuery<Space>({ queryKey: [`/api/spaces/${spaceId}`] });
+  const { data: signal, isLoading, error: signalError, refetch: refetchSignal } = useSignalDeck(spaceId, { refetchInterval: 5000 });
 
   const deck = signal?.deck ?? null;
   const activities = signal?.activities ?? [];
@@ -55,6 +56,23 @@ export default function SignalParticipant() {
       toast({ title: 'Could not send', description: e?.message || 'Please try again.', variant: 'destructive' });
     },
   });
+
+  const loadError = signalError || spaceError || orgError;
+  if (loadError) {
+    return (
+      <main id="main-content" className="flex min-h-screen items-center justify-center p-6">
+        <Card className="w-full max-w-xl">
+          <CardContent className="space-y-4 py-10 text-center" role="alert" data-testid="signal-load-error">
+            <h1 className="text-lg font-semibold">Unable to load Signal</h1>
+            <p className="text-sm text-muted-foreground">{signalLoadErrorMessage(loadError)}</p>
+            <Button onClick={() => { void refetchOrg(); void refetchSpace(); void refetchSignal(); }}>
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
 
   if (!org || !space || isLoading) {
     return (
